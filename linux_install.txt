@@ -1,0 +1,140 @@
+BTSolver - Linux Ubuntu 18.04.4
+
+This step by step guide is about how to setup and run OptiLab on a Linux machine from scratch.
+In my case, I start with only the OS (Ubuntu 18.04.4), emacs, and the downloaded OptiLab git repository.
+Following are the steps I took to setup the whole environment.
+I created a folder
+"workplace"
+under my home folder and it is there that I will install all the components and libraries needed for
+OptiLab back-end.
+In particular, all the third-party libraries should be installed (includes, libs, etc.) under that folder
+and not under /usr/local or usr/bin.
+Therefore, inside
+/home/<name>/workplace
+I have something like:
+- optilab-cloud-service/
+- boost_1_70_0/
+- ...
+
+Note that is not required to build all the libraries from scratch.
+In particular, many of the below are already present in the GIT repository.
+
+Once everything is done, remember to set the paths to the dynamic libraries.
+In my case:
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/fcampeot/workplace/optilab-cloud-service/lib/linux/zeromq
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/fcampeot/workplace/optilab-cloud-service/lib/linux/or-tools
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/fcampeot/workplace/optilab-cloud-service/lib/linux/gecode
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/fcampeot/workplace/optilab-cloud-service/lib/linux/ssl
+
+Finally, a nice GUI for git on Linux:
+https://www.gitkraken.com/download/linux-deb
+
+==== STEP 1: Eclipse ====
+
+OptiLab (backend) is mostly written in c++11. It is important to be consistent in the coding style and
+to setup a common environment.
+There are several good IDEs out there.
+I personally like Eclipse and hence here are the steps on how to set it up and running:
+1) Update apt: sudo apt update
+2) Install Java: sudo apt install openjdk-14-jdk-headless
+   Now the command javac -version should print something like javac 14-ea
+3) From here, either use the software center or download IDE for C++:
+   https://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/2019-09/R/eclipse-cpp-2019-09-R-linux-gtk-x86_64.tar.gz
+   Download it and open it (Eclipse icon).
+5) Create a new c++ project: file -> New -> Project -> C/C++ -> Makefile with existing code.
+   Name the project, point to the location of the code checked out by git, select the gcc toolchain.
+   Click finish.
+6) Configure the project:
+   - Click Project->Properties
+   - Under "Resource" make sure the Text file encoding is UTF-8
+   - Download the eclipse-cpp-google-style.xml file from https://github.com/google/styleguide
+   - Under C/C++ General->Formatter, import the settings file (eclipse-cpp-google-style.xml) by selecting Import
+     on the downloaded xml file
+   - Change the eclipse margin line to 100 columns:
+     Window -> Preferences -> C/C++ -> Formatter -> Edit... -> Line Wrapping and set "Maximum line width" to 100
+7) Install cpp style:
+   - CppStyle allows for auto-formatting on save, or selective formatting
+     on selection using Google's cpplint or clang-format
+   - Go to the Eclipse Marketplace using the C/C++ Eclipse IDE (under Help)
+   - Search for "CppStyle" - Install
+   - Install clang format: sudo apt install clang-format
+   - Window -> Preferences -> C/C++ -> CppStyle
+   - Add in your Clang-format path under the "Clang-format path" option (it should be in /usr/bin)
+   - Click on (enable) "Run clang-format on file save"
+
+==== STEP 2: Boost ====
+
+OptiLab uses boost libraries.
+The current version is Boost 1.70.0:
+1) download boost (check for the right version) from https://www.boost.org/users/history/version_1_70_0.html
+2) follow the instructions in
+   https://www.boost.org/doc/libs/1_70_0/more/getting_started/unix-variants.html
+3) remember to install Boost NOT on /usr/local BUT inside the workplace folder:
+   ./bootstrap.sh --prefix=path/to/installation/prefix
+   For each library, I personally create a <name_lib>_install folder to contain the installation data.
+   In this case, under workplace I have:
+   boost_install
+   and use that during bootstrap.
+   From now on I assume these "*_install" are present.
+   Generally, there is no need to install all boost libraries.
+   For the current version of OptiLab, the libraries needed are (using bootsrap option):
+   ./bootstrap.sh --prefix=path/workplace/boost_install --with-libraries=filesystem,regex,system,thread,mpi,timer,chrono
+   Then run
+   ./b2 install
+
+==== STEP 3: Protocol buffer ====
+
+Protocol buffers is the serialization mechanism used by OptiLab to send data between services and workers.
+The current version is 3.7.1:
+1) Get all the tools needed to install protobuf (and other libraries as well), in particular:
+   - autoconf
+   - automake
+   - libtool
+   - make
+   - g++
+   - unzip
+   On Ubuntu/Debian, run:
+   sudo apt-get install autoconf automake libtool curl make g++ unzip
+   Check what you need, for example, I didn't need to install g++ since it came with the Ubuntu OS.
+2) Get the protobuf source:
+   https://github.com/protocolbuffers/protobuf/releases/tag/v3.7.1
+   @note you can follow the instructions at https://github.com/protocolbuffers/protobuf/blob/master/src/README.md
+   as well to install for Java, Python, etc.
+   https://github.com/protocolbuffers/protobuf/releases/protobuf-cpp-3.7.1.tr.gz
+   In this case, download protobuf-cpp-3.7.1.tar.gz
+3) Build and install:
+   - ./autogen.sh
+   - ./configure --prefix=<path>/workplace/protobuf_install
+   - make
+   - make check
+   - sudo make install
+   - sudo ldconfig # refresh shared library cache
+
+==== STEP 4: Google OR-Tools ====
+
+Google OR Tools is the set of OR optimization libraries used as some of the back-end solver
+of OptiLab. The current version of OR-Tools supported by OptiLab is 7.1:
+1) Go to https://developers.google.com/optimization/install/cpp/source_linux
+2) Install toolchain (do not need to re-install previous installed tools):
+   sudo apt-get -y install git wget pkg-config build-essential cmake autoconf libtool zlib1g-dev lsb-release
+3) Download the source code for version 7.1 from https://github.com/google/or-tools/releases
+4) cd into the or-tools-7.1 folder:
+   - make third_party
+   - make cc
+   - make test_cc
+   - make install_cc
+   All the libraries and include should be present under:
+   - headers: /usr/local/include -> copy absl, coin, gflags, glog, google, ortools
+     under optilab-cloud-service/include/or-tools (if not already present there)
+   - libraries:
+	* under or-tools-7.1/lib
+   	* under or-tools-7.1/dependencies/install/lib (or, /usr/local/lib)
+
+  ==== STEP 5: CMake ====
+
+Similar to other installation steps, follow the instructions in https://cmake.org/install/.
+In other words, download the source code and do the following:
+  - ./bootstrap
+  - make
+  - make install
+
