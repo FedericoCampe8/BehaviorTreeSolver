@@ -1,8 +1,13 @@
 #include "bt/node.hpp"
 
+#include <algorithm>  // for std::find
 #include <stdexcept>  // for std::runtime_error
 
 #include "bt/behavior_tree_arena.hpp"
+
+namespace {
+constexpr uint32_t kDefaultNumEdges{10};
+}  // namespace
 
 namespace btsolver {
 
@@ -20,6 +25,25 @@ Node::Node(const std::string& name,
   if (pArena == nullptr)
   {
     throw std::invalid_argument("Node: empty pointer to the arena");
+  }
+
+  pIncomingEdges.reserve(1);
+  pOutgoingEdges.reserve(kDefaultNumEdges);
+}
+
+Node::~Node()
+{
+  // Remove this node from the edges
+  for (auto inEdge : pIncomingEdges)
+  {
+    auto edge = pArena->getEdge(inEdge);
+    edge->resetTail();
+  }
+
+  for (auto inEdge : pOutgoingEdges)
+  {
+    auto edge = pArena->getEdge(inEdge);
+    edge->resetHead();
   }
 }
 
@@ -102,5 +126,22 @@ NodeStatus Node::tick()
   return result;
 }
 
-}  // namespace btsolver
+void Node::removeIncomingEdge(uint32_t edgeId)
+{
+  auto iter = std::find(pIncomingEdges.begin(), pIncomingEdges.end(), edgeId);
+  if (iter != pIncomingEdges.end())
+  {
+    pIncomingEdges.erase(iter);
+  }
+}
 
+void Node::removeOutgoingEdge(uint32_t edgeId)
+{
+  auto iter = std::find(pOutgoingEdges.begin(), pOutgoingEdges.end(), edgeId);
+  if (iter != pOutgoingEdges.end())
+  {
+    pOutgoingEdges.erase(iter);
+  }
+}
+
+}  // namespace btsolver

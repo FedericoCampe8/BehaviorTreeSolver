@@ -24,10 +24,14 @@ class SYS_EXPORT_CLASS Edge {
    /// Constructs an edge from the head node to tail node.
    /// Throws std::invalid_argument on empty pointers
    Edge(Node* head, Node* tail);
-   ~Edge() = default;
+   ~Edge();
 
    /// Returns this edge's unique identifier
    uint32_t getUniqueId() const noexcept { return pEdgeId; }
+
+   /// Resets head and tail nodes
+   void resetHead(Node* head = nullptr);
+   void resetTail(Node* tail = nullptr);
 
    /// Returns the raw pointer to the head node.
    /// Note: use only if you know what you are doing!
@@ -43,6 +47,9 @@ class SYS_EXPORT_CLASS Edge {
    /// Returns the pointer to the domain associated with this edge
    DomainPtr getDomain() const noexcept { return pDomain; }
    cp::Variable::FiniteDomain* getDomainMutable() const noexcept { return pDomain.get(); }
+
+   /// Removes this edge from the head and tail node
+   void removeEdgeFromNodes();
 
  private:
    static uint32_t kNextID;
@@ -60,6 +67,12 @@ class SYS_EXPORT_CLASS Edge {
 
    /// Pointer to the domain on this edge
    DomainPtr pDomain{nullptr};
+
+   /// Boolean flag indicating whether or not this edge has been added to the nodes
+   bool pEdgeAddedToNodes{false};
+
+   /// Registers this edge on the head and tail nodes
+   void setEdgeOnNodes();
 };
 
 }  // namespace btsolver

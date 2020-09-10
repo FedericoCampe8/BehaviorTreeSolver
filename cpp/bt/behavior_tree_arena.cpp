@@ -1,9 +1,7 @@
 #include "bt/behavior_tree_arena.hpp"
 
 namespace {
-
 constexpr uint32_t kPreallocatedMemorySize{100};
-
 }  // namespace
 
 namespace btsolver {

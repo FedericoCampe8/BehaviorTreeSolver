@@ -34,7 +34,6 @@ public:
   : Node(name, arena)
   {
     // Register the run callback
-    std::function<NodeStatus(const Blackboard::SPtr&)> callback;
     registerRunCallback([=](const Blackboard::SPtr& bb) {
       return this->runLog(bb);
     });

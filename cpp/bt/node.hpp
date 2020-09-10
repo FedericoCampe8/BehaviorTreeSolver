@@ -10,8 +10,10 @@
 
 #include <cstdint>     // for uint32_t
 #include <functional>  // for std::function
+#include <limits>      // for std::numeric_limits
 #include <memory>      // for std::unique_ptr
 #include <string>
+#include <vector>
 
 #include "bt/blackboard.hpp"
 #include "bt/node_status.hpp"
@@ -54,7 +56,7 @@ public:
        BehaviorTreeArena* arena,
        Blackboard::SPtr blackboard=nullptr);
 
-  virtual ~Node() = default;
+  virtual ~Node();
 
   /// Returns this node's unique identifier
   uint32_t getUniqueId() const noexcept { return pNodeId; }
@@ -85,6 +87,18 @@ public:
 
   /// Sets the blackboard
   void setBlackboard(Blackboard::SPtr blackboard) noexcept { pBlackboard = blackboard; }
+
+  /// Adds edges to this node
+  void addIncomingEdge(uint32_t edgeId) { pIncomingEdges.push_back(edgeId); }
+  void addOutgoingEdge(uint32_t edgeId) { pOutgoingEdges.push_back(edgeId); }
+
+  /// Remove edges to this node
+  void removeIncomingEdge(uint32_t edgeId);
+  void removeOutgoingEdge(uint32_t edgeId);
+
+  /// Returns the (usually only) incoming edge
+  uint32_t getIncomingEdge() const {
+    return pIncomingEdges.empty() ? std::numeric_limits<uint32_t>::max() : pIncomingEdges.front(); }
 
   /// Executes the node's state machine and returns the result of the run.
   /// In Behavior Tree terminology, executes a "tick"
@@ -138,6 +152,14 @@ private:
   NodeCallback pConfigureCallback;
   NodeCallback pCleanupCallback;
   NodeCallback pCancelCallback;
+
+  /// Identifiers of incoming edges.
+  /// Note: usually there is only one incoming edge,
+  /// i.e., one parent for each node
+  std::vector<uint32_t> pIncomingEdges;
+
+  /// Identifiers of outgoing edges
+  std::vector<uint32_t> pOutgoingEdges;
 };
 
 }  // namespace btsolver
