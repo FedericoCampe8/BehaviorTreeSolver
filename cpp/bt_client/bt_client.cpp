@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "bt/node.hpp"
+
 extern int optind;
 
 namespace {
@@ -61,6 +63,9 @@ int main(int argc, char* argv[]) {
   {
     // Add entry point code here
     std::cout << "Framework in use: " << framework << std::endl;
+    btsolver::Node node("my_node");
+    std::cout << "Node " << node.getName() << " with status " <<
+            node.getResult().toString() << std::endl;
   }
   catch (const std::exception& e)
   {

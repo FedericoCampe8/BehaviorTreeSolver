@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.12.0 FATAL_ERROR)
 project(BehaviorTreeSolver VERSION 1.0 LANGUAGES C CXX)
 
 # Set c++ version and make it a requirement when building the targets
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add the include directory in src to the search path for include files.
@@ -16,6 +16,7 @@ include_directories(
   "${PROJECT_SOURCE_DIR}/cpp"
   "${PROJECT_SOURCE_DIR}/third-party"
   "${PROJECT_SOURCE_DIR}/third-party/asio"
+  "${PROJECT_SOURCE_DIR}/third-party/sparsepp"
   "${PROJECT_SOURCE_DIR}/include/or-tools"
   "${PROJECT_SOURCE_DIR}/include/bt_protobuf"
   "${PROJECT_SOURCE_DIR}"
