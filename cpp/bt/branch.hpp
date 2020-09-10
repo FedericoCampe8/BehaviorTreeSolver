@@ -12,6 +12,11 @@
 #include "bt/behavior.hpp"
 #include "bt/node_status.hpp"
 
+// Forward declarations
+namespace btsolver {
+class BehaviorTreeArena;
+}  // namespace btsolver
+
 namespace btsolver {
 
 /**
@@ -27,7 +32,7 @@ class SYS_EXPORT_CLASS Selector : public Behavior {
    using SPtr = std::shared_ptr<Selector>;
 
  public:
-   Selector(const std::string& name);
+   Selector(const std::string& name, BehaviorTreeArena* arena);
 
  private:
    NodeStatus runSelector(const Blackboard::SPtr& blackboard);
@@ -45,7 +50,7 @@ class SYS_EXPORT_CLASS Sequence : public Behavior {
    using SPtr = std::shared_ptr<Sequence>;
 
  public:
-   Sequence(const std::string& name);
+   Sequence(const std::string& name, BehaviorTreeArena* arena);
 
  private:
    NodeStatus runSequence(const Blackboard::SPtr& blackboard);

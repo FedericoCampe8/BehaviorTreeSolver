@@ -2,16 +2,25 @@
 
 #include <stdexcept>  // for std::runtime_error
 
+#include "bt/behavior_tree_arena.hpp"
+
 namespace btsolver {
 
 // Initialize unique Identifier for nodes
 uint32_t Node::kNextID = 0;
 
-Node::Node(const std::string& name, Blackboard::SPtr blackboard)
+Node::Node(const std::string& name,
+           BehaviorTreeArena* arena,
+           Blackboard::SPtr blackboard)
 : pNodeId(Node::kNextID++),
   pNodeName(name),
+  pArena(arena),
   pBlackboard(blackboard ? blackboard : std::make_shared<Blackboard>())
 {
+  if (pArena == nullptr)
+  {
+    throw std::invalid_argument("Node: empty pointer to the arena");
+  }
 }
 
 void Node::configure()

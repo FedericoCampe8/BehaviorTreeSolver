@@ -17,6 +17,11 @@
 #include "bt/node_status.hpp"
 #include "system/system_export_defs.hpp"
 
+// Forward declarations
+namespace btsolver {
+class BehaviorTreeArena;
+}  // namespace btsolver
+
 namespace btsolver {
 
 /**
@@ -42,10 +47,13 @@ public:
   /**
    * \brief Node constructor:
    *        - name: name of this node. This should be a unique name
+   *        - arena: the memory/map of nodes in the behavior tree
    *        - blackboard: blackboard for this node. If nullptr is passed, a default one is created.
    */
   Node(const std::string& name,
+       BehaviorTreeArena* arena,
        Blackboard::SPtr blackboard=nullptr);
+
   virtual ~Node() = default;
 
   /// Returns this node's unique identifier
@@ -100,12 +108,21 @@ public:
   /// callback, if any
   virtual void cancel();
 
+protected:
+  BehaviorTreeArena* getArena() const noexcept { return pArena; }
+
 private:
   static uint32_t kNextID;
 
 private:
+  /// Unique identifier for this node
   uint32_t pNodeId{0};
+
+  /// This node's name
   std::string pNodeName{};
+
+  /// Pointer to the behavior tree arena
+  BehaviorTreeArena* pArena{nullptr};
 
   /// Status/result of this node
   NodeStatus pResult{NodeStatus::kPending};

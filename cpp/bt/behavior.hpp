@@ -12,10 +12,13 @@
 #include <string>
 #include <vector>
 
-#include <sparsepp/spp.h>
-
 #include "bt/node.hpp"
 #include "bt/node_status.hpp"
+
+// Forward declarations
+namespace btsolver {
+class BehaviorTreeArena;
+}  // namespace btsolver
 
 namespace btsolver {
 
@@ -25,14 +28,14 @@ class SYS_EXPORT_CLASS Behavior : public Node {
   using SPtr = std::shared_ptr<Behavior>;
 
  public:
-   Behavior(const std::string& name);
+   Behavior(const std::string& name, BehaviorTreeArena* arena);
 
    /// Adds a child to this behavior.
-   /// Notice: children are run in the sequence they are added
-   void addChild(Node::UPtr child);
+   /// Note: children are run in the sequence they are added.
+   void addChild(uint32_t childId);
 
-   /// Pops the child from the list of children and returns its reference
-   Node::UPtr popChild();
+   /// Pops the child from the list of children and returns its unique identifier
+   uint32_t popChild();
 
    /// Cancel all children currently running
    void cancelChildren();
@@ -61,17 +64,11 @@ class SYS_EXPORT_CLASS Behavior : public Node {
    /// Get the child given its identifier
    Node* getChildMutable(uint32_t childId) const;
 
-   const std::vector<Node::UPtr>& getChildren() const noexcept { return pChildren; }
-
- private:
-   using ChildrenNodeMap = spp::sparse_hash_map<uint32_t, std::size_t>;
+   const std::vector<uint32_t>& getChildren() const noexcept { return pChildren; }
 
  private:
    /// List of children nodes
-   std::vector<Node::UPtr> pChildren;
-
-   /// Map of node's unique identifiers to the pointers in the vector
-   ChildrenNodeMap pChildrenMap;
+   std::vector<uint32_t> pChildren;
 
    /// List of open nodes (running nodes)
    std::vector<uint32_t> pOpenNodes;

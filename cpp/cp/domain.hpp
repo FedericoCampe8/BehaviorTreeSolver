@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include <cstdint>  // for uint32_t
+#include <cstdint>    // for uint32_t
 #include <stdexcept>  // for std::invalid_argument
 
 namespace btsolver {

@@ -4,8 +4,8 @@
 
 namespace btsolver {
 
-Selector::Selector(const std::string& name)
-: Behavior(name)
+Selector::Selector(const std::string& name, BehaviorTreeArena* arena)
+: Behavior(name, arena)
 {
   // Register the run callback
   std::function<NodeStatus(const Blackboard::SPtr&)> callback;
@@ -22,7 +22,7 @@ NodeStatus Selector::runSelector(const Blackboard::SPtr& blackboard)
   // Run one child at a time, from left to right
   for (auto& child : getChildren())
   {
-    auto result = tickChild(child->getUniqueId());
+    auto result = tickChild(child);
     if (result == NodeStatus::kActive || result == NodeStatus::kPending)
     {
       // The current child is still active, return asap
@@ -41,8 +41,8 @@ NodeStatus Selector::runSelector(const Blackboard::SPtr& blackboard)
   return NodeStatus::kFail;
 }
 
-Sequence::Sequence(const std::string& name)
-: Behavior(name)
+Sequence::Sequence(const std::string& name, BehaviorTreeArena* arena)
+: Behavior(name, arena)
 {
   // Register the run callback
   std::function<NodeStatus(const Blackboard::SPtr&)> callback;
@@ -59,7 +59,7 @@ NodeStatus Sequence::runSequence(const Blackboard::SPtr& blackboard)
   // Run one child at a time, from left to right
   for (auto& child : getChildren())
   {
-    const auto result = tickChild(child->getUniqueId());
+    const auto result = tickChild(child);
     if (result == NodeStatus::kActive || result == NodeStatus::kPending)
     {
       // The current child is still active, return asap

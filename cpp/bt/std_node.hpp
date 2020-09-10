@@ -15,6 +15,11 @@
 #include "bt/node_status.hpp"
 #include "system/system_export_defs.hpp"
 
+// Forward declarations
+namespace btsolver {
+class BehaviorTreeArena;
+}  // namespace btsolver
+
 namespace btsolver {
 
 /**
@@ -25,8 +30,8 @@ public:
   using UPtr = std::unique_ptr<LogNode>;
 
 public:
-  LogNode(const std::string& name)
-  : Node(name)
+  LogNode(const std::string& name, BehaviorTreeArena* arena)
+  : Node(name, arena)
   {
     // Register the run callback
     std::function<NodeStatus(const Blackboard::SPtr&)> callback;

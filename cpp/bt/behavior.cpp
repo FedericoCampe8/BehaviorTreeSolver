@@ -1,8 +1,11 @@
 #include "bt/behavior.hpp"
 
 #include <algorithm>  // for std::find
+#include <limits>     // for std::numeric_limits
 #include <stdexcept>  // for std::invalid_argument
 #include <utility>    // for std::move
+
+#include "bt/behavior_tree_arena.hpp"
 
 namespace {
 constexpr std::size_t kDefaultNumChildren{16};
@@ -10,54 +13,37 @@ constexpr std::size_t kDefaultNumChildren{16};
 
 namespace btsolver {
 
-Behavior::Behavior(const std::string& name)
-: Node(name)
+Behavior::Behavior(const std::string& name, BehaviorTreeArena* arena)
+: Node(name, arena)
 {
   pChildren.reserve(kDefaultNumChildren);
   pOpenNodes.reserve(kDefaultNumChildren);
 }
 
-void Behavior::addChild(Node::UPtr child)
+void Behavior::addChild(uint32_t childId)
 {
-  if (child == nullptr)
-  {
-    throw std::invalid_argument("Behavior - addChild: empty child instance");
-  }
-
-  // Fail if element is already present in the map
-  pChildrenMap.insert(std::make_pair(child->getUniqueId(), pChildren.size()));
-
-  // Insert the children in the map
-  pChildren.push_back(std::move(child));
+  // Insert the children in the list of children
+  pChildren.push_back(childId);
 }
 
-Node::UPtr Behavior::popChild()
+uint32_t Behavior::popChild()
 {
-  if (pChildrenMap.empty())
+  if (pChildren.empty())
   {
-    return nullptr;
+    return std::numeric_limits<uint32_t>::max();
   }
 
   // Pop the node from the list of children
-  auto outNode = std::move(pChildren.back());
+  auto outNode = pChildren.back();
   pChildren.pop_back();
 
-  // Remove the entry from the map
-  pChildrenMap.erase(outNode->getUniqueId());
-
-  // Return the node (pointer)
-  return std::move(outNode);
+  // Return the node (identifier)
+  return outNode;
 }
 
 Node* Behavior::getChildMutable(uint32_t childId) const
 {
-  auto childPos = pChildrenMap.find(childId);
-  if (childPos == pChildrenMap.end())
-  {
-    throw std::runtime_error("Behavior - tickChild: child not found");
-  }
-
-  return pChildren.at(childPos->second).get();
+  return getArena()->getNode(childId);
 }
 
 NodeStatus Behavior::tickChild(uint32_t childId)
@@ -92,7 +78,7 @@ void Behavior::cancelChildren()
 {
   for (auto& child : pChildren)
   {
-    this->cancelChild(child->getUniqueId());
+    this->cancelChild(child);
   }
 }
 
@@ -113,8 +99,9 @@ void Behavior::cancelChild(uint32_t childId)
 
 void Behavior::cleanupChildren()
 {
-  for (auto& child : pChildren)
+  for (auto& childId : pChildren)
   {
+    auto child = getChildMutable(childId);
     if (child->getResult() != NodeStatus::kPending)
     {
       child->cleanup();

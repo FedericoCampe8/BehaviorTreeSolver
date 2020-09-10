@@ -1,12 +1,22 @@
 #include "bt/behavior_tree.hpp"
 
 #include <algorithm>  // for std::max
+#include <stdexcept>  // for std::invalid_argument
 
 namespace btsolver {
 
-void BehaviorTree::setEntryNode(Node::UPtr entryNode)
+BehaviorTree::BehaviorTree(BehaviorTreeArena::UPtr arena)
+: pArena(std::move(arena))
 {
-  pEntryNode = std::move(entryNode);
+  if (pArena == nullptr)
+  {
+    throw std::invalid_argument("BehaviorTree - empty arena");
+  }
+}
+
+void BehaviorTree::setEntryNode(uint32_t entryNode)
+{
+  pEntryNode = entryNode;
 }
 
 void BehaviorTree::run()
@@ -15,9 +25,16 @@ void BehaviorTree::run()
   pStatus = NodeStatus::kActive;
   pStopRun = false;
 
-  if (pEntryNode == nullptr)
+  if (pEntryNode == std::numeric_limits<uint32_t>::max())
   {
+    // Entry node not set, return asap
     return;
+  }
+
+  auto entryNodePtr = pArena->getNode(pEntryNode);
+  if (entryNodePtr == nullptr)
+  {
+    throw std::runtime_error("BehaviorTree - run: empty entry node");
   }
 
   // Start ticking
@@ -30,7 +47,7 @@ void BehaviorTree::run()
         break;
       }
 
-      pStatus = pEntryNode->tick();
+      pStatus = entryNodePtr->tick();
     }
   }
   else
@@ -42,7 +59,7 @@ void BehaviorTree::run()
         break;
       }
 
-      pStatus = pEntryNode->tick();
+      pStatus = entryNodePtr->tick();
     }
   }
 }
