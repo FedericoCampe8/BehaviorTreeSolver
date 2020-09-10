@@ -42,11 +42,10 @@ class SYS_EXPORT_CLASS Edge {
    Node* getTail() const noexcept { return pTail; }
 
    /// Sets the domain for this edge
-   void setDomain(DomainPtr domain) noexcept { pDomain = domain; }
+   void setDomain(cp::Variable::FiniteDomain* domain) noexcept { pDomain = domain; }
 
    /// Returns the pointer to the domain associated with this edge
-   DomainPtr getDomain() const noexcept { return pDomain; }
-   cp::Variable::FiniteDomain* getDomainMutable() const noexcept { return pDomain.get(); }
+   cp::Variable::FiniteDomain* getDomainMutable() const noexcept { return pDomain; }
 
    /// Removes this edge from the head and tail node
    void removeEdgeFromNodes();
@@ -66,7 +65,7 @@ class SYS_EXPORT_CLASS Edge {
    Node* pTail{nullptr};
 
    /// Pointer to the domain on this edge
-   DomainPtr pDomain{nullptr};
+   cp::Variable::FiniteDomain* pDomain{nullptr};
 
    /// Boolean flag indicating whether or not this edge has been added to the nodes
    bool pEdgeAddedToNodes{false};

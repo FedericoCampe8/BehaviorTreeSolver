@@ -12,12 +12,16 @@
 #include <vector>
 
 #include "bt/behavior_tree.hpp"
+#include "bt/behavior_tree_arena.hpp"
 #include "bt/branch.hpp"
 #include "bt/node.hpp"
 #include "bt/node_status.hpp"
 #include "bt/std_node.hpp"
-#include "cp/domain.hpp"
+#include "bt_solver/bt_solver.hpp"
 #include "cp/bitmap_domain.hpp"
+#include "cp/domain.hpp"
+#include "cp/model.hpp"
+#include "cp/variable.hpp"
 
 extern int optind;
 
@@ -33,24 +37,26 @@ void printHelp(const std::string& programName) {
       << std::endl;
 }  // printHelp
 
-void runBehaviorTree()
+void runBehaviorTreeTest()
 {
   using namespace btsolver;
   using namespace btsolver::cp;
 
-  auto root = std::make_unique<btsolver::Sequence>("sequence");
-  auto log1 = std::make_unique<btsolver::LogNode>("log_1");
-  auto log2 = std::make_unique<btsolver::LogNode>("log_2");
-  auto log3 = std::make_unique<btsolver::LogNode>("log_3");
-  log1->setLog("log_1");
-  log2->setLog("log_2");
-  log3->setLog("log_3");
-  root->addChild(std::move(log1));
-  root->addChild(std::move(log2));
-  root->addChild(std::move(log3));
+  auto arena = std::make_unique<BehaviorTreeArena>();
 
-  btsolver::BehaviorTree bt;
-  bt.setEntryNode(std::move(root));
+  auto root = arena->buildNode<btsolver::Sequence>("sequence");
+  auto log1 = arena->buildNode<btsolver::LogNode>("log_1");
+  auto log2 = arena->buildNode<btsolver::LogNode>("log_2");
+  auto log3 = arena->buildNode<btsolver::LogNode>("log_3");
+  reinterpret_cast<btsolver::LogNode*>(log1)->setLog("log_1");
+  reinterpret_cast<btsolver::LogNode*>(log2)->setLog("log_2");
+  reinterpret_cast<btsolver::LogNode*>(log3)->setLog("log_3");
+  reinterpret_cast<btsolver::Sequence*>(root)->addChild(log1->getUniqueId());
+  reinterpret_cast<btsolver::Sequence*>(root)->addChild(log2->getUniqueId());
+  reinterpret_cast<btsolver::Sequence*>(root)->addChild(log3->getUniqueId());
+
+  btsolver::BehaviorTree bt(std::move(arena));
+  bt.setEntryNode(root->getUniqueId());
   bt.run();
 
   Domain<BitmapDomain> domain(120, 130);
@@ -102,6 +108,27 @@ void runBehaviorTree()
   it.reset();
 }
 
+
+void runSolver()
+{
+  using namespace btsolver;
+  using namespace btsolver::cp;
+
+  BTSolver solver;
+
+  // Create a simple model
+  auto model = std::make_shared<Model>("basic_model");
+  model->addVariable(std::make_shared<Variable>("v1", 1, 3));
+  model->addVariable(std::make_shared<Variable>("v2", 1, 3));
+  model->addVariable(std::make_shared<Variable>("v3", 1, 3));
+
+  solver.setModel(model);
+  solver.setBehaviorTree(solver.buildRelaxedBT());
+
+  // Run solver on the relaxed Behavior Tree
+  solver.solve(0);
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -137,7 +164,7 @@ int main(int argc, char* argv[]) {
   try
   {
     // TODO Add entry point code here
-    runBehaviorTree();
+    runSolver();
   }
   catch (const std::exception& e)
   {
