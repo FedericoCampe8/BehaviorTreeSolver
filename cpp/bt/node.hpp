@@ -10,13 +10,12 @@
 
 #include <cstdint>     // for uint32_t
 #include <functional>  // for std::function
-#include <memory>
+#include <memory>      // for std::unique_ptr
 #include <string>
 
 #include "bt/blackboard.hpp"
 #include "bt/node_status.hpp"
 #include "system/system_export_defs.hpp"
-
 
 namespace btsolver {
 
