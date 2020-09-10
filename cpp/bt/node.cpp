@@ -7,19 +7,10 @@ namespace btsolver {
 // Initialize unique Identifier for nodes
 uint32_t Node::kNextID = 0;
 
-Node::Node(const std::string& name,
-           Blackboard::SPtr blackboard,
-           CallbackRunSPtr runCallback,
-           CallbackSPtr configureCallback,
-           CallbackSPtr cleanupCallback,
-           CallbackSPtr cancelCallback)
+Node::Node(const std::string& name, Blackboard::SPtr blackboard)
 : pNodeId(Node::kNextID++),
   pNodeName(name),
-  pBlackboard(blackboard ? blackboard : std::make_shared<Blackboard>()),
-  pRunCallback(runCallback),
-  pConfigureCallback(configureCallback),
-  pCleanupCallback(cleanupCallback),
-  pCancelCallback(cancelCallback)
+  pBlackboard(blackboard ? blackboard : std::make_shared<Blackboard>())
 {
 }
 
@@ -28,16 +19,16 @@ void Node::configure()
   if (pConfigureCallback)
   {
     // Run the user provided callback
-    (*pConfigureCallback)(pBlackboard);
+    pConfigureCallback(pBlackboard);
   }
 
   // Change the status to active
-  pResult.changeStatus(NodeStatus::NodeStatusType::kActive);
+  pResult = NodeStatus::kActive;
 }
 
 void Node::cleanup()
 {
-  if (pResult.getStatus() == NodeStatus::NodeStatusType::kActive)
+  if (pResult == NodeStatus::kActive)
   {
     this->cancel();
   }
@@ -45,66 +36,61 @@ void Node::cleanup()
   if (pCleanupCallback)
   {
     // Run the user provided callback
-    (*pCleanupCallback)(pBlackboard);
+    pCleanupCallback(pBlackboard);
   }
 
   // Reset the status to pending
-  pForcedState.changeStatus(NodeStatus::NodeStatusType::kUndefined);
-  pResult.changeStatus(NodeStatus::NodeStatusType::kPending);
+  pForcedState = NodeStatus::kUndefined;
+  pResult = NodeStatus::kPending;
 }
 
-void Node::run() {
-  if (pForcedState.getStatus() != NodeStatus::NodeStatusType::kUndefined)
+NodeStatus Node::run() {
+  if (pForcedState != NodeStatus::kUndefined)
   {
     // Force the status
-    pResult.changeStatus(pForcedState.getStatus());
+    pResult = pForcedState;
   }
   else if (pRunCallback)
   {
-    auto status = (*pRunCallback)(pBlackboard);
-    pResult.changeStatus(status);
+    pResult = pRunCallback(pBlackboard);
   }
   else
   {
     throw std::runtime_error("Node - run: callback not found");
   }
+  pBlackboard->setNodeStatus(getUniqueId(), pResult);
+  return pResult;
 }
 
 void Node::cancel()
 {
-  pForcedState.changeStatus(NodeStatus::NodeStatusType::kCancel);
+  pForcedState = NodeStatus::kCancel;
   if (pCancelCallback)
   {
     // Run the user provided callback
-    (*pCancelCallback)(pBlackboard);
+    pCancelCallback(pBlackboard);
   }
 
   // Run the node after canceling
   this->run();
 }
 
-void Node::force(NodeStatus::NodeStatusType status)
+NodeStatus Node::tick()
 {
-  pForcedState.changeStatus(status);
-}
-
-void Node::tick()
-{
-  if (pResult.getStatus() == NodeStatus::NodeStatusType::kPending)
+  if (pResult == NodeStatus::kPending)
   {
     this->configure();
   }
 
   // Run the node
-  this->run();
-
-  const auto postRunResult = pResult.getStatus();
-  if (!(postRunResult == NodeStatus::NodeStatusType::kActive ||
-          postRunResult == NodeStatus::NodeStatusType::kPending))
+  const auto result = this->run();
+  if (!(result == NodeStatus::kActive || result == NodeStatus::kPending))
   {
-    // The node is not active anymore, execute the cleanup
+    // The node is not active anymore, execute the cleanup.
+    // Note: cleanup has side-effects on the internal state of this node
     this->cleanup();
   }
+  return result;
 }
 
 }  // namespace btsolver

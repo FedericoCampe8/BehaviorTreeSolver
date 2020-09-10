@@ -2,37 +2,18 @@
 
 namespace btsolver {
 
-NodeStatus::NodeStatus(NodeStatusType status)
-: pStatusType(status)
+std::string statusToString(NodeStatus state) noexcept
 {
-}
-
-void NodeStatus::changeStatus(NodeStatusType status) noexcept
-{
-  pStatusType = status;
-}
-
-void NodeStatus::merge(NodeStatusType status) noexcept
-{
-  if (static_cast<int>(status) > static_cast<int>(pStatusType) &&
-          (status != NodeStatusType::kUndefined))
-  {
-    pStatusType = status;
-  }
-}
-
-std::string NodeStatus::toString() const noexcept
-{
-  switch(pStatusType) {
-    case NodeStatusType::kActive:
+  switch(state) {
+    case NodeStatus::kActive:
       return "ACTIVE";
-    case NodeStatusType::kCancel:
+    case NodeStatus::kCancel:
       return "CANCEL";
-    case NodeStatusType::kFail:
+    case NodeStatus::kFail:
       return "FAIL";
-    case NodeStatusType::kPending:
+    case NodeStatus::kPending:
       return "PENDING";
-    case NodeStatusType::kSuccess:
+    case NodeStatus::kSuccess:
       return "SUCCESS";
     default:
       return "UNDEFINED";

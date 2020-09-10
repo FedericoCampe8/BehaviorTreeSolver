@@ -8,13 +8,14 @@
 #pragma once
 
 #include <cstdio>  // for std::size_t
+#include <memory>  // for std::unique_ptr
 #include <string>
 #include <vector>
 
 #include <sparsepp/spp.h>
 
 #include "bt/node.hpp"
-
+#include "bt/node_status.hpp"
 
 namespace btsolver {
 
@@ -55,10 +56,12 @@ class SYS_EXPORT_CLASS Behavior : public Node {
 
  protected:
    /// Ticks the specified child
-   void tickChild(uint32_t childId);
+   NodeStatus tickChild(uint32_t childId);
 
    /// Get the child given its identifier
    Node* getChildMutable(uint32_t childId) const;
+
+   const std::vector<Node::UPtr>& getChildren() const noexcept { return pChildren; }
 
  private:
    using ChildrenNodeMap = spp::sparse_hash_map<uint32_t, std::size_t>;

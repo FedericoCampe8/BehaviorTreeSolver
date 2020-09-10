@@ -35,9 +35,7 @@ class SYS_EXPORT_CLASS Node {
 public:
   /// Node callback methods
   using NodeCallback = std::function<void(const Blackboard::SPtr&)>;
-  using RunCallback = std::function<NodeStatus::NodeStatusType(const Blackboard::SPtr&)>;
-  using CallbackSPtr = std::shared_ptr<NodeCallback>;
-  using CallbackRunSPtr = std::shared_ptr<RunCallback>;
+  using NodeRunCallback = std::function<NodeStatus(const Blackboard::SPtr&)>;
   using UPtr = std::unique_ptr<Node>;
   using SPtr = std::shared_ptr<Node>;
 
@@ -46,17 +44,9 @@ public:
    * \brief Node constructor:
    *        - name: name of this node. This should be a unique name
    *        - blackboard: blackboard for this node. If nullptr is passed, a default one is created.
-   *        - runCallback: the function to call on run
-   *        - configureCallback: the function to call on enter
-   *        - cleanupCallback: the function to call on exit
-   *        - cancelCallback: the function to call when canceled
    */
   Node(const std::string& name,
-       Blackboard::SPtr blackboard=nullptr,
-       CallbackRunSPtr runCallback=nullptr,
-       CallbackSPtr configureCallback=nullptr,
-       CallbackSPtr cleanupCallback=nullptr,
-       CallbackSPtr cancelCallback=nullptr);
+       Blackboard::SPtr blackboard=nullptr);
   virtual ~Node() = default;
 
   /// Returns this node's unique identifier
@@ -66,42 +56,42 @@ public:
   const std::string& getName() const noexcept { return pNodeName; }
 
   /// Returns the result of this node
-  const NodeStatus& getResult() const noexcept { return pResult; }
+  NodeStatus getResult() const noexcept { return pResult; }
 
-  /// Returns this node's data/blackboard
-  Blackboard::SPtr getNodeData() const noexcept { return pBlackboard; }
+  /// Returns this node's status
+  NodeStatus getStatus() noexcept { return pBlackboard->getNodeStatus(getUniqueId()); }
 
-  /// Registers the run callback
-  void registerRunCallback(CallbackRunSPtr runCB) noexcept { pRunCallback = runCB; }
+  /// Returns this node's blackboard
+  Blackboard::SPtr getBlackboard() const noexcept { return pBlackboard; }
 
-  /// Registers the configure callback
-  void registerConfigureCallback(CallbackSPtr configCB) noexcept { pConfigureCallback = configCB; }
+  /// Registers the run callback: the function to call on run
+  void registerRunCallback(NodeRunCallback&& runCB) noexcept { pRunCallback = runCB; }
 
-  /// Registers the cleanup callback
-  void registerCleanupCallback(CallbackSPtr cleanupCB) noexcept { pCleanupCallback = cleanupCB; }
+  /// Registers the configure callback: the function to call on enter
+  void registerConfigureCallback(NodeCallback&& configCB) noexcept { pConfigureCallback = configCB; }
 
-  /// Registers the cancel callback
-  void registerCancelCallback(CallbackSPtr cancelCB) noexcept { pCancelCallback = cancelCB; }
+  /// Registers the cleanup callback: the function to call on exit
+  void registerCleanupCallback(NodeCallback&& cleanupCB) noexcept { pCleanupCallback = cleanupCB; }
+
+  /// Registers the cancel callback: the function to call when canceled
+  void registerCancelCallback(NodeCallback&& cancelCB) noexcept { pCancelCallback = cancelCB; }
 
   /// Sets the blackboard
   void setBlackboard(Blackboard::SPtr blackboard) noexcept { pBlackboard = blackboard; }
 
-  /// Returns the blackboard registered within this node
-  Blackboard::SPtr getBlackboard() const noexcept { return pBlackboard; }
-
-  /// Runs the node.
+  /// Executes the node's state machine and returns the result of the run.
   /// In Behavior Tree terminology, executes a "tick"
-  void tick();
+  NodeStatus tick();
 
   /// Forces an execution state
-  void force(NodeStatus::NodeStatusType status);
+  void force(NodeStatus status) noexcept { pForcedState = status; }
 
   /// Configuration performed once before run.
   /// This is usually used to set up internal variables
   void configure();
 
-  /// Evaluates the current node
-  void run();
+  /// Evaluates the current node and returns the state after run
+  NodeStatus run();
 
   /// Cleanup performed once run returns a termination value.
   /// This is usually used to reset internal variables
@@ -119,19 +109,19 @@ private:
   std::string pNodeName{};
 
   /// Status/result of this node
-  NodeStatus pResult{};
+  NodeStatus pResult{NodeStatus::kPending};
 
   /// Forced status
-  NodeStatus pForcedState{NodeStatus::NodeStatusType::kUndefined};
+  NodeStatus pForcedState{NodeStatus::kUndefined};
 
   /// Blackboard memory of this node
   Blackboard::SPtr pBlackboard;
 
   /// Callback
-  CallbackRunSPtr pRunCallback;
-  CallbackSPtr pConfigureCallback;
-  CallbackSPtr pCleanupCallback;
-  CallbackSPtr pCancelCallback;
+  NodeRunCallback pRunCallback;
+  NodeCallback pConfigureCallback;
+  NodeCallback pCleanupCallback;
+  NodeCallback pCancelCallback;
 };
 
 }  // namespace btsolver

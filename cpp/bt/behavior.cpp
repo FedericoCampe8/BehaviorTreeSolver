@@ -60,25 +60,22 @@ Node* Behavior::getChildMutable(uint32_t childId) const
   return pChildren.at(childPos->second).get();
 }
 
-void Behavior::tickChild(uint32_t childId)
+NodeStatus Behavior::tickChild(uint32_t childId)
 {
   auto child = this->getChildMutable(childId);
 
-  // Run the node
-  child->tick();
-
-  // Get the result status of the node
-  const auto result = (child->getResult()).getStatus();
-  if (result == NodeStatus::NodeStatusType::kActive)
+  // Run the node and get its result
+  const auto result = child->tick();
+  if (result == NodeStatus::kActive)
   {
     auto nodeId = child->getUniqueId();
     if (std::find(pOpenNodes.begin(), pOpenNodes.end(), nodeId) == pOpenNodes.end())
     {
-      // The node is still active, add it to the set of open nodes
+      // The node is still active, add it to the set of open nodes (if not already present)
       pOpenNodes.push_back(nodeId);
     }
   }
-  else if (result == NodeStatus::NodeStatusType::kPending)
+  else if (result == NodeStatus::kPending)
   {
     auto nodeId = child->getUniqueId();
     auto iter = std::find(pOpenNodes.begin(), pOpenNodes.end(), nodeId);
@@ -88,6 +85,7 @@ void Behavior::tickChild(uint32_t childId)
       pOpenNodes.erase(iter);
     }
   }
+  return result;
 }
 
 void Behavior::cancelChildren()
@@ -107,7 +105,7 @@ void Behavior::cancel()
 void Behavior::cancelChild(uint32_t childId)
 {
   auto child = this->getChildMutable(childId);
-  if (child->getResult().getStatus() != NodeStatus::NodeStatusType::kPending)
+  if (child->getResult() != NodeStatus::kPending)
   {
     child->cancel();
   }
@@ -117,7 +115,7 @@ void Behavior::cleanupChildren()
 {
   for (auto& child : pChildren)
   {
-    if (child->getResult().getStatus() != NodeStatus::NodeStatusType::kPending)
+    if (child->getResult() != NodeStatus::kPending)
     {
       child->cleanup();
       auto nodeId = child->getUniqueId();

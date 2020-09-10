@@ -11,7 +11,10 @@
 #include <string>
 #include <vector>
 
+#include "bt/branch.hpp"
 #include "bt/node.hpp"
+#include "bt/node_status.hpp"
+#include "bt/std_node.hpp"
 
 extern int optind;
 
@@ -26,6 +29,27 @@ void printHelp(const std::string& programName) {
       << "  --help|-h          Print this help message."
       << std::endl;
 }  // printHelp
+
+void runBehaviorTree()
+{
+  btsolver::Sequence sequence("sequence");
+  auto log1 = std::make_unique<btsolver::LogNode>("log_1");
+  auto log2 = std::make_unique<btsolver::LogNode>("log_2");
+  auto log3 = std::make_unique<btsolver::LogNode>("log_3");
+  log1->setLog("log_1");
+  log2->setLog("log_2");
+  log3->setLog("log_3");
+  sequence.addChild(std::move(log1));
+  sequence.addChild(std::move(log2));
+  sequence.addChild(std::move(log3));
+
+  auto status = btsolver::NodeStatus::kActive;
+  while (status == btsolver::NodeStatus::kActive)
+  {
+    sequence.tick();
+    status = sequence.getResult();
+  }
+}
 
 }  // namespace
 
@@ -61,11 +85,8 @@ int main(int argc, char* argv[]) {
   // Print some info
   try
   {
-    // Add entry point code here
-    std::cout << "Framework in use: " << framework << std::endl;
-    btsolver::Node node("my_node");
-    std::cout << "Node " << node.getName() << " with status " <<
-            node.getResult().toString() << std::endl;
+    // TODO Add entry point code here
+    runBehaviorTree();
   }
   catch (const std::exception& e)
   {
