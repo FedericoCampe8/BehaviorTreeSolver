@@ -22,6 +22,7 @@
 #include "cp/domain.hpp"
 #include "cp/model.hpp"
 #include "cp/variable.hpp"
+#include "tools/timer.hpp"
 
 extern int optind;
 
@@ -123,10 +124,22 @@ void runSolver()
   model->addVariable(std::make_shared<Variable>("v3", 1, 3));
 
   solver.setModel(model);
-  solver.setBehaviorTree(solver.buildRelaxedBT());
+
+  tools::Timer timer;
+
+  // Build the relaxed BT
+  auto bt = solver.buildRelaxedBT();
+
+  // Build the exact BT starting from the relaxed BT
+  solver.buildExactBT(bt);
+
+  // Run the solver on the exact BT
+  solver.setBehaviorTree(bt);
 
   // Run solver on the relaxed Behavior Tree
-  solver.solve(0);
+  solver.solve(1);
+
+  std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
 }
 
 }  // namespace

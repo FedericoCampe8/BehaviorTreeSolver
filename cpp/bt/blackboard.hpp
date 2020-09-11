@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdint>  // for uint32_t
 #include <memory>
 #include <string>
@@ -66,8 +67,18 @@ public:
   /// Clears all the internal status
   void clearNodeStatus() { pNodeStatusMap.clear(); }
 
+  /// Adds a new (CP) node state to the blackboard.
+  /// The state will be set active/non-active according to the given value
+  void addState(uint32_t stateId, bool isActive=true);
+
+  /// Gets the value of the given state (active/non-active).
+  /// Sets the state to non-active (regardless), and returns
+  /// the value of the state before it was set to non-active
+  bool checkAndDeactivateState(uint32_t stateId);
+
 private:
   using Memory = spp::sparse_hash_map<std::string, BlackboardValue>;
+  using StateMemory = spp::sparse_hash_map<uint32_t, bool>;
 
 private:
   /// The "memory" of this blackboard
@@ -75,6 +86,10 @@ private:
 
   /// Map of nodes (unique ids) and their status
   NodeStatusMap pNodeStatusMap;
+
+  /// Map of active/non-active states.
+  /// This map is mainly used by CP solver to activate states
+  StateMemory pStateMemory;
 
 };
 

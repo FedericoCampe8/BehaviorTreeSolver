@@ -32,10 +32,10 @@ class SYS_EXPORT_CLASS Selector : public Behavior {
    using SPtr = std::shared_ptr<Selector>;
 
  public:
-   Selector(const std::string& name, BehaviorTreeArena* arena);
+   Selector(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr);
 
  private:
-   NodeStatus runSelector(const Blackboard::SPtr& blackboard);
+   NodeStatus runSelector(Blackboard* blackboard);
 };
 
 /**
@@ -50,10 +50,10 @@ class SYS_EXPORT_CLASS Sequence : public Behavior {
    using SPtr = std::shared_ptr<Sequence>;
 
  public:
-   Sequence(const std::string& name, BehaviorTreeArena* arena);
+   Sequence(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr);
 
  private:
-   NodeStatus runSequence(const Blackboard::SPtr& blackboard);
+   NodeStatus runSequence(Blackboard* blackboard);
 };
 
 }  // namespace btsolver

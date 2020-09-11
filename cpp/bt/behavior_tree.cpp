@@ -12,6 +12,9 @@ BehaviorTree::BehaviorTree(BehaviorTreeArena::UPtr arena)
   {
     throw std::invalid_argument("BehaviorTree - empty arena");
   }
+
+  // Set the blackboard shared among the nodes
+  pBlackboard = pArena->getBlackboard();
 }
 
 void BehaviorTree::setEntryNode(uint32_t entryNode)

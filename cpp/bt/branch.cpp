@@ -4,17 +4,16 @@
 
 namespace btsolver {
 
-Selector::Selector(const std::string& name, BehaviorTreeArena* arena)
-: Behavior(name, arena)
+Selector::Selector(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard)
+: Behavior(name, arena, blackboard)
 {
   // Register the run callback
-  std::function<NodeStatus(const Blackboard::SPtr&)> callback;
-  registerRunCallback([=](const Blackboard::SPtr& bb) {
+  registerRunCallback([=](Blackboard* bb) {
     return this->runSelector(bb);
   });
 }
 
-NodeStatus Selector::runSelector(const Blackboard::SPtr& blackboard)
+NodeStatus Selector::runSelector(Blackboard* blackboard)
 {
   // Reset the status of all children before running
   resetChildrenStatus();
@@ -41,17 +40,16 @@ NodeStatus Selector::runSelector(const Blackboard::SPtr& blackboard)
   return NodeStatus::kFail;
 }
 
-Sequence::Sequence(const std::string& name, BehaviorTreeArena* arena)
-: Behavior(name, arena)
+Sequence::Sequence(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard)
+: Behavior(name, arena, blackboard)
 {
   // Register the run callback
-  std::function<NodeStatus(const Blackboard::SPtr&)> callback;
-  registerRunCallback([=](const Blackboard::SPtr& bb) {
+  registerRunCallback([=](Blackboard* bb) {
     return this->runSequence(bb);
   });
 }
 
-NodeStatus Sequence::runSequence(const Blackboard::SPtr& blackboard)
+NodeStatus Sequence::runSequence(Blackboard* blackboard)
 {
   // Reset the status of all children before running
   resetChildrenStatus();

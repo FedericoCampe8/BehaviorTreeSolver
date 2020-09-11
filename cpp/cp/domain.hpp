@@ -88,6 +88,18 @@ template <typename BaseDomain>
 class Domain {
  public:
   /**
+   * \brief Creates a singleton domain.
+   *        Throws std::invalid_argument if upperBound < lowerBound
+   */
+  Domain(int32_t value)
+  : pLowerBound(value),
+    pUpperBound(value)
+  {
+    // Configure the internal domain representation
+    resetDomain();
+  }
+
+  /**
    * \brief Creates a domain [lowerBound, upperBound].
    *        Throws std::invalid_argument if upperBound < lowerBound
    */

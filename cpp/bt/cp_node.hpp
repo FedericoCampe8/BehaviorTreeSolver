@@ -41,16 +41,16 @@ public:
   using UPtr = std::unique_ptr<StateNode>;
 
 public:
-  StateNode(const std::string& name, BehaviorTreeArena* arena)
-  : Node(name, arena)
+  StateNode(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr)
+  : Node(name, arena, blackboard)
   {
     // Register the config callback
-    registerConfigureCallback([=](const Blackboard::SPtr& bb) {
+    registerConfigureCallback([=](Blackboard* bb) {
       return this->configNode(bb);
     });
 
     // Register the run callback
-    registerRunCallback([=](const Blackboard::SPtr& bb) {
+    registerRunCallback([=](Blackboard* bb) {
       return this->runStateNode(bb);
     });
   }
@@ -60,7 +60,7 @@ private:
   std::atomic<bool> pDomainExplored{false};
   cp::Variable::FiniteDomain* pDomain{nullptr};
 
-  void configNode(const Blackboard::SPtr& blackboard)
+  void configNode(Blackboard* blackboard)
   {
     // Get the incoming edge
     const auto edgeId = getIncomingEdge();
@@ -71,7 +71,7 @@ private:
     pDomain = getArena()->getEdge(edgeId)->getDomainMutable();
   }
 
-  void cleanupNode(const Blackboard::SPtr& blackboard)
+  void cleanupNode(Blackboard* blackboard)
   {
     // Get the incoming edge
     if (pDomain == nullptr)
@@ -87,7 +87,7 @@ private:
     pDomainExplored = false;
   }
 
-  NodeStatus runStateNode(const Blackboard::SPtr& blackboard)
+  NodeStatus runStateNode(Blackboard* blackboard)
   {
     if (pDomain == nullptr || pDomainExplored)
     {

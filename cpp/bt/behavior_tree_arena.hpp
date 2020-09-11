@@ -14,6 +14,7 @@
 
 #include <sparsepp/spp.h>
 
+#include "bt/blackboard.hpp"
 #include "bt/node.hpp"
 #include "bt/edge.hpp"
 #include "system/system_export_defs.hpp"
@@ -35,9 +36,8 @@ class SYS_EXPORT_CLASS BehaviorTreeArena {
   {
     // TODO add garbage collector: check if size is greater than max and, if so,
     // resize the pool
-    pNodePool.push_back(std::make_unique<NodeType>(name, this));
+    pNodePool.push_back(std::make_unique<NodeType>(name, this, pBlackboard.get()));
     pNodeArena[pNodePool.back()->getUniqueId()] = static_cast<uint32_t>((pNodePool.size() - 1));
-    pNodeStringArena[pNodePool.back()->getName()] = static_cast<uint32_t>((pNodePool.size() - 1));
     return pNodePool.back().get();
   }
 
@@ -57,12 +57,6 @@ class SYS_EXPORT_CLASS BehaviorTreeArena {
     return pNodePool.at(pNodeArena.at(nodeId)).get();
   }
 
-  /// Returns the pointer to the node with given name
-  Node* getNode(const std::string& nodeName) const
-  {
-    return pNodePool.at(pNodeStringArena.at(nodeName)).get();
-  }
-
   /// Returns the pointer to the edge with given id
   Edge* getEdge(uint32_t edgeId) const
   {
@@ -75,10 +69,12 @@ class SYS_EXPORT_CLASS BehaviorTreeArena {
   /// Deletes the edge with given id
   void deleteEdge(uint32_t edgeId);
 
+  /// Returns the pointer to the internal blackboard
+  Blackboard::SPtr getBlackboard() const noexcept { return pBlackboard; }
+
  private:
   /// Map from node id to its index in the node list
   using NodeArena = spp::sparse_hash_map<uint32_t, uint32_t>;
-  using NodeStringArena = spp::sparse_hash_map<std::string, uint32_t>;
 
   /// Map from edge id to its index in the edge list
   using EdgeArena = spp::sparse_hash_map<uint32_t, uint32_t>;
@@ -86,7 +82,6 @@ class SYS_EXPORT_CLASS BehaviorTreeArena {
 private:
   /// Node map
   NodeArena pNodeArena;
-  NodeStringArena pNodeStringArena;
 
   /// Edge map
   EdgeArena pEdgeArena;
@@ -96,6 +91,10 @@ private:
 
   /// List of all the edge instances in the Behavior Tree
   std::vector<Edge::UPtr> pEdgePool;
+
+  /// Blackboard instance shared with all nodes created
+  /// in this arena
+  Blackboard::SPtr pBlackboard{nullptr};
 
 };
 

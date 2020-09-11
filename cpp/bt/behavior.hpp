@@ -14,6 +14,7 @@
 
 #include "bt/node.hpp"
 #include "bt/node_status.hpp"
+#include "system/system_export_defs.hpp"
 
 // Forward declarations
 namespace btsolver {
@@ -28,7 +29,7 @@ class SYS_EXPORT_CLASS Behavior : public Node {
   using SPtr = std::shared_ptr<Behavior>;
 
  public:
-   Behavior(const std::string& name, BehaviorTreeArena* arena);
+   Behavior(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr);
 
    /// Adds a child to this behavior.
    /// Note: children are run in the sequence they are added.
@@ -36,6 +37,9 @@ class SYS_EXPORT_CLASS Behavior : public Node {
 
    /// Pops the child from the list of children and returns its unique identifier
    uint32_t popChild();
+
+   /// Replace child "oldChild" with child "newChild"
+   void replaceChild(uint32_t oldChild, uint32_t newChild);
 
    /// Cancel all children currently running
    void cancelChildren();
@@ -57,14 +61,15 @@ class SYS_EXPORT_CLASS Behavior : public Node {
    /// This is usually used to reset internal variables
    void cleanup() override;
 
+   /// Returns the list of children of this node
+   const std::vector<uint32_t>& getChildren() const noexcept { return pChildren; }
+
  protected:
    /// Ticks the specified child
    NodeStatus tickChild(uint32_t childId);
 
    /// Get the child given its identifier
    Node* getChildMutable(uint32_t childId) const;
-
-   const std::vector<uint32_t>& getChildren() const noexcept { return pChildren; }
 
  private:
    /// List of children nodes

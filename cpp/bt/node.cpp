@@ -16,15 +16,20 @@ uint32_t Node::kNextID = 0;
 
 Node::Node(const std::string& name,
            BehaviorTreeArena* arena,
-           Blackboard::SPtr blackboard)
+           Blackboard* blackboard)
 : pNodeId(Node::kNextID++),
   pNodeName(name),
   pArena(arena),
-  pBlackboard(blackboard ? blackboard : std::make_shared<Blackboard>())
+  pBlackboard(blackboard)
 {
   if (pArena == nullptr)
   {
     throw std::invalid_argument("Node: empty pointer to the arena");
+  }
+
+  if (pBlackboard == nullptr)
+  {
+    throw std::invalid_argument("Node: empty pointer to the blackboard");
   }
 
   pIncomingEdges.reserve(1);

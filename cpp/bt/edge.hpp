@@ -33,6 +33,12 @@ class SYS_EXPORT_CLASS Edge {
    void resetHead(Node* head = nullptr);
    void resetTail(Node* tail = nullptr);
 
+   /// Change head and tail nodes.
+   /// Note: this methods DO NOT modify the children of the current or given nodes
+   void changeHead(Node* head);
+   void changeTail(Node* tail);
+
+
    /// Returns the raw pointer to the head node.
    /// Note: use only if you know what you are doing!
    Node* getHead() const noexcept { return pHead; }
@@ -43,6 +49,10 @@ class SYS_EXPORT_CLASS Edge {
 
    /// Sets the domain for this edge
    void setDomain(cp::Variable::FiniteDomain* domain) noexcept { pDomain = domain; }
+
+   /// Sets the domain for this edge and make the edge owner of the domain.
+   /// Note: this is usually done for temporary domains
+   void setDomainAndOwn(cp::Variable::FiniteDomain* domain);
 
    /// Returns the pointer to the domain associated with this edge
    cp::Variable::FiniteDomain* getDomainMutable() const noexcept { return pDomain; }
@@ -63,6 +73,9 @@ class SYS_EXPORT_CLASS Edge {
 
    /// Pointer to the tail node of this edge
    Node* pTail{nullptr};
+
+   /// Flag indicating whether this edge owns the domain or not
+   bool pOwnsDomain{false};
 
    /// Pointer to the domain on this edge
    cp::Variable::FiniteDomain* pDomain{nullptr};

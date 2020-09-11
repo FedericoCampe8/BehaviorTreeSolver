@@ -13,8 +13,8 @@ constexpr std::size_t kDefaultNumChildren{16};
 
 namespace btsolver {
 
-Behavior::Behavior(const std::string& name, BehaviorTreeArena* arena)
-: Node(name, arena)
+Behavior::Behavior(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard)
+: Node(name, arena, blackboard)
 {
   pChildren.reserve(kDefaultNumChildren);
   pOpenNodes.reserve(kDefaultNumChildren);
@@ -39,6 +39,16 @@ uint32_t Behavior::popChild()
 
   // Return the node (identifier)
   return outNode;
+}
+
+void Behavior::replaceChild(uint32_t oldChild, uint32_t newChild)
+{
+  auto iter = std::find(pChildren.begin(), pChildren.end(), oldChild);
+  if (iter != pChildren.end())
+  {
+    // Replace the child
+    *iter = newChild;
+  }
 }
 
 Node* Behavior::getChildMutable(uint32_t childId) const

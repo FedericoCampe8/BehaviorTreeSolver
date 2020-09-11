@@ -8,8 +8,11 @@
 
 #include <cstdint>  // for uint32_t
 #include <memory>   // for std::unique_ptr
+#include <vector>
 
 #include "bt/behavior_tree.hpp"
+#include "bt/behavior_tree_arena.hpp"
+#include "bt/node.hpp"
 #include "cp/model.hpp"
 #include "system/system_export_defs.hpp"
 
@@ -33,6 +36,14 @@ class SYS_EXPORT_CLASS BTSolver {
   /// Builds and returns a relaxed BT
   BehaviorTree::SPtr buildRelaxedBT();
 
+  /// Compiling and solving process.
+  /// This method takes the given Behavior Tree and applies
+  /// node splitting and constraint filtering,
+  /// child by child until the BT is an exact BT
+  /// ASSUMPTION: the given BT is NOT a general BT but it is constructed
+  /// to solver CP problems!
+  void buildExactBT(BehaviorTree::SPtr bt);
+
   /// Sets the Behavior Tree instance to run and solve
   void setBehaviorTree(BehaviorTree::SPtr bt) { pBehaviorTree = bt; }
 
@@ -46,6 +57,15 @@ class SYS_EXPORT_CLASS BTSolver {
 
   /// The Behavior Tree instance to run and solve
   BehaviorTree::SPtr pBehaviorTree{nullptr};
+
+  /// Process "child" during the exact BT construction.
+  /// This procedure applies node splitting and constraint filtering
+  void processChildForExactBTConstruction(int child, const std::vector<uint32_t>& children,
+                                          BehaviorTreeArena* arena);
+
+  /// Process the first child of the exact BT.
+  /// Note: the first child does not apply filtering directly, only state splitting
+  void processFirstChildForExactBTConstruction(Node* child, BehaviorTreeArena* arena);
 };
 
 }  // namespace btsolver

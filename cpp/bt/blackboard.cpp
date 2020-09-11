@@ -13,4 +13,16 @@ NodeStatus Blackboard::getNodeStatus(uint32_t nodeId) noexcept
   return iter->second;
 }
 
+void Blackboard::addState(uint32_t stateId, bool isActive)
+{
+  pStateMemory[stateId] = isActive;
+}  // addState
+
+bool Blackboard::checkAndDeactivateState(uint32_t stateId)
+{
+  const auto val = pStateMemory[stateId];
+  pStateMemory[stateId] = false;
+  return val;
+}
+
 }  // namespace btsolver

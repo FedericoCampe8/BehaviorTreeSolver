@@ -40,8 +40,8 @@ namespace btsolver {
 class SYS_EXPORT_CLASS Node {
 public:
   /// Node callback methods
-  using NodeCallback = std::function<void(const Blackboard::SPtr&)>;
-  using NodeRunCallback = std::function<NodeStatus(const Blackboard::SPtr&)>;
+  using NodeCallback = std::function<void(Blackboard*)>;
+  using NodeRunCallback = std::function<NodeStatus(Blackboard*)>;
   using UPtr = std::unique_ptr<Node>;
   using SPtr = std::shared_ptr<Node>;
 
@@ -54,7 +54,7 @@ public:
    */
   Node(const std::string& name,
        BehaviorTreeArena* arena,
-       Blackboard::SPtr blackboard=nullptr);
+       Blackboard* blackboard=nullptr);
 
   virtual ~Node();
 
@@ -70,8 +70,8 @@ public:
   /// Returns this node's status
   NodeStatus getStatus() noexcept { return pBlackboard->getNodeStatus(getUniqueId()); }
 
-  /// Returns this node's blackboard
-  Blackboard::SPtr getBlackboard() const noexcept { return pBlackboard; }
+  /// Returns the raw pointer to this node's blackboard
+  Blackboard* getBlackboardMutable() const noexcept { return pBlackboard; }
 
   /// Registers the run callback: the function to call on run
   void registerRunCallback(NodeRunCallback&& runCB) noexcept { pRunCallback = runCB; }
@@ -85,8 +85,9 @@ public:
   /// Registers the cancel callback: the function to call when canceled
   void registerCancelCallback(NodeCallback&& cancelCB) noexcept { pCancelCallback = cancelCB; }
 
-  /// Sets the blackboard
-  void setBlackboard(Blackboard::SPtr blackboard) noexcept { pBlackboard = blackboard; }
+  /// Sets the blackboard.
+  /// Note: this node does NOT take ownership of the given blackboard
+  void setBlackboard(Blackboard* blackboard) noexcept { pBlackboard = blackboard; }
 
   /// Adds edges to this node
   void addIncomingEdge(uint32_t edgeId) { pIncomingEdges.push_back(edgeId); }
@@ -145,7 +146,7 @@ private:
   NodeStatus pForcedState{NodeStatus::kUndefined};
 
   /// Blackboard memory of this node
-  Blackboard::SPtr pBlackboard;
+  Blackboard* pBlackboard{nullptr};
 
   /// Callback
   NodeRunCallback pRunCallback;

@@ -32,7 +32,6 @@ class SYS_EXPORT_CLASS BehaviorTree {
    BehaviorTree(BehaviorTreeArena::UPtr arena);
    ~BehaviorTree() = default;
 
-   void setBlackboard(Blackboard::SPtr blackboard) noexcept { pBlackboard = blackboard; }
    Blackboard::SPtr getBlackboard() const noexcept { return pBlackboard; }
 
    /// Sets the total number of ticks
@@ -42,6 +41,9 @@ class SYS_EXPORT_CLASS BehaviorTree {
    /// The method takes the index of the entry node.
    /// Note: the Behavior Tree doesn't take ownership of the given node
    void setEntryNode(uint32_t entryNode);
+
+   /// Returns the entry node
+   uint32_t getEntryNode() const noexcept { return pEntryNode; }
 
    /// Returns the current status of this BT
    NodeStatus getStatus() const noexcept { return pStatus; }

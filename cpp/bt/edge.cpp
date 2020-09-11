@@ -24,6 +24,12 @@ Edge::Edge(Node* head, Node* tail)
 Edge::~Edge()
 {
   removeEdgeFromNodes();
+
+  if (pOwnsDomain)
+  {
+    // Delete the domain if owned by this edge
+    delete pDomain;
+  }
 }
 
 void Edge::setEdgeOnNodes()
@@ -64,6 +70,54 @@ void Edge::resetHead(Node* head)
 void Edge::resetTail(Node* tail)
 {
   pTail = tail;
+}
+
+void Edge::changeHead(Node* head)
+{
+  if (head == pHead)
+  {
+    return;
+  }
+
+  // Remove this edge from the previous node
+  if (pHead)
+  {
+    pHead->removeOutgoingEdge(this->getUniqueId());
+  }
+
+  // Set this edge on the new node
+  pHead = head;
+  if (pHead)
+  {
+    pHead->addOutgoingEdge(this->getUniqueId());
+  }
+}
+
+void Edge::changeTail(Node* tail)
+{
+  if (tail == pTail)
+  {
+    return;
+  }
+
+  // Remove this edge from the previous node
+  if (pTail)
+  {
+    pTail->removeIncomingEdge(this->getUniqueId());
+  }
+
+  // Set this edge on the new node
+  pTail = tail;
+  if (pTail)
+  {
+    pTail->addIncomingEdge(this->getUniqueId());
+  }
+}
+
+void Edge::setDomainAndOwn(cp::Variable::FiniteDomain* domain)
+{
+  pDomain = domain;
+  pOwnsDomain = true;
 }
 
 }  // namespace btsolver
