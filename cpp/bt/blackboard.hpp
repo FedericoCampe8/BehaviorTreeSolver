@@ -11,6 +11,7 @@
 #include <cstdint>  // for uint32_t
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <sparsepp/spp.h>
 
@@ -32,7 +33,7 @@ public:
   using SPtr = std::shared_ptr<Blackboard>;
 
 public:
-  Blackboard() = default;
+  Blackboard();
   ~Blackboard() = default;
 
   /// Saves the given <key, value> pair in the Blackboard
@@ -71,10 +72,15 @@ public:
   /// The state will be set active/non-active according to the given value
   void addState(uint32_t stateId, bool isActive=true);
 
+  /// Returns the value (active/non-active) of the given state
+  bool checkState(uint32_t stateId) const noexcept;
+
   /// Gets the value of the given state (active/non-active).
   /// Sets the state to non-active (regardless), and returns
   /// the value of the state before it was set to non-active
   bool checkAndDeactivateState(uint32_t stateId);
+
+  std::vector<uint32_t>& getMostRecentStatesList() noexcept { return pMostRecentStatesList; }
 
 private:
   using Memory = spp::sparse_hash_map<std::string, BlackboardValue>;
@@ -90,6 +96,15 @@ private:
   /// Map of active/non-active states.
   /// This map is mainly used by CP solver to activate states
   StateMemory pStateMemory;
+
+  /// This is a performance 'trick'.
+  /// This vector is used to store the new states created by each child
+  /// while building the exact BT. This way, a new child doesn't have
+  /// to traverse all the left sub-tree to obtain them but it can
+  /// read them directly from here.
+  /// Of course, this vector must be updated at each iteration of
+  /// the split-filtering algorithm
+  std::vector<uint32_t> pMostRecentStatesList;
 
 };
 

@@ -108,21 +108,93 @@ void BTSolver::processChildForExactBTConstruction(int child, const std::vector<u
     return;
   }
 
-  // Otherwise apply state splitting and constraint filtering
+  // Otherwise apply state splitting and constraint filtering.
+  // The initial split is the same for all children:
+  // - create a new sub-BT with a selector node as "entry node"
+  // - add a sequence node for each state 's' created by the left-brother BT
+  // - for each sequence node add a parent-state node linked to 's'
+  // - for each sequence node add new nodes considering the domain values and constraint filtering:
+  //
+  //     |          |
+  //   +---+      +---+
+  //   | U | -->  | ? |
+  //   +---+      +-+-+
+  //                |
+  //           +----+----+
+  //           |         |
+  //         +---+     +---+
+  //         |-> |     |-> |
+  //         +---+     +---+
+  //           |         |
+  //      +----+----+   ...
+  //      |         |
+  //    /---\      ...
+  //    | P | Apply filtering
+  //    \---/
+  // Parent state
+  // for previous
+  // state 's'
+
+  // Step 1: create the selector node that will replace the current node
+  auto selector = reinterpret_cast<btsolver::Selector*>(
+          arena->buildNode<btsolver::Selector>("Selector"));
+
+  // Step 2: create a sequence node for each state node on the left brother
+  auto& leftBrotherStates = arena->getBlackboard()->getMostRecentStatesList();
+  std::vector<btsolver::Sequence*> sequenceNodesList;
+  sequenceNodesList.reserve(leftBrotherStates.size());
+  for (const auto state : leftBrotherStates)
+  {
+    // Step 2.1: create the sequence node
+    auto sequence = reinterpret_cast<btsolver::Sequence*>(
+            arena->buildNode<btsolver::Selector>("Sequence"));
+    sequenceNodesList.push_back(sequence);
+
+    // Step 2.2: add the sequence node to the selector
+    selector->addChild(sequence->getUniqueId());
+
+    // Step 2.3: add an edge between the selector and the sequence.
+    //           Notice that the domain is the original domain of the variable.
+    //           The domain on the edge is going to be filtered with constraint filtering.
+    //           Therefore, add directly the reduced domain later
+    auto edge = arena->buildEdge(selector, sequence);
+
+    // Step 2.4: add a parent state node attached to the sequence and pair it to the
+    //           corresponding left-brother state.
+    //           Notice that there is no need to create an edge since there is no information
+    //           related to domains but only active/non-active state information
+    auto parentStateNode = reinterpret_cast<btsolver::ParentStateNode*>(
+            arena->buildNode<btsolver::ParentStateNode>("ParentState"));
+    parentStateNode->pairState(state);
+    sequence->addChild(parentStateNode->getUniqueId());
+  }
+
+  // Clear the most recent state list.
+  // It will be update when creating the state for this child
+  leftBrotherStates.clear();
+
+  // Step 3: for each sequence, create the states of this child by filtering constraints
+
+
 }
 
 void BTSolver::processFirstChildForExactBTConstruction(Node* child, BehaviorTreeArena* arena)
 {
   // The given node is replaced by a selector node with a number of state children
   // equal to the number of domain elements of the variable associated with this node.
-  // Step 1: create the subtree that will replace the current node
+  // Step 1: create the subtree that will replace the current node.
+  //         Notice that the state list is cleared (this is the first child)
+  arena->getBlackboard()->getMostRecentStatesList().clear();
   auto selector = reinterpret_cast<btsolver::Selector*>(
           arena->buildNode<btsolver::Selector>("Selector"));
 
 
   // Step 2: reset the edges.
+  //         The incoming edge of "child" will point to (tail) the new selector node
+  //         and be removed as incoming edge from "child".
   // Note: the input child will be an orphan
   auto incomingEdge = arena->getEdge(child->getIncomingEdge());
+  child->removeIncomingEdge(incomingEdge->getUniqueId());
   incomingEdge->changeTail(selector);
 
   // By CP-BT construction, the parent of each root direct child is a sequence node
@@ -133,23 +205,36 @@ void BTSolver::processFirstChildForExactBTConstruction(Node* child, BehaviorTree
   auto domain = incomingEdge->getDomainMutable();
   auto& it = domain->getIterator();
 
-  // TODO reuse the input node instead of discarding it
+  bool reuseChild{true};
   while(!it.atEnd())
   {
-    auto stateNode = arena->buildNode<btsolver::StateNode>("State");
-    selector->addChild(stateNode->getUniqueId());
+    Edge* edge{nullptr};
+    if (reuseChild)
+    {
+      arena->getBlackboard()->getMostRecentStatesList().push_back(child->getUniqueId());
+      selector->addChild(child->getUniqueId());
+      edge = arena->buildEdge(selector, child);
+      reuseChild = false;
+    }
+    else
+    {
+      auto stateNode = arena->buildNode<btsolver::StateNode>("State");
+      arena->getBlackboard()->getMostRecentStatesList().push_back(child->getUniqueId());
+      selector->addChild(stateNode->getUniqueId());
 
-    // Add a connecting edge between the root and the state node.
-    // The constructor will automatically register the node on the head and tail nodes
-    auto edge = arena->buildEdge(selector, stateNode);
+      // Add a connecting edge between the root and the state node.
+      // The constructor will automatically register the node on the head and tail nodes
+      edge = arena->buildEdge(selector, stateNode);
+    }
 
     // Set the domain on this edge
     edge->setDomainAndOwn(new cp::Domain<cp::BitmapDomain>(it.value()));
     it.moveToNext();
   }
 
-  // Create the last node
+  // Create the last node for the last domain value
   auto stateNode = arena->buildNode<btsolver::StateNode>("State");
+  arena->getBlackboard()->getMostRecentStatesList().push_back(child->getUniqueId());
   selector->addChild(stateNode->getUniqueId());
   auto edge = arena->buildEdge(selector, stateNode);
   edge->setDomainAndOwn(new cp::Domain<cp::BitmapDomain>(it.value()));

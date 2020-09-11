@@ -7,11 +7,12 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>     // for uint32_t
 #include <functional>  // for std::function
 #include <iostream>
 #include <limits>      // for std::numeric_limits
 #include <string>
-#include <memory>  // for std::unique_ptr
+#include <memory>      // for std::unique_ptr
 
 #include "bt/behavior_tree_arena.hpp"
 #include "bt/edge.hpp"
@@ -53,11 +54,27 @@ public:
     registerRunCallback([=](Blackboard* bb) {
       return this->runStateNode(bb);
     });
+
+    // Register the cleanup callback
+    registerCleanupCallback([=](Blackboard* bb) {
+      return this->cleanupNode(bb);
+    });
+
+    // Create a new state in the blackboard and activate it.
+    // Parent state of BT nodes on the right will use this state
+    // for their activation
+    if (blackboard)
+    {
+      blackboard->addState(this->getUniqueId(), true);
+    }
   }
 
 private:
   /// Variable indicating whether a domain is completely explored or not
   std::atomic<bool> pDomainExplored{false};
+
+  /// Domain associated with this state,
+  /// i.e., the domain to the incoming edge
   cp::Variable::FiniteDomain* pDomain{nullptr};
 
   void configNode(Blackboard* blackboard)
@@ -91,7 +108,8 @@ private:
   {
     if (pDomain == nullptr || pDomainExplored)
     {
-      // If a domain is explored, there is nothing left to do: return asap
+      // Return FAIL if the domain is already explored since there is
+      // nothing left to do
       return NodeStatus::kFail;
     }
 
@@ -114,6 +132,57 @@ private:
 
     // Return success
     return NodeStatus::kSuccess;
+  }
+};
+
+/**
+ * \brief A parent state node is a leaf node that represents a "parent state"
+ *        for the BT owning state nodes.
+ *        The parent state is paired with a state node (from previous children)
+ *        and returns SUCCESS if the node is active and deactivates the state.
+ *        Returns FAIL otherwise.
+ */
+class SYS_EXPORT_CLASS ParentStateNode : public Node {
+public:
+  using UPtr = std::unique_ptr<ParentStateNode>;
+
+public:
+  ParentStateNode(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr)
+  : Node(name, arena, blackboard)
+  {
+    // Register the run callback
+    registerRunCallback([=](Blackboard* bb) {
+      return this->runStateNode(bb);
+    });
+  }
+
+  /// Pair this parent state node with a state node
+  void pairState(uint32_t stateId) noexcept { pState = stateId; }
+
+private:
+  /// The state (identifier) associated with this parent node
+  uint32_t pState{std::numeric_limits<uint32_t>::max()};
+
+  NodeStatus runStateNode(Blackboard* blackboard)
+  {
+    if (pState == std::numeric_limits<uint32_t>::max() || blackboard == nullptr)
+    {
+      // Return FAIL if the domain paired state is not set or there is no blackboard
+      return NodeStatus::kFail;
+    }
+
+    // Check and deactivate the paired state.
+    // Return SUCCESS/FAIL accordingly
+    if (blackboard->checkAndDeactivateState(pState))
+    {
+      // This will run only once, allowing other runs to find
+      // other solutions on the BT
+      return NodeStatus::kSuccess;
+    }
+    else
+    {
+      return NodeStatus::kFail;
+    }
   }
 };
 
