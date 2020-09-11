@@ -15,10 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(
   "${PROJECT_SOURCE_DIR}/cpp"
   "${PROJECT_SOURCE_DIR}/third-party"
-  "${PROJECT_SOURCE_DIR}/third-party/asio"
   "${PROJECT_SOURCE_DIR}/third-party/sparsepp"
-  "${PROJECT_SOURCE_DIR}/include/or-tools"
-  "${PROJECT_SOURCE_DIR}/include/bt_protobuf"
   "${PROJECT_SOURCE_DIR}"
   "${PROJECT_BINARY_DIR}/src"
 )
@@ -58,12 +55,6 @@ include(BasicSetup)
 #AddCXXFlag("-Wunused-function")
 AddCXXFlag("-Wno-deprecated")
 AddCXXFlag("-Wno-deprecated-declarations")
-
-# Use ASIO instead of the boost asio version
-add_definitions(-DUSE_STANDALONE_ASIO)
-
-# Use specified solvers when building OR-Tools
-add_definitions(-DUSE_CLP -DUSE_CBC -DUSE_GLOP -DUSE_BOP -DUSE_GLPK)
 
 # Hide symbols by default (e.g. on GCC to use -fvisibility=hidden).
 # This should be overridden in API headers.
@@ -107,31 +98,11 @@ set(THIRD_PARTY_LIBS_PATH "${PROJECT_SOURCE_DIR}/lib/${lib_arch_dir}")
 # "${Boost_REGEX_LIBRARY}"
 #	)
 
-find_package(Boost REQUIRED COMPONENTS boost_system boost_chrono boost_filesystem boost_regex boost_thread boost_timer)
+#find_package(Boost REQUIRED COMPONENTS boost_system boost_chrono boost_filesystem boost_regex boost_thread boost_timer)
 # Treat Boost as system libraries, to suppress warnings
 #include_directories(BEFORE SYSTEM "${Boost_INCLUDE_DIRS}")
-include_directories(BEFORE SYSTEM ${Boost_INCLUDE_DIR})
-link_libraries(${Boost_LIBS})
-
-# Protobuf
-# The following find and link protobuf libraries
-find_package(ProtocolBuffer REQUIRED COMPONENTS protobuf-lite protobuf protoc)
-include_directories(${ProtocolBuffer_INCLUDE_DIR})
-link_libraries(${ProtocolBuffer_LIBS})
-
-# The following will generate the protobuf files
-set(PROTO_SRCS "")
-add_subdirectory(bt_protobuf)
-
-# OR-Tools
-find_package(ORTools REQUIRED COMPONENTS ortools glog gflags)
-include_directories(${ORTools_INCLUDE_DIR})
-link_libraries(${ORTools_LIBS})
-
-# Python
-find_package(Python REQUIRED Interpreter Development)
-include_directories(${Python_INCLUDE_DIRS})
-link_libraries(${Python_LIBRARIES})
+#include_directories(BEFORE SYSTEM ${Boost_INCLUDE_DIR})
+#link_libraries(${Boost_LIBS})
 
 # DL libs
 link_libraries(${CMAKE_DL_LIBS})
