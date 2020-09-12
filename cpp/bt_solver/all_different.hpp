@@ -54,6 +54,7 @@ class SYS_EXPORT_CLASS AllDifferent : public BTConstraint {
     *        equivalent to a previous state. If not, it add itself to the list.
     */
    using StateMemory = std::vector<std::pair<Variable::FiniteDomain*, btsolver::StateNode*>>;
+
  private:
    /// Builds the first node of the AllDifferent BT
    std::pair<btsolver::Selector*, StateMemory> buildFirstNodeBT(const Variable::SPtr& var,

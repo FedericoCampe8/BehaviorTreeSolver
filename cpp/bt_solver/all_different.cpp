@@ -123,8 +123,12 @@ std::pair<btsolver::Selector*, AllDifferent::StateMemory> AllDifferent::buildNod
 
   // Iterate over all the previous states
   AllDifferent::StateMemory updatedStateMemory;
+
+  // int maxWidth{16};
   for (const auto& it : stateMemory)
   {
+    // if (updatedStateMemory.size() >= maxWidth) break;
+
     // For each state, create a sequence node
     auto sequence = reinterpret_cast<btsolver::Sequence*>(
             arena->buildNode<btsolver::Sequence>("Sequence_AllDifferent"));
@@ -161,8 +165,8 @@ std::pair<btsolver::Selector*, AllDifferent::StateMemory> AllDifferent::buildNod
       // If so, re-use that state, otherwise create a new one
       auto elements = it.first->getElementList();
       elements.push_back(domIt.value());
-      auto stateDomain = new Variable::FiniteDomain(elements);
 
+      auto stateDomain = new Variable::FiniteDomain(elements);
       btsolver::StateNode* newStateNode{nullptr};
       for (const auto& updatedIt : updatedStateMemory)
       {

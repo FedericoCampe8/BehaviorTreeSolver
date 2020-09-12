@@ -121,7 +121,7 @@ void runSolver()
   // Create a simple model
   auto model = std::make_shared<Model>("basic_model");
 
-  int maxVars{100};
+  int maxVars{40};
   for (int idx{0}; idx < maxVars; ++idx)
   {
     model->addVariable(std::make_shared<Variable>("var_" + std::to_string(idx), 1, maxVars));

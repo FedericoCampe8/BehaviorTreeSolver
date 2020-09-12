@@ -6,7 +6,7 @@
 #include "bt/behavior_tree_arena.hpp"
 
 namespace {
-constexpr uint32_t kDefaultNumEdges{10};
+constexpr uint32_t kDefaultNumEdges{100};
 }  // namespace
 
 namespace btsolver {
@@ -32,7 +32,7 @@ Node::Node(const std::string& name,
     throw std::invalid_argument("Node: empty pointer to the blackboard");
   }
 
-  pIncomingEdges.reserve(1);
+  pIncomingEdges.reserve(10);
   pOutgoingEdges.reserve(kDefaultNumEdges);
 }
 

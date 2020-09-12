@@ -10,10 +10,13 @@
 #pragma once
 
 #include <algorithm>  // for std::sort
+#include <cassert>
 #include <cstdint>    // for uint32_t
+#include <iostream>
 #include <limits>     // for std::numeric_limits
 #include <memory>     // for std::unique_ptr
 #include <stdexcept>  // for std::invalid_argument
+#include <string>
 #include <utility>    // for std::move
 #include <vector>
 
@@ -135,9 +138,10 @@ class Domain {
       throw std::invalid_argument("Domain - empty list");
     }
 
-    //std::sort(elementList.begin(), elementList.end());
+    std::sort(elementList.begin(), elementList.end());
     pLowerBound = elementList.front();
     pUpperBound = elementList.back();
+    assert(pLowerBound <= pUpperBound);
     resetDomain();
 
     // Set this domain to empty
@@ -167,7 +171,7 @@ class Domain {
   bool isEqual(Domain<BaseDomain>* other) const noexcept
   {
     if (other == nullptr || (this->minElement() != other->minElement()) ||
-            (this->maxElement() != this->maxElement()))
+            (this->maxElement() != other->maxElement()))
     {
       return false;
     }
@@ -248,7 +252,9 @@ class Domain {
       }
 
       const auto val = res->pIterator.value();
-      if (!dom->contains(val))
+
+
+      if (dom->contains(val))
       {
         res->pDomain.remove(val);
       }
@@ -270,6 +276,24 @@ class Domain {
   void removeElement(int32_t d) noexcept { pDomain.remove(d); }
 
   DomainIterator<BaseDomain>& getIterator() noexcept { return pIterator; }
+
+  /// Returns a string representing this domain for debugging purposes.
+  /// Note: resets the internal iterator
+  std::string toString()
+  {
+    std::string dom{"["};
+    pIterator.reset();
+
+    while (!pIterator.atEnd())
+    {
+      dom += std::to_string(pIterator.value()) + ", ";
+      pIterator.moveToNext();
+    }
+    dom += std::to_string(pIterator.value()) + "]";
+    pIterator.reset();
+
+    return dom;
+  }
 
  private:
   /// Actual domain implementation
