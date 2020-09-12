@@ -19,6 +19,7 @@ namespace cp {
 class SYS_EXPORT_CLASS BitmapDomain {
 public:
   BitmapDomain() = default;
+
   ~BitmapDomain() = default;
 
   /// Return original bounds
@@ -37,6 +38,9 @@ public:
   /// Sets this domain to be empty
   void setEmpty() noexcept { pBitset.reset(); }
 
+  /// Sets this domain to be empty WITHOUT changing the bounds of this domain
+  void setEmptyAndPreserveBounds() noexcept { pBitset.reset(); }
+
   /// Returns whether or not this domain is empty
   bool empty() const noexcept { return size() == 0; }
 
@@ -48,6 +52,9 @@ public:
 
   /// Removes the element 'd', from this domain
   void remove(int32_t d) noexcept;
+
+  /// Re-insert the given element in the domain
+  void reinsertElement(int32_t d) noexcept;
 
   /// Returns true if the element at given position is set to true.
   /// Returns false otherwise

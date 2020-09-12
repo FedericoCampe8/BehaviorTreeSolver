@@ -9,8 +9,13 @@
 
 #pragma once
 
+#include <algorithm>  // for std::sort
 #include <cstdint>    // for uint32_t
+#include <limits>     // for std::numeric_limits
+#include <memory>     // for std::unique_ptr
 #include <stdexcept>  // for std::invalid_argument
+#include <utility>    // for std::move
+#include <vector>
 
 namespace btsolver {
 namespace cp {
@@ -87,6 +92,9 @@ private:
 template <typename BaseDomain>
 class Domain {
  public:
+  using UPtr = std::unique_ptr<Domain<BaseDomain>>;
+
+ public:
   /**
    * \brief Creates a singleton domain.
    *        Throws std::invalid_argument if upperBound < lowerBound
@@ -116,6 +124,31 @@ class Domain {
     resetDomain();
   }
 
+  /**
+   * \brief Creates a domain over the given list of elements.
+   *        Throws std::invalid_argument if the list is empty.
+   */
+  Domain(std::vector<int32_t>& elementList)
+  {
+    if (elementList.empty())
+    {
+      throw std::invalid_argument("Domain - empty list");
+    }
+
+    //std::sort(elementList.begin(), elementList.end());
+    pLowerBound = elementList.front();
+    pUpperBound = elementList.back();
+    resetDomain();
+
+    // Set this domain to empty
+    pDomain.setEmptyAndPreserveBounds();
+
+    for (auto d : elementList)
+    {
+      pDomain.reinsertElement(d);
+    }
+  }
+
   /// Resets this domain to its original content
   void resetDomain()
   {
@@ -129,19 +162,108 @@ class Domain {
   /// Returns whether or not this domain is empty
   bool isEmpty() const noexcept { return pDomain.empty(); }
 
+  /// Returns true if this domain is equal to the given domain.
+  /// Returns false otherwise
+  bool isEqual(Domain<BaseDomain>* other) const noexcept
+  {
+    if (other == nullptr || (this->minElement() != other->minElement()) ||
+            (this->maxElement() != this->maxElement()))
+    {
+      return false;
+    }
+
+    // Bounds are the same.
+    // The two domains are the equal iff they have the same size
+    return this->size() == other->size();
+  }
+
   /// Returns the min element of the domain
-  uint32_t minElement() const noexcept { return pDomain.min(); }
+  int32_t minElement() const noexcept {
+    return isEmpty() ? std::numeric_limits<uint32_t>::min() : pDomain.min(); }
 
   /// Returns the max element of the domain
-  uint32_t maxElement() const noexcept { return pDomain.max(); }
+  int32_t maxElement() const noexcept {
+    return isEmpty() ? std::numeric_limits<uint32_t>::max() : pDomain.max(); }
 
   /// Returns the number of elements in the domain
   uint32_t size() const noexcept { return pDomain.size(); }
+
+  /// Returns the list of all elements in this domain.
+  /// Note: this method resets the iterator
+  std::vector<int32_t> getElementList() noexcept
+  {
+    std::vector<int32_t> elementList;
+    elementList.reserve(this->size());
+    bool breakLoop{false};
+    while(true)
+    {
+      if (pIterator.atEnd())
+      {
+        breakLoop = true;
+      }
+
+      elementList.push_back(pIterator.value());
+
+      if (breakLoop)
+      {
+        pIterator.reset();
+        return elementList;
+      }
+
+      pIterator.moveToNext();
+    }
+  }
 
   /// Returns whether or not this domain contains the element 'd'
   bool contains(int32_t d) const noexcept
   {
     return pDomain.contains(d);
+  }
+
+  /// Subtracts "dom" from this domain and returns the difference as a new domain
+  Domain<BaseDomain>::UPtr subtract(Domain<BaseDomain>* dom)
+  {
+    if (this->isEmpty())
+    {
+      auto res = std::make_unique<Domain<BaseDomain>>(0, 0);
+      res->setToEmpty();
+      return std::move(res);
+    }
+
+    auto res = std::make_unique<Domain<BaseDomain>>(pLowerBound, pUpperBound);
+    res->pDomain = pDomain;
+    if ((this->maxElement() < dom->minElement()) ||
+            (dom->maxElement() < this->minElement()))
+    {
+      // No intersection between domains, return this domain
+      return std::move(res);
+    }
+
+    bool breakLoop{false};
+    while (true)
+    {
+      if (res->pIterator.atEnd())
+      {
+        breakLoop = true;
+      }
+
+      const auto val = res->pIterator.value();
+      if (!dom->contains(val))
+      {
+        res->pDomain.remove(val);
+      }
+
+      if (breakLoop)
+      {
+        break;
+      }
+
+      res->pIterator.moveToNext();
+    }
+    res->pIterator.reset();
+
+    // Return the difference domain
+    return std::move(res);
   }
 
   /// Removes 'd' from this domain (if 'd' is contained in this domain)

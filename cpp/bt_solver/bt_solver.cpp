@@ -98,13 +98,15 @@ void BTSolver::buildExactBT(BehaviorTree::SPtr bt)
   }
 }
 
-void BTSolver::processChildForExactBTConstruction(int child, const std::vector<uint32_t>& children,
+void BTSolver::processChildForExactBTConstruction(int childNum,
+                                                  const std::vector<uint32_t>& children,
                                                   BehaviorTreeArena* arena)
 {
-  if (child == 0)
+  auto child = arena->getNode(children[childNum]);
+  if (childNum == 0)
   {
     // First child simply splits on its domain
-    processFirstChildForExactBTConstruction(arena->getNode(children[0]), arena);
+    processFirstChildForExactBTConstruction(child, arena);
     return;
   }
 
@@ -138,6 +140,16 @@ void BTSolver::processChildForExactBTConstruction(int child, const std::vector<u
   // Step 1: create the selector node that will replace the current node
   auto selector = reinterpret_cast<btsolver::Selector*>(
           arena->buildNode<btsolver::Selector>("Selector"));
+
+  // Step 1.1: replace the previous state node with the entry selector node
+  auto incomingEdge = arena->getEdge(child->getIncomingEdge());
+  child->removeIncomingEdge(incomingEdge->getUniqueId());
+  incomingEdge->changeTail(selector);
+
+  // Step 1.2: by CP-BT construction, the parent of each root direct child is a sequence node.
+  //           Replace the state node with the new selector node
+  auto parentNode = reinterpret_cast<btsolver::Sequence*>(incomingEdge->getHead());
+  parentNode->replaceChild(child->getUniqueId(), selector->getUniqueId());
 
   // Step 2: create a sequence node for each state node on the left brother
   auto& leftBrotherStates = arena->getBlackboard()->getMostRecentStatesList();
@@ -173,9 +185,11 @@ void BTSolver::processChildForExactBTConstruction(int child, const std::vector<u
   // It will be update when creating the state for this child
   leftBrotherStates.clear();
 
-  // Step 3: for each sequence, create the states of this child by filtering constraints
-
-
+  // Step 3: for each sequence, create the states of this child by filtering constraints.
+  //         Notice that there is not two-phase approach: SPLIT domain elements then FILTER.
+  //         Instead, BT construction and FILTER is done at the same time.
+  //         This leads to less states and faster BT construction
+  // TODO
 }
 
 void BTSolver::processFirstChildForExactBTConstruction(Node* child, BehaviorTreeArena* arena)

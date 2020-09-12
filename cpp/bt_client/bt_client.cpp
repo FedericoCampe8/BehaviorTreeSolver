@@ -17,6 +17,7 @@
 #include "bt/node.hpp"
 #include "bt/node_status.hpp"
 #include "bt/std_node.hpp"
+#include "bt_solver/all_different.hpp"
 #include "bt_solver/bt_solver.hpp"
 #include "cp/bitmap_domain.hpp"
 #include "cp/domain.hpp"
@@ -119,13 +120,28 @@ void runSolver()
 
   // Create a simple model
   auto model = std::make_shared<Model>("basic_model");
-  model->addVariable(std::make_shared<Variable>("v1", 1, 3));
-  model->addVariable(std::make_shared<Variable>("v2", 1, 3));
-  model->addVariable(std::make_shared<Variable>("v3", 1, 3));
 
-  solver.setModel(model);
+  int maxVars{100};
+  for (int idx{0}; idx < maxVars; ++idx)
+  {
+    model->addVariable(std::make_shared<Variable>("var_" + std::to_string(idx), 1, maxVars));
+  }
 
   tools::Timer timer;
+
+  // Build AllDifferent constraint
+  auto allDiff = std::make_unique<AllDifferent>("AllDifferent");
+  allDiff->setScope(model->getVariables());
+
+  auto arena = std::make_unique<BehaviorTreeArena>();
+  allDiff->builBehaviorTreePropagator(arena.get());
+
+  std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
+
+  return;
+
+  // Set the model into the solver
+  solver.setModel(model);
 
   // Build the relaxed BT
   auto bt = solver.buildRelaxedBT();
@@ -138,8 +154,6 @@ void runSolver()
 
   // Run solver on the relaxed Behavior Tree
   solver.solve(1);
-
-  std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
 }
 
 }  // namespace

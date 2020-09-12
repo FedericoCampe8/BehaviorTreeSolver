@@ -3,7 +3,7 @@
 namespace btsolver {
 namespace cp {
 
-// Initialize unique Identifier for variables
+// Initialize unique identifier for variables
 uint32_t Variable::kNextID = 0;
 
 Variable::Variable(const std::string& name, int32_t lowerBound, int32_t upperBound)

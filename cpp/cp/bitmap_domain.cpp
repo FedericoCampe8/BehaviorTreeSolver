@@ -59,6 +59,14 @@ void BitmapDomain::remove(int32_t d) noexcept
   pBitset.reset(d - pLowerBound);
 }
 
+void BitmapDomain::reinsertElement(int32_t d) noexcept
+{
+  if (d < pLowerBound || d > pUpperBound)
+  {
+    return;
+  }
+  pBitset.set(d - pLowerBound);
+}
 
 }  // namespace cp
 }  // namespace btsolver
