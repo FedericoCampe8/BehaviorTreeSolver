@@ -6,13 +6,21 @@
 
 #pragma once
 
-#include <cstdint>    // for uint32_t
-#include <memory>  // for std::shared_ptr
+#include <cstdint>  // for uint32_t
+#include <memory>   // for std::shared_ptr
 #include <string>
+#include <vector>
 
 #include "cp/domain.hpp"
 #include "cp/bitmap_domain.hpp"
 #include "system/system_export_defs.hpp"
+
+// Forward declarations
+namespace btsolver {
+namespace cp {
+class Constraint;
+}  // namespace cp
+}  // namespace btsolver
 
 namespace btsolver {
 namespace cp {
@@ -54,6 +62,10 @@ public:
   /// Returns true if the domain of this variable is empty.
   /// Returns false otherwise
   bool isInvalid() const noexcept { return pDomain->isEmpty(); }
+
+  /// Register the given constraint as callback constraint.
+  /// This means that this variable is part of the scope of the given constraint
+  void registerCallbackConstraint(Constraint* constraint);
 
 private:
   static uint32_t kNextID;

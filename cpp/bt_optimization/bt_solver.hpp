@@ -1,7 +1,7 @@
 //
 // Copyright OptiLab 2020. All rights reserved.
 //
-// Base class for the Behavior-Tree-based solver.
+// Base class for the Behavior-Tree-based optimization solver.
 //
 
 #pragma once
@@ -17,15 +17,16 @@
 #include "system/system_export_defs.hpp"
 
 namespace btsolver {
+namespace optimization {
 
-class SYS_EXPORT_CLASS BTSolver {
+class SYS_EXPORT_CLASS BTOptSolver {
  public:
-  using UPtr = std::unique_ptr<BTSolver>;
-  using SPtr = std::shared_ptr<BTSolver>;
+  using UPtr = std::unique_ptr<BTOptSolver>;
+  using SPtr = std::shared_ptr<BTOptSolver>;
 
  public:
-  BTSolver() = default;
-  ~BTSolver() = default;
+  BTOptSolver() = default;
+  ~BTOptSolver() = default;
 
   /// Sets the model to solve
   void setModel(cp::Model::SPtr model) noexcept { pModel = model; }
@@ -33,7 +34,27 @@ class SYS_EXPORT_CLASS BTSolver {
   /// Returns the model this solver is solving
   cp::Model::SPtr getModel() const noexcept { return pModel; }
 
-  /// Builds and returns a relaxed BT
+  /**
+   * \brief Builds and returns a relaxed Behavior Tree
+   *        to be used for optimization.
+   *
+   *        A relaxed optimization BT has the following structure:
+   *
+   *        +---+
+   *        | R |
+   *        +---+
+   *          |
+   *        +---+      | Runner Optimizer node:
+   *        | * | ---> | runs all children regardless success/fail.
+   *        +---+      | It uses queues for BFS node activation
+   *     x_1  |  x_2
+   *      +---+---+
+   *      |       | [min, max]
+   *    +---+   +---+
+   *    | U1|   | U2|
+   *    +---+   +---+
+   *     Dx_1    Dx_2
+   */
   BehaviorTree::SPtr buildRelaxedBT();
 
   /// Sets the Behavior Tree instance to run and solve
@@ -51,4 +72,5 @@ class SYS_EXPORT_CLASS BTSolver {
   BehaviorTree::SPtr pBehaviorTree{nullptr};
 };
 
+}  // namespace optimization
 }  // namespace btsolver

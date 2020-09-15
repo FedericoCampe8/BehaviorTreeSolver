@@ -13,5 +13,18 @@ Constraint::Constraint(ConstraintType type, const std::string& name)
 {
 }
 
+void Constraint::setScope(const std::vector<Variable::SPtr>& scope) noexcept
+{
+  // Set the scope
+  pScope = scope;
+
+  // Register this constraint on the variable
+  for (const auto& var : pScope)
+  {
+    //var->registerCallbackConstraint(this);
+  }
+}
+
+
 }  // namespace cp
 }  // namespace btsolver

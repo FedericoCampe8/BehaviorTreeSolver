@@ -60,7 +60,7 @@ class SYS_EXPORT_CLASS Constraint {
    void setStatus(ConstraintStatus status) noexcept { pStatus = status; }
 
    /// Sets the scope of this constraint
-   void setScope(const std::vector<Variable::SPtr>& scope) noexcept { pScope = scope; }
+   void setScope(const std::vector<Variable::SPtr>& scope) noexcept;
 
    /// Returns the scope of this constraint
    const std::vector<Variable::SPtr>& getScope() const noexcept { return pScope; }

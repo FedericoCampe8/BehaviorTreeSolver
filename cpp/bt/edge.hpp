@@ -6,8 +6,9 @@
 
 #pragma once
 
-#include <memory>  // for std::unique_ptr
-
+#include <limits>   // for std::numeric_limits
+#include <memory>   // for std::unique_ptr
+#include <utility>  // for std::pair
 #include "bt/node.hpp"
 #include "cp/variable.hpp"
 #include "system/system_export_defs.hpp"
@@ -34,10 +35,12 @@ class SYS_EXPORT_CLASS Edge {
    void resetTail(Node* tail = nullptr);
 
    /// Change head and tail nodes.
-   /// Note: this methods DO NOT modify the children of the current or given nodes
+   /// This method removes and adds this edge to from the old
+   /// and to the new nodes respectively.
+   /// However, this method DOES NOT remove or add any child.
+   /// That needs to be done manually from the nodes.
    void changeHead(Node* head);
    void changeTail(Node* tail);
-
 
    /// Returns the raw pointer to the head node.
    /// Note: use only if you know what you are doing!
@@ -46,6 +49,32 @@ class SYS_EXPORT_CLASS Edge {
    /// Returns the raw pointer to the tail node.
    /// Note: use only if you know what you are doing!
    Node* getTail() const noexcept { return pTail; }
+
+   /// Returns the cost on the objective function on this edge.
+   /// If this edge represents a parallel edge,
+   /// the cost is the sum of all edges.
+   /// If this edge is not connected to a state node, return +Inf
+   double getCostValue() const noexcept;
+
+   /// Returns the cost bounds on the objective function on this edge.
+   /// Note: this makes sense only if the edge is a parallel edge.
+   /// If not, use the faster version "getCostValue"
+   std::pair<double, double> getCostBounds() const noexcept;
+
+   /// Returns true if this edge represents a parallel edge.
+   /// Returns false otherwise
+   bool isParallelEdge() const noexcept { return pDomainLowerBound < pDomainUpperBound; }
+
+   /// Sets the domain bounds for this edge.
+   /// If "lowerBound" < "upperBound" this edge represents a parallel edge.
+   /// Throws if "lowerBound" > "upperBound"
+   void setDomainBounds(int32_t lowerBound, int32_t upperBound);
+
+   /// Returns the domain lower bound on this edge
+   int32_t getDomainLowerBound() const noexcept { return pDomainLowerBound; }
+
+   /// Returns the domain lower bound on this edge
+   int32_t getDomainUpperBound() const noexcept { return pDomainUpperBound; }
 
    /// Sets the domain for this edge
    void setDomain(cp::Variable::FiniteDomain* domain) noexcept { pDomain = domain; }
@@ -76,6 +105,12 @@ class SYS_EXPORT_CLASS Edge {
 
    /// Flag indicating whether this edge owns the domain or not
    bool pOwnsDomain{false};
+
+   /// Lower bound on the represented domain
+   int32_t pDomainLowerBound{std::numeric_limits<int32_t>::min()};
+
+   /// Upper bound on the represented domain
+   int32_t pDomainUpperBound{std::numeric_limits<int32_t>::max()};
 
    /// Pointer to the domain on this edge
    cp::Variable::FiniteDomain* pDomain{nullptr};

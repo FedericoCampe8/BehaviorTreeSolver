@@ -1,5 +1,7 @@
 #include "bt/edge.hpp"
 
+#include "bt/opt_node.hpp"
+
 #include <stdexcept>
 
 namespace btsolver {
@@ -118,6 +120,75 @@ void Edge::setDomainAndOwn(cp::Variable::FiniteDomain* domain)
 {
   pDomain = domain;
   pOwnsDomain = true;
+}
+
+double Edge::getCostValue() const noexcept
+{
+  if (!pTail)
+  {
+    return std::numeric_limits<double>::max();
+  }
+
+  auto stateNode = reinterpret_cast<optimization::OptimizationState*>(pTail);
+  if (!this->isParallelEdge())
+  {
+    return stateNode->getDPStateMutable()->cost(pDomainLowerBound);
+  }
+  else
+  {
+    double cost{0.0};
+    auto dpState = stateNode->getDPStateMutable();
+    for (auto domVal{pDomainLowerBound}; domVal <= pDomainUpperBound; ++domVal)
+    {
+      cost += dpState->cost(domVal);
+    }
+    return cost;
+  }
+}
+
+std::pair<double, double> Edge::getCostBounds() const noexcept
+{
+  if (!pTail)
+  {
+    return {std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max()};
+  }
+
+  auto stateNode = reinterpret_cast<optimization::OptimizationState*>(pTail);
+  if (!this->isParallelEdge())
+  {
+    auto cost = stateNode->getDPStateMutable()->cost(pDomainLowerBound);
+    return {cost, cost};
+  }
+  else
+  {
+    double lbCost{std::numeric_limits<double>::max()};
+    double ubCost{std::numeric_limits<double>::lowest()};
+    auto dpState = stateNode->getDPStateMutable();
+    for (auto domVal{pDomainLowerBound}; domVal <= pDomainUpperBound; ++domVal)
+    {
+      auto cost = dpState->cost(domVal);
+      if (lbCost > cost)
+      {
+        lbCost = cost;
+      }
+      else if (ubCost < cost)
+      {
+        ubCost = cost;
+      }
+    }
+    return {lbCost, ubCost};
+  }
+}
+
+void Edge::setDomainBounds(int32_t lowerBound, int32_t upperBound)
+{
+  if (lowerBound > upperBound)
+  {
+    throw std::invalid_argument("Edge - setDomainBounds: lower bound "
+            "greater than upper bound");
+  }
+  pDomainLowerBound = lowerBound;
+  pDomainUpperBound = upperBound;
 }
 
 }  // namespace btsolver

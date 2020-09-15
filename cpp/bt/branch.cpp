@@ -1,6 +1,7 @@
 #include "bt/branch.hpp"
 
 #include <functional>  // for std::function
+#include <iostream>
 
 namespace btsolver {
 

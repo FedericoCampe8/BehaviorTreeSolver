@@ -21,11 +21,6 @@
 #include "cp/domain.hpp"
 #include "system/system_export_defs.hpp"
 
-// Forward declarations
-namespace btsolver {
-class BehaviorTreeArena;
-}  // namespace btsolver
-
 namespace btsolver {
 
 /**

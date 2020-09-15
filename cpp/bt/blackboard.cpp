@@ -2,13 +2,20 @@
 
 namespace {
 
-constexpr uint64_t kDefaultMemoryAllocation{10};
+constexpr uint64_t kDefaultMemoryAllocation{100};
 
 }  // namespace
 
 namespace btsolver {
 
+StateOptimizationQueue::StateOptimizationQueue()
+: queuePtr(0)
+{
+  queue.reserve(kDefaultMemoryAllocation);
+}
+
 Blackboard::Blackboard()
+: pOptimizationQueue(std::make_shared<StateOptimizationQueue>())
 {
   pMostRecentStatesList.reserve(kDefaultMemoryAllocation);
 }

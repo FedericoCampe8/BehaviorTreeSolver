@@ -28,6 +28,15 @@ class SYS_EXPORT_CLASS Model {
    /// Returns this model's name
    const std::string& getName() const noexcept { return pName; }
 
+   /// Set objective direction
+   void setMaximization(bool maximization=true) noexcept { pMaximizeObjective = true; }
+
+   /// Is the optimization direction set to maximize?
+   bool maximization() const noexcept { return pMaximizeObjective; }
+
+   /// Is the optimization direction set to minimize?
+   bool minimization() const noexcept { return !maximization(); }
+
    /// Adds a variable to the model
    void addVariable(Variable::SPtr var) { pVariablesList.push_back(var); }
 
@@ -35,7 +44,11 @@ class SYS_EXPORT_CLASS Model {
    const std::vector<Variable::SPtr>& getVariables() const noexcept { return pVariablesList; }
 
  private:
+   /// The name of this model
    std::string pName{};
+
+   /// The objective direction
+   bool pMaximizeObjective{true};
 
    // Variables of the model
    std::vector<Variable::SPtr> pVariablesList;

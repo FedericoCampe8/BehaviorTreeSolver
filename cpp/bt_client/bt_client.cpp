@@ -19,6 +19,8 @@
 #include "bt/std_node.hpp"
 #include "bt_solver/all_different.hpp"
 #include "bt_solver/bt_solver.hpp"
+#include "bt_optimization/all_different.hpp"
+#include "bt_optimization/bt_solver.hpp"
 #include "cp/bitmap_domain.hpp"
 #include "cp/domain.hpp"
 #include "cp/model.hpp"
@@ -111,7 +113,7 @@ void runBehaviorTreeTest()
 }
 
 
-void runSolver()
+void runSolverSat()
 {
   using namespace btsolver;
   using namespace btsolver::cp;
@@ -130,11 +132,10 @@ void runSolver()
   tools::Timer timer;
 
   // Build AllDifferent constraint
-  auto allDiff = std::make_unique<AllDifferent>("AllDifferent");
-  allDiff->setScope(model->getVariables());
-
   auto arena = std::make_unique<BehaviorTreeArena>();
-  allDiff->builBehaviorTreePropagator(arena.get());
+  auto allDiff = std::make_unique<AllDifferent>(arena.get(), "AllDifferent");
+  allDiff->setScope(model->getVariables());
+  allDiff->builBehaviorTreePropagator();
 
   std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
 
@@ -146,15 +147,58 @@ void runSolver()
   // Build the relaxed BT
   auto bt = solver.buildRelaxedBT();
 
-  // Build the exact BT starting from the relaxed BT
-  solver.buildExactBT(bt);
-
   // Run the solver on the exact BT
   solver.setBehaviorTree(bt);
 
   // Run solver on the relaxed Behavior Tree
   solver.solve(1);
 }
+
+void runSolverOpt()
+{
+  using namespace btsolver;
+  using namespace btsolver::optimization;
+
+  DPState::SPtr state = std::make_shared<AllDifferentState>();
+  for (int idx = 0; idx < 10; ++idx)
+  {
+    std::cout << state->toString() << std::endl;
+    state = state->next(idx);
+  }
+
+  return;
+
+  BTOptSolver solver;
+
+  // Create a simple model
+  auto model = std::make_shared<cp::Model>("basic_model");
+
+  int maxVars{3};
+  for (int idx{0}; idx < maxVars; ++idx)
+  {
+    model->addVariable(std::make_shared<cp::Variable>("var_" + std::to_string(idx), 0, 1));
+  }
+
+  tools::Timer timer;
+
+  // Build AllDifferent constraint
+  auto arena = std::make_unique<BehaviorTreeArena>();
+
+  // Set the model into the solver
+  solver.setModel(model);
+
+  // Build the relaxed BT
+  auto bt = solver.buildRelaxedBT();
+
+  // Run the solver on the exact BT
+  solver.setBehaviorTree(bt);
+
+  // Run solver on the relaxed Behavior Tree
+  solver.solve(1);
+
+  std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
+}
+
 
 }  // namespace
 
@@ -191,7 +235,7 @@ int main(int argc, char* argv[]) {
   try
   {
     // TODO Add entry point code here
-    runSolver();
+    runSolverOpt();
   }
   catch (const std::exception& e)
   {

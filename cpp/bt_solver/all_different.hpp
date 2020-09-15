@@ -28,13 +28,13 @@ class SYS_EXPORT_CLASS AllDifferent : public BTConstraint {
    using SPtr = std::shared_ptr<AllDifferent>;
 
  public:
-   AllDifferent(const std::string& name="AllDifferent");
+   AllDifferent(BehaviorTreeArena* arena, const std::string& name="AllDifferent");
 
    /**
     * \brief Builds and returns the Behavior Tree used to propagate
     *        this constraint.
     */
-   btsolver::Sequence* builBehaviorTreePropagator(BehaviorTreeArena* arena) override;
+   btsolver::Sequence* builBehaviorTreePropagator() override;
 
    /// Given the current scope, check if the constraint is feasible,
    /// i.e., check if the variables satisfy the constraint

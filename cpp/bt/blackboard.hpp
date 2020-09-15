@@ -18,8 +18,26 @@
 #include "bt/node_status.hpp"
 #include "system/system_export_defs.hpp"
 
+/// Forward declarations
+namespace btsolver {
+class Node;
+}  // btsolver
 
 namespace btsolver {
+
+/**
+ * \brief A value that can be stored in the Blackboard memory.
+ */
+struct SYS_EXPORT_STRUCT StateOptimizationQueue {
+  using SPtr = std::shared_ptr<StateOptimizationQueue>;
+  StateOptimizationQueue();
+
+  /// Queue of state
+  std::vector<Node*> queue;
+
+  /// Pointer to the current state
+  uint32_t queuePtr{0};
+};
 
 /**
  * \brief A value that can be stored in the Blackboard memory.
@@ -82,6 +100,13 @@ public:
 
   std::vector<uint32_t>& getMostRecentStatesList() noexcept { return pMostRecentStatesList; }
 
+  /// Returns the optimization queue stored in this blackboard
+  StateOptimizationQueue::SPtr getOptimizationQueue() const noexcept { return pOptimizationQueue; }
+  StateOptimizationQueue* getOptimizationQueueMutable() const noexcept
+  {
+    return pOptimizationQueue.get();
+  }
+
 private:
   using Memory = spp::sparse_hash_map<std::string, BlackboardValue>;
   using StateMemory = spp::sparse_hash_map<uint32_t, bool>;
@@ -106,6 +131,8 @@ private:
   /// the split-filtering algorithm
   std::vector<uint32_t> pMostRecentStatesList;
 
+  /// Optimization state queue
+  StateOptimizationQueue::SPtr pOptimizationQueue{nullptr};
 };
 
 }  // namespace btsolver

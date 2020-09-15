@@ -7,13 +7,14 @@
 namespace btsolver {
 namespace cp {
 
-AllDifferent::AllDifferent(const std::string& name)
-: BTConstraint(ConstraintType::kAllDifferent, name)
+AllDifferent::AllDifferent(BehaviorTreeArena* arena, const std::string& name)
+: BTConstraint(ConstraintType::kAllDifferent, arena, name)
 {
 }
 
-btsolver::Sequence* AllDifferent::builBehaviorTreePropagator(BehaviorTreeArena* arena)
+btsolver::Sequence* AllDifferent::builBehaviorTreePropagator()
 {
+  auto arena = getArena();
   const auto& scope = getScope();
   if (arena == nullptr || scope.empty())
   {
@@ -124,11 +125,8 @@ std::pair<btsolver::Selector*, AllDifferent::StateMemory> AllDifferent::buildNod
   // Iterate over all the previous states
   AllDifferent::StateMemory updatedStateMemory;
 
-  // int maxWidth{16};
   for (const auto& it : stateMemory)
   {
-    // if (updatedStateMemory.size() >= maxWidth) break;
-
     // For each state, create a sequence node
     auto sequence = reinterpret_cast<btsolver::Sequence*>(
             arena->buildNode<btsolver::Sequence>("Sequence_AllDifferent"));
