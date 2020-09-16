@@ -1,4 +1,5 @@
 #include "bt_optimization/dp_model.hpp"
+#include <string>
 
 namespace btsolver {
 namespace optimization {
