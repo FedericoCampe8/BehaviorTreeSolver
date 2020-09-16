@@ -108,7 +108,7 @@ class SYS_EXPORT_CLASS BTOptSolver {
                                 Selector* nextNode,
                                 BTOptConstraint* con,
                                 BehaviorTree* bt,
-                                std::vector<OptimizationState*> newStatesList,
+                                std::vector<OptimizationState*>& newStatesList,
                                 spp::sparse_hash_set<uint32_t>& conditionStatesToRemove);
 
   /// Removes a node and all its incoming edges from the BT

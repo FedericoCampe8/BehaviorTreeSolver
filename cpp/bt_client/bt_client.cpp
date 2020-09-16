@@ -164,10 +164,10 @@ void runSolverOpt()
   // Create a simple model
   auto model = std::make_shared<cp::Model>("basic_model");
 
-  int maxVars{3};
+  int maxVars{10};
   for (int idx{0}; idx < maxVars; ++idx)
   {
-    model->addVariable(std::make_shared<cp::Variable>("var_" + std::to_string(idx), 0, 1));
+    model->addVariable(std::make_shared<cp::Variable>("var_" + std::to_string(idx), 1, maxVars));
   }
 
   tools::Timer timer;
@@ -177,6 +177,15 @@ void runSolverOpt()
 
   // Build the relaxed BT
   auto bt = solver.buildRelaxedBT();
+  std::cout << "Wallclock time building relaxed BT (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
+
+  auto allDiff = std::make_shared<AllDifferent>(bt->getArenaMutable(), "AllDifferent");
+  allDiff->setScope(model->getVariables());
+  model->addConstraint(allDiff);
+
+  timer.reset();
+  timer.start();
   solver.separateBehaviorTree(bt);
 
   // Run the solver on the behavior tree

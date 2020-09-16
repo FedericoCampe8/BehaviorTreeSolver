@@ -61,7 +61,7 @@ DPState::SPtr AllDifferentState::next(int32_t domainElement) const noexcept
   if (std::find(pElementList.begin(), pElementList.end(), domainElement) == pElementList.end())
   {
     state->pElementList = pElementList;
-    state->pElementList.push_back(domainElement);
+    state->pElementList.insert(domainElement);
   }
   return state;
 }

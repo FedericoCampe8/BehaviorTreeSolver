@@ -7,7 +7,8 @@
 #pragma once
 
 #include <string>
-#include <vector>
+
+#include <sparsepp/spp.h>
 
 #include "bt/behavior_tree_arena.hpp"
 #include "bt_optimization/dp_model.hpp"
@@ -43,9 +44,8 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
   bool isEqual(const DPState* other) const noexcept override;
 
  private:
-  // Actual state representation.
-  // The first element is ALWAYS the lower bound
-  std::vector<int32_t> pElementList;
+  // Actual state representation
+  spp::sparse_hash_set<int32_t> pElementList;
 };
 
 class SYS_EXPORT_CLASS AllDifferent : public BTOptConstraint {
@@ -58,6 +58,8 @@ class SYS_EXPORT_CLASS AllDifferent : public BTOptConstraint {
 
    /// Returns the initial DP state
    DPState::SPtr getInitialDPState() const noexcept;
+
+   bool isFeasible() const noexcept override { return true; }
 
  private:
    /// Initial state for the DP model for the AllDifferent constraint

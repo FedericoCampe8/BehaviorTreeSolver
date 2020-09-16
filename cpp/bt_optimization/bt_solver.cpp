@@ -165,14 +165,14 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
 
 void BTOptSolver::separateBehaviorTree(BehaviorTree::SPtr bt)
 {
-  if (pBehaviorTree == nullptr || pModel == nullptr)
+  if (bt == nullptr || pModel == nullptr)
   {
     return;
   }
 
   // Get the constraints in the model.
   // Separation will be performed on each constraint
-  const auto conList = pModel->getConstraint();
+  const auto conList = pModel->getConstraints();
   if (conList.empty())
   {
     return;
@@ -211,6 +211,9 @@ void BTOptSolver::separateConstraintInBehaviorTree(BehaviorTree* bt, BTOptConstr
   newStatesList.reserve(kDefaultNumNewStates);
   for (uint32_t childCtr{0}; childCtr < static_cast<uint32_t>(childrenIdList.size()); ++childCtr)
   {
+    // Clear the list of new state before processing the current child
+    newStatesList.clear();
+
     // Skip children that are not part of the scope of the current constraint
     if (!con->isVariableInScope(bt->getVariableMutableGivenOrderingNumber(childCtr)))
     {
@@ -293,7 +296,7 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
                                            Selector* nextNode,
                                            BTOptConstraint* con,
                                            BehaviorTree* bt,
-                                           std::vector<OptimizationState*> newStatesList,
+                                           std::vector<OptimizationState*>& newStatesList,
                                            spp::sparse_hash_set<uint32_t>& conditionStatesToRemove)
 {
   auto arena = bt->getArenaMutable();
@@ -375,7 +378,7 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
     while (recursiveNode->hasDefaultDPState() && recursiveNode->hasParentConditionNode())
     {
       auto parentNode = reinterpret_cast<OptimizationStateCondition*>(
-              recursiveNode->getParentConditionNode());
+              arena->getNode(recursiveNode->getParentConditionNode()));
 
       // The parent condition node has the same state of the paired node on the left.
       // All the paired states must have the same DP state (otherwise they wouldn't be
@@ -425,13 +428,15 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
           continue;
         }
 
+        // Remove the current element from the domain.
+        // It will end-up on another edge (if the produced DP state is feasible)
+        edge->removeElementFromDomain(startEdgeValue);
+
         auto newDPState = initState->next(startEdgeValue);
+        //std::cout << "Processing state " << newDPState->toString() << std::endl;
         if (newDPState->isInfeasible())
         {
-          // The new state is infeasible and the domain element must be removed
-          edge->removeElementFromDomain(startEdgeValue);
-
-          // Now, if the edge has an empty domain,
+          // If the edge has an empty domain,
           // the full edge should be removed together with the node, parent and so on
           if (edge->isDomainEmpty())
           {
@@ -476,8 +481,10 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
           if (node->hasDefaultDPState())
           {
             // The node has a default state, set this state as its new state reachable
-            // from the edge
+            // from the edge and re-insert the value on the edge
+            edge->reinsertElementInDomain(startEdgeValue);
             node->resetDPState(newDPState);
+            newStatesList.push_back(node);
           }
           else
           {
@@ -537,31 +544,35 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
               newStatesList.push_back(stateNode);
 
               // Create a child on the right and pair with this state
-              auto newSequence = reinterpret_cast<Sequence*>(
-                      arena->buildNode<Sequence>("Sequence"));
-              auto newSequenceEdge = arena->buildEdge(nextNode, newSequence);
-              nextNode->addChild(newSequence->getUniqueId());
+              // This is done only if there is a next node (i.e., not on the last child)
+              if (nextNode != nullptr)
+              {
+                auto newSequence = reinterpret_cast<Sequence*>(
+                        arena->buildNode<Sequence>("Sequence"));
+                auto newSequenceEdge = arena->buildEdge(nextNode, newSequence);
+                nextNode->addChild(newSequence->getUniqueId());
 
-              auto newCondition = reinterpret_cast<OptimizationStateCondition*>(
-                      arena->buildNode<OptimizationStateCondition>("State_Condition"));
-              newCondition->pairWithOptimizationState(stateNode->getUniqueId());
-              auto newConditionEdge = arena->buildEdge(newSequence, newCondition);
-              newSequence->addChild(newCondition->getUniqueId());
+                auto newCondition = reinterpret_cast<OptimizationStateCondition*>(
+                        arena->buildNode<OptimizationStateCondition>("State_Condition"));
+                newCondition->pairWithOptimizationState(stateNode->getUniqueId());
+                auto newConditionEdge = arena->buildEdge(newSequence, newCondition);
+                newSequence->addChild(newCondition->getUniqueId());
 
-              auto newDomainSelector = reinterpret_cast<Selector*>(
-                      arena->buildNode<Selector>("Domain_Selector"));
-              auto newDomainSelectorEdge = arena->buildEdge(newSequence, newDomainSelector);
-              newSequence->addChild(newDomainSelector->getUniqueId());
+                auto newDomainSelector = reinterpret_cast<Selector*>(
+                        arena->buildNode<Selector>("Domain_Selector"));
+                auto newDomainSelectorEdge = arena->buildEdge(newSequence, newDomainSelector);
+                newSequence->addChild(newDomainSelector->getUniqueId());
 
-              auto newStateNode = reinterpret_cast<OptimizationState*>(
-                      arena->buildNode<OptimizationState>("Optimization_State"));
-              newStateNode->setParentConditionNode(newCondition->getUniqueId());
-              newDomainSelector->addChild(newStateNode->getUniqueId());
+                auto newStateNode = reinterpret_cast<OptimizationState*>(
+                        arena->buildNode<OptimizationState>("Optimization_State"));
+                newStateNode->setParentConditionNode(newCondition->getUniqueId());
+                newDomainSelector->addChild(newStateNode->getUniqueId());
 
-              auto newDomainEdge = arena->buildEdge(newDomainSelector, newStateNode);
-              auto entryEdge = arena->getEdge(nextNode->getIncomingEdge());
-              newDomainEdge->setDomainBounds(entryEdge->getDomainLowerBound(),
-                                             entryEdge->getDomainUpperBound());
+                auto newDomainEdge = arena->buildEdge(newDomainSelector, newStateNode);
+                auto entryEdge = arena->getEdge(nextNode->getIncomingEdge());
+                newDomainEdge->setDomainBounds(entryEdge->getDomainLowerBound(),
+                                               entryEdge->getDomainUpperBound());
+              }
             }
           }
         }
@@ -653,6 +664,7 @@ void BTOptSolver::solve(uint32_t numSolutions)
       throw std::runtime_error("BTOptSolver - solve: missing incoming edge");
     }
     auto edge = arena->getEdge(inEdge);
+    edge->finalizeDomain();
 
     // If the edge is a parallel edge, pick the value that improves the cost
     double edgeCost{0.0};
@@ -672,6 +684,7 @@ void BTOptSolver::solve(uint32_t numSolutions)
     {
       edgeCost = edge->getCostValue();
     }
+
     solutionCost += edgeCost;
     solution.push_back({(*it)->getName(), std::to_string(edgeCost)});
     if (bestState->getParentConditionNode() == std::numeric_limits<uint32_t>::max())

@@ -48,7 +48,7 @@ class SYS_EXPORT_CLASS Model {
    void addConstraint(Constraint::SPtr con) { pConstraintList.push_back(con); }
 
    /// Returns the list of constraint in the model
-   const std::vector<Constraint::SPtr>& getConstraint() const noexcept { return pConstraintList; }
+   const std::vector<Constraint::SPtr>& getConstraints() const noexcept { return pConstraintList; }
 
  private:
    /// The name of this model

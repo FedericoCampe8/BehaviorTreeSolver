@@ -154,7 +154,7 @@ public:
 
   /// Returns true if the nodes contains the original/default DP state.
   /// Returns false otherwise (e.g., the DP state has been reset)
-  bool hasDefaultDPState() const noexcept { return pIsDPStateChanged; }
+  bool hasDefaultDPState() const noexcept { return !pIsDPStateChanged; }
 
   /// Returns the internal DP State
   DPState::SPtr getDPState() const noexcept { return pDPState; }

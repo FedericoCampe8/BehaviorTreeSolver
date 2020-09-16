@@ -64,9 +64,10 @@ void OptimizationStateCondition::cleanupNode(Blackboard* blackboard)
 OptimizationState::OptimizationState(const std::string& name, BehaviorTreeArena* arena,
                                      Blackboard* blackboard)
 : Node(name, arena, blackboard),
-  pDefaultDPState(std::make_shared<DPState>()),
-  pDPState(pDefaultDPState)
+  pDefaultDPState(std::make_shared<DPState>())
 {
+  pDPState = pDefaultDPState;
+
   // Register the run callback
   registerRunCallback([=](Blackboard* bb) {
     return this->runOptimizationStateNode(bb);
@@ -191,6 +192,7 @@ NodeStatus RunnerOptimizer::runOptimizer(Blackboard* blackboard)
       return NodeStatus::kActive;
     }
 
+    /*
     std::cout << "RunnerOptimizer - Optimality GAP:\n";
     for (auto node : pOptimizationQueue->queue)
     {
@@ -198,10 +200,10 @@ NodeStatus RunnerOptimizer::runOptimizer(Blackboard* blackboard)
       std::cout << "(" << stateNode->getGlbLowerBoundOnCost() << ", " <<
               stateNode->getGlbUpperBoundOnCost() << ")\n";
     }
-
+    */
     if (idx < static_cast<int>(getChildren().size()) - 1)
     {
-      // Store the last states for backtracking assignment
+      // Store the last states for variable backtracking assignments
       pOptimizationQueue->queue.clear();
     }
   }

@@ -191,6 +191,33 @@ void Edge::setDomainBounds(int32_t lowerBound, int32_t upperBound)
   pDomainUpperBound = upperBound;
 }
 
+uint32_t Edge::getDomainSize() const noexcept
+{
+  return static_cast<uint32_t>(
+          (pDomainUpperBound - pDomainLowerBound + 1) - pInvalidDomainElements.size());
+}
+
+void Edge::finalizeDomain() noexcept
+{
+  while(pDomainLowerBound <= pDomainUpperBound)
+  {
+    if (isElementInDomain(pDomainLowerBound))
+    {
+      break;
+    }
+    pDomainLowerBound++;
+  }
+
+  while(pDomainLowerBound <= pDomainUpperBound)
+  {
+    if (isElementInDomain(pDomainUpperBound))
+    {
+      break;
+    }
+    pDomainUpperBound--;
+  }
+}
+
 void Edge::reinsertElementInDomain(int32_t element) noexcept
 {
   if (pDomainLowerBound <= element &&

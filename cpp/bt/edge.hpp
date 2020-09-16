@@ -73,11 +73,17 @@ class SYS_EXPORT_CLASS Edge {
    /// Throws if "lowerBound" > "upperBound"
    void setDomainBounds(int32_t lowerBound, int32_t upperBound);
 
-   /// Returns the domain lower bound on this edge
+   /// Returns the original domain lower bound on this edge
    int32_t getDomainLowerBound() const noexcept { return pDomainLowerBound; }
 
-   /// Returns the domain lower bound on this edge
+   /// Returns the original domain lower bound on this edge
    int32_t getDomainUpperBound() const noexcept { return pDomainUpperBound; }
+
+   /// Returns the size of the current domain
+   uint32_t getDomainSize() const noexcept;
+
+   /// Re-sets lower/upper bound w.r.t. the removed elements
+   void finalizeDomain() noexcept;
 
    /// Re-inserts an element in the domain on this edge
    void reinsertElementInDomain(int32_t element) noexcept;
