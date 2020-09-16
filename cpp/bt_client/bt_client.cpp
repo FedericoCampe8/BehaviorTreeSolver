@@ -164,6 +164,7 @@ void runSolverOpt()
   // Create a simple model
   auto model = std::make_shared<cp::Model>("basic_model");
 
+  // Switch num. variables for testing
   int maxVars{10};
   for (int idx{0}; idx < maxVars; ++idx)
   {
