@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "cp/model.hpp"
+#include "cp/constraint.hpp"
 #include "cp/variable.hpp"
 #include "system/system_export_defs.hpp"
 
@@ -43,6 +44,12 @@ class SYS_EXPORT_CLASS Model {
    /// Returns the list of variables in the model
    const std::vector<Variable::SPtr>& getVariables() const noexcept { return pVariablesList; }
 
+   /// Adds a constraint to the model
+   void addConstraint(Constraint::SPtr con) { pConstraintList.push_back(con); }
+
+   /// Returns the list of constraint in the model
+   const std::vector<Constraint::SPtr>& getConstraint() const noexcept { return pConstraintList; }
+
  private:
    /// The name of this model
    std::string pName{};
@@ -52,6 +59,9 @@ class SYS_EXPORT_CLASS Model {
 
    // Variables of the model
    std::vector<Variable::SPtr> pVariablesList;
+
+   // Constraints of the model
+   std::vector<Constraint::SPtr> pConstraintList;
 };
 
 }  // namespace cp

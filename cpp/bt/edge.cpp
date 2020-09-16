@@ -191,4 +191,39 @@ void Edge::setDomainBounds(int32_t lowerBound, int32_t upperBound)
   pDomainUpperBound = upperBound;
 }
 
+void Edge::reinsertElementInDomain(int32_t element) noexcept
+{
+  if (pDomainLowerBound <= element &&
+          element <= pDomainUpperBound &&
+          !isElementInDomain(element))
+  {
+    pInvalidDomainElements.erase(element);
+  }
+}
+
+void Edge::removeElementFromDomain(int32_t element) noexcept
+{
+  if (pDomainLowerBound <= element && element <= pDomainUpperBound)
+  {
+    pInvalidDomainElements.insert(element);
+  }
+}
+
+bool Edge::isDomainEmpty() const noexcept
+{
+  // Check if all distinct elements in the domain
+  // have been removed/marked as invalid elements
+  return static_cast<int32_t>(pInvalidDomainElements.size()) ==
+          (pDomainUpperBound - pDomainLowerBound + 1);
+}
+
+bool Edge::isElementInDomain(int32_t element) const noexcept
+{
+  if (pDomainLowerBound <= element && element <= pDomainUpperBound)
+  {
+    return pInvalidDomainElements.find(element) == pInvalidDomainElements.end();
+  }
+  return false;
+}
+
 }  // namespace btsolver

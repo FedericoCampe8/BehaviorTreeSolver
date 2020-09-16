@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include <sparsepp/spp.h>
+
 #include "cp/variable.hpp"
 #include "system/system_export_defs.hpp"
 
@@ -65,6 +67,11 @@ class SYS_EXPORT_CLASS Constraint {
    /// Returns the scope of this constraint
    const std::vector<Variable::SPtr>& getScope() const noexcept { return pScope; }
 
+   /// Returns true if the given variable is not nullptr and part of
+   /// this constraint's scope.
+   /// Returns false otherwise
+   bool isVariableInScope(Variable* var) const noexcept;
+
    /// Given the current scope, check if the constraint is feasible,
    /// i.e., check if the variables satisfy the constraint.
    /// Returns always true if the variables are not ground
@@ -88,6 +95,9 @@ class SYS_EXPORT_CLASS Constraint {
 
    // Scope of this constraint, i.e., the variables involved in this constraint
    std::vector<Variable::SPtr> pScope;
+
+   /// Set of variable identifiers used for quick look-up
+   spp::sparse_hash_set<uint32_t> pVarIdSet;
 };
 
 }  // namespace cp

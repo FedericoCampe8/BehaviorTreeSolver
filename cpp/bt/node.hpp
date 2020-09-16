@@ -101,6 +101,12 @@ public:
   uint32_t getIncomingEdge() const {
     return pIncomingEdges.empty() ? std::numeric_limits<uint32_t>::max() : pIncomingEdges.front(); }
 
+  /// Returns the list of all incoming edges
+  const std::vector<uint32_t>& getAllIncomingEdges() const noexcept { return pIncomingEdges; }
+
+  /// Returns the list of all outoing edges
+  const std::vector<uint32_t>& getAllOutgoingEdges() const noexcept { return pOutgoingEdges; }
+
   /// Executes the node's state machine and returns the result of the run.
   /// In Behavior Tree terminology, executes a "tick"
   NodeStatus tick();
@@ -124,7 +130,11 @@ public:
   virtual void cancel();
 
 protected:
+  /// Returns this node's arena
   BehaviorTreeArena* getArena() const noexcept { return pArena; }
+
+  /// Returns this node's blackboard
+  Blackboard* getBlackboard() const noexcept { return pBlackboard; }
 
 private:
   static uint32_t kNextID;

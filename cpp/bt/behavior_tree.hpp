@@ -10,10 +10,13 @@
 #include <limits>   // for std::numeric_limits
 #include <memory>   // for std::unique_ptr
 
+#include <sparsepp/spp.h>
+
 #include "bt/behavior_tree_arena.hpp"
 #include "bt/blackboard.hpp"
 #include "bt/node_status.hpp"
 #include "bt/node_status.hpp"
+#include "cp/variable.hpp"
 #include "system/system_export_defs.hpp"
 
 namespace btsolver {
@@ -51,6 +54,21 @@ class SYS_EXPORT_CLASS BehaviorTree {
    /// Returns the raw pointer to the internal arena
    BehaviorTreeArena* getArenaMutable() const noexcept { return pArena.get(); }
 
+   void addVariableMapping(int idx, cp::Variable::SPtr var)
+   {
+     pVarMap[idx] = var;
+   }
+
+   cp::Variable* getVariableMutableGivenOrderingNumber(int idx)
+   {
+     auto it = pVarMap.find(idx);
+     if (it == pVarMap.end())
+     {
+       return nullptr;
+     }
+     return (it->second).get();
+   }
+
    /// Runs this behavior tree
    void run();
 
@@ -78,6 +96,11 @@ class SYS_EXPORT_CLASS BehaviorTree {
    /// First and unique child of this BT.
    /// All other children are attached to this entry node
    uint32_t pEntryNode{std::numeric_limits<uint32_t>::max()};
+
+   /// Mapping between BT children and model variables.
+   /// TODO create a Blackboard specific for optimization and add
+   /// this mapping to that blackboard
+   spp::sparse_hash_map<int, cp::Variable::SPtr> pVarMap;
 };
 
 }  // namespace btsolver

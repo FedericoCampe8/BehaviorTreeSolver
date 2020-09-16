@@ -159,15 +159,6 @@ void runSolverOpt()
   using namespace btsolver;
   using namespace btsolver::optimization;
 
-  DPState::SPtr state = std::make_shared<AllDifferentState>();
-  for (int idx = 0; idx < 10; ++idx)
-  {
-    std::cout << state->toString() << std::endl;
-    state = state->next(idx);
-  }
-
-  return;
-
   BTOptSolver solver;
 
   // Create a simple model
@@ -181,16 +172,14 @@ void runSolverOpt()
 
   tools::Timer timer;
 
-  // Build AllDifferent constraint
-  auto arena = std::make_unique<BehaviorTreeArena>();
-
   // Set the model into the solver
   solver.setModel(model);
 
   // Build the relaxed BT
   auto bt = solver.buildRelaxedBT();
+  solver.separateBehaviorTree(bt);
 
-  // Run the solver on the exact BT
+  // Run the solver on the behavior tree
   solver.setBehaviorTree(bt);
 
   // Run solver on the relaxed Behavior Tree

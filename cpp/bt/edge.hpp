@@ -9,6 +9,9 @@
 #include <limits>   // for std::numeric_limits
 #include <memory>   // for std::unique_ptr
 #include <utility>  // for std::pair
+
+#include <sparsepp/spp.h>
+
 #include "bt/node.hpp"
 #include "cp/variable.hpp"
 #include "system/system_export_defs.hpp"
@@ -76,6 +79,18 @@ class SYS_EXPORT_CLASS Edge {
    /// Returns the domain lower bound on this edge
    int32_t getDomainUpperBound() const noexcept { return pDomainUpperBound; }
 
+   /// Re-inserts an element in the domain on this edge
+   void reinsertElementInDomain(int32_t element) noexcept;
+
+   /// Removes an element from the domain on this edge
+   void removeElementFromDomain(int32_t element) noexcept;
+
+   /// Returns whether or not the domain is empty
+   bool isDomainEmpty() const noexcept;
+
+   /// Returns whether or not the given element is part of the domain on this edge
+   bool isElementInDomain(int32_t element) const noexcept;
+
    /// Sets the domain for this edge
    void setDomain(cp::Variable::FiniteDomain* domain) noexcept { pDomain = domain; }
 
@@ -111,6 +126,9 @@ class SYS_EXPORT_CLASS Edge {
 
    /// Upper bound on the represented domain
    int32_t pDomainUpperBound{std::numeric_limits<int32_t>::max()};
+
+   /// Sets of elements in [lb, ub] that are not part of the domain
+   spp::sparse_hash_set<int32_t> pInvalidDomainElements;
 
    /// Pointer to the domain on this edge
    cp::Variable::FiniteDomain* pDomain{nullptr};

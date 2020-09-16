@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "bt/behavior_tree_arena.hpp"
+#include "bt_optimization/dp_model.hpp"
 #include "cp/constraint.hpp"
 #include "system/system_export_defs.hpp"
 
@@ -24,6 +25,9 @@ class SYS_EXPORT_CLASS BTOptConstraint : public cp::Constraint {
 
  public:
    BTOptConstraint(cp::ConstraintType type, BehaviorTreeArena* arena, const std::string& name="");
+
+   /// Returns the initial state of the DP transformation chain
+   virtual DPState::SPtr getInitialDPState() const noexcept = 0;
 
  protected:
    inline BehaviorTreeArena* getArena() const noexcept { return pArena; }

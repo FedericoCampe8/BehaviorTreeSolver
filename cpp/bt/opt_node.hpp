@@ -123,13 +123,41 @@ public:
   /// Returns the parent condition node
   uint32_t getParentConditionNode() const noexcept { return pParentStateConditionNode; }
 
+  /// Returns whether or not this node has a parent condition activating it
+  bool hasParentConditionNode() const noexcept
+  {
+    return getParentConditionNode() < std::numeric_limits<uint32_t>::max();
+  }
+
   /// Pairs a state condition node to be activated once this node is ticked
   void pairStateConditionNode(uint32_t stateCondition) noexcept;
 
+  /// Returns the condition state paired (ticked) by this node (if any)
+  OptimizationStateCondition* getPairedCondition() const noexcept { return pPairedStateCondition; }
+
+  /// Register this node in the blackboard given its tree vertical level
+  void mapNodeOnBlackboard(uint32_t btLevel);
+
   /// Resets the internal DP state
-  void resetDPState(DPState::SPtr dpState) noexcept { pDPState = dpState; }
+  void resetDPState(DPState::SPtr dpState) noexcept
+  {
+    pIsDPStateChanged = true;
+    pDPState = dpState;
+  }
+
+  /// Resets the internal DP state to the default one
+  void setDefaultDPState()
+  {
+    pIsDPStateChanged = false;
+    pDPState = pDefaultDPState;
+  }
+
+  /// Returns true if the nodes contains the original/default DP state.
+  /// Returns false otherwise (e.g., the DP state has been reset)
+  bool hasDefaultDPState() const noexcept { return pIsDPStateChanged; }
 
   /// Returns the internal DP State
+  DPState::SPtr getDPState() const noexcept { return pDPState; }
   DPState* getDPStateMutable() const noexcept { return pDPState.get(); }
 
   /// Returns the lower bound on the solution cost
@@ -145,9 +173,19 @@ public:
   double getGlbUpperBoundOnCost() const noexcept { return pTotUpperBoundCost; }
 
 private:
+  /// Flag indicating whether or not the original DP state has been changed
+  bool pIsDPStateChanged{false};
 
   /// The DP state associated with this BT state
   DPState::SPtr pDPState{nullptr};
+
+  /// The default DP state
+  DPState::SPtr pDefaultDPState{nullptr};
+
+  /// Multiple edges from different child selectors can share the same
+  /// optimization state under the same child.
+  /// This variable keeps track of which edge is currently activated
+  uint32_t pCurrentTickedEdge{0};
 
   /// Local lower bound on the solution on this edge,
   /// i.e., the cost of this state transition

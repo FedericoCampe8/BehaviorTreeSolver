@@ -24,6 +24,12 @@ class Node;
 }  // btsolver
 
 namespace btsolver {
+namespace optimization {
+class OptimizationState;
+}  // namespace optimization
+}  // btsolver
+
+namespace btsolver {
 
 /**
  * \brief A value that can be stored in the Blackboard memory.
@@ -48,6 +54,10 @@ struct SYS_EXPORT_STRUCT BlackboardValue {
 class SYS_EXPORT_CLASS Blackboard {
 public:
   using NodeStatusMap = spp::sparse_hash_map<uint32_t, NodeStatus>;
+
+  /// Map of optimization nodes in the BT stored per "vertical-level"
+  using OptimizationStateNodeMap =
+          spp::sparse_hash_map<uint32_t, std::vector<optimization::OptimizationState*>>;
   using SPtr = std::shared_ptr<Blackboard>;
 
 public:
@@ -100,6 +110,16 @@ public:
 
   std::vector<uint32_t>& getMostRecentStatesList() noexcept { return pMostRecentStatesList; }
 
+  /// Registers the given optimization state node with this blackboard.
+  /// The node is mapped to the given tree vertical level
+  void registerOptimizationStateNode(optimization::OptimizationState* node, uint32_t treeLevel);
+
+  /// Returns the optimization state node map
+  OptimizationStateNodeMap& getOptimizationStateNodeMap() noexcept
+  {
+    return pOptimizationStateNodeMap;
+  }
+
   /// Returns the optimization queue stored in this blackboard
   StateOptimizationQueue::SPtr getOptimizationQueue() const noexcept { return pOptimizationQueue; }
   StateOptimizationQueue* getOptimizationQueueMutable() const noexcept
@@ -121,6 +141,9 @@ private:
   /// Map of active/non-active states.
   /// This map is mainly used by CP solver to activate states
   StateMemory pStateMemory;
+
+  /// Map of all optimization states in the BT owning this Blackboard
+  OptimizationStateNodeMap pOptimizationStateNodeMap;
 
   /// This is a performance 'trick'.
   /// This vector is used to store the new states created by each child

@@ -91,8 +91,14 @@ std::string AllDifferentState::toString() const noexcept
 }
 
 AllDifferent::AllDifferent(BehaviorTreeArena* arena, const std::string& name)
-: BTOptConstraint(cp::ConstraintType::kAllDifferent, arena, name)
+: BTOptConstraint(cp::ConstraintType::kAllDifferent, arena, name),
+  pInitialDPState(std::make_shared<AllDifferentState>())
 {
+}
+
+DPState::SPtr AllDifferent::getInitialDPState() const noexcept
+{
+  return pInitialDPState;
 }
 
 }  // namespace optimization

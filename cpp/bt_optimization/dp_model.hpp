@@ -49,7 +49,6 @@ class SYS_EXPORT_STRUCT DPState {
   // Returns a string representing this state
   virtual std::string toString() const noexcept;
 
- protected:
   /// Returns true if this is equal to "other".
   /// Returns false otherwise
   virtual bool isEqual(const DPState* other) const noexcept;

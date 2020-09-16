@@ -64,12 +64,20 @@ void OptimizationStateCondition::cleanupNode(Blackboard* blackboard)
 OptimizationState::OptimizationState(const std::string& name, BehaviorTreeArena* arena,
                                      Blackboard* blackboard)
 : Node(name, arena, blackboard),
-  pDPState(std::make_shared<DPState>())
+  pDefaultDPState(std::make_shared<DPState>()),
+  pDPState(pDefaultDPState)
 {
   // Register the run callback
   registerRunCallback([=](Blackboard* bb) {
     return this->runOptimizationStateNode(bb);
   });
+}
+
+void OptimizationState::mapNodeOnBlackboard(uint32_t btLevel)
+{
+  // Register this optimization state in the blackboard.
+  // The Behavior Tree owning this node should be able to retrieve all state nodes in the tree
+  // getBlackboard()->registerOptimizationStateNode(this, btLevel);
 }
 
 void OptimizationState::pairStateConditionNode(uint32_t stateCondition) noexcept
@@ -88,7 +96,24 @@ NodeStatus OptimizationState::runOptimizationStateNode(Blackboard* blackboard)
   //       this variable's domain and the parent state condition node (if any)
   // 2.2 - Copy over the bounds to this node
   // 2.2 - Set the bounds on the paired state condition node (if any)
-  auto inEdgeId = getIncomingEdge();
+  //
+  // Note:
+  // This state can have multiple incoming edges (which, in turn can be parallel or not)
+  // since this state can be shared among different selectors of the same child.
+  // In other words, this state can hold onto a DP state that ends up to be the same
+  // when activated by different parent conditions.
+  // For example, in the AllDifferent constraint, the DP state {1, 2}, coming from the path
+  // x_1 = {1}, x_2 = {2}, is the same as the DP state {2, 1}, coming from the path
+  // x_1 = {2}, x_2 = {1}.
+  // Therefore, a different edge should be considered at each tick
+  const auto& allEdges = getAllIncomingEdges();
+  auto inEdgeId = allEdges[pCurrentTickedEdge++];
+  if (pCurrentTickedEdge >= static_cast<uint32_t>(allEdges.size()))
+  {
+    // Reset the counter
+    pCurrentTickedEdge = 0;
+  }
+
   if (inEdgeId != std::numeric_limits<uint32_t>::max())
   {
     auto edge = getArena()->getEdge(inEdgeId);

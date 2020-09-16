@@ -22,7 +22,17 @@ void Constraint::setScope(const std::vector<Variable::SPtr>& scope) noexcept
   for (const auto& var : pScope)
   {
     //var->registerCallbackConstraint(this);
+    pVarIdSet.insert(var->getUniqueId());
   }
+}
+
+bool Constraint::isVariableInScope(Variable* var) const noexcept
+{
+  if (var == nullptr)
+  {
+    return false;
+  }
+  return pVarIdSet.find(var->getUniqueId()) != pVarIdSet.end();
 }
 
 

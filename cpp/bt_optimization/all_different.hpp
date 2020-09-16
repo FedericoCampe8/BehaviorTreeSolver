@@ -40,7 +40,6 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
 
   std::string toString() const noexcept override;
 
- protected:
   bool isEqual(const DPState* other) const noexcept override;
 
  private:
@@ -56,6 +55,13 @@ class SYS_EXPORT_CLASS AllDifferent : public BTOptConstraint {
 
  public:
    AllDifferent(BehaviorTreeArena* arena, const std::string& name="AllDifferent");
+
+   /// Returns the initial DP state
+   DPState::SPtr getInitialDPState() const noexcept;
+
+ private:
+   /// Initial state for the DP model for the AllDifferent constraint
+   AllDifferentState::SPtr pInitialDPState{nullptr};
 };
 
 }  // namespace optimization

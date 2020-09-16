@@ -1,9 +1,11 @@
 #include "bt/blackboard.hpp"
 
+#include <stdexcept>  // for std::invalid_argument
+
+#include "bt/opt_node.hpp"
+
 namespace {
-
 constexpr uint64_t kDefaultMemoryAllocation{100};
-
 }  // namespace
 
 namespace btsolver {
@@ -46,6 +48,17 @@ bool Blackboard::checkAndDeactivateState(uint32_t stateId)
   const auto val = pStateMemory[stateId];
   pStateMemory[stateId] = false;
   return val;
+}
+
+void Blackboard::registerOptimizationStateNode(optimization::OptimizationState* node,
+                                               uint32_t treeLevel)
+{
+  if (node == nullptr)
+  {
+    throw std::invalid_argument("Blackboard - registerOptimizationStateNode: "
+            "empty pointer to the node");
+  }
+  pOptimizationStateNodeMap[treeLevel].push_back(node);
 }
 
 }  // namespace btsolver
