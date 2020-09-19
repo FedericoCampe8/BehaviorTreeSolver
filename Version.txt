@@ -1,9 +1,0 @@
-Version of the software used:
-	- Google OR-Tools: 7.7
-	- Google Protocol Buffer: 3.12.2
-	- Boost 1.70.0
-	- Asio 1.12.2
-
-The software is built and tested under:
-     - Linux Ubuntu 18.04.4
-

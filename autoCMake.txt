@@ -1,0 +1,74 @@
+#!/bin/bash
+
+function printHelp 
+{
+    echo "Usage: ./autoCMake.sh <Platform type> <Build type>"
+    echo "  Platform types:"
+    echo "    -c CPU"
+    echo "    -g GPU"
+    echo "  Build types:"
+    echo "    -d  Debug"
+    echo "    -r  Release"
+    echo "Example: ./autoCMake.sh -c -d"
+}
+
+
+if [ "$#" -ne 2 ];
+then
+    printHelp
+    exit 1
+fi
+
+platformType=""
+buildType=""
+
+for arg in "$@" 
+do
+    case "$arg" in
+        -c) 
+            platformType="CPU"
+            ;;
+        -g) 
+            platformType="GPU"
+            ;;
+        -r) 
+            buildType="Release"
+            ;;
+        -d) 
+            buildType="Debug"
+            ;;
+        -h|--help) 
+            printHelp
+            exit 0
+            ;;
+        *)
+            echo "[ERROR] Unrecognized argument: $arg"
+            printHelp
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$platformType" ];
+then
+    echo "[ERROR] Missing platform type"
+    printHelp
+    exit 1
+fi
+
+if [ -z "platformType" ];
+then
+    echo "[ERROR] Missing build type"
+    printHelp
+    exit 1
+fi
+
+rm -rf ./build &> /dev/null
+mkdir ./build
+
+cd build
+
+cmake \
+    -DPLATFORM_TYPE=$platformType \
+    -DCMAKE_BUILD_TYPE=$buildType \
+    ..

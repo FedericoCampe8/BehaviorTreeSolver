@@ -1,8 +1,0 @@
-#!/bin/sh
-
-if [ "$1" != "one" -o \
-     "$2" != "two" -o \
-     "$3" != "three" ]; then
-    echo Wrong arguments!
-    exit 1
-fi
