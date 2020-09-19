@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "../system/system_export_defs.hpp"
 
 class SYS_EXPORT_CLASS Variable {

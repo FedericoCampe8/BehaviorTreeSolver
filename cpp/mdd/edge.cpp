@@ -7,9 +7,9 @@ Edge::Edge(Node *tail, Node *head, int value)
     this->value = value;
 }
 
-void Edge::set_head( Node node )
+void Edge::set_head( Node* node )
 {
-    head = &node;
+    head = node;
 }
 
 Node* Edge::get_head()

@@ -23,7 +23,7 @@ public:
     Node* get_tail();
     int get_value();
 
-    void set_head( Node node );
+    void set_head( Node* node );
 
 };
 

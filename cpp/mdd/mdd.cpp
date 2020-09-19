@@ -147,7 +147,7 @@ void MDD::enforce_alldifff_sequential( Node *node )
                 // Move incoming conflicting edge from next node to splitting node
                 next_node->remove_in_edge( position );
                 new_node.add_in_edge( edge_ptr );
-                edge_ptr->set_head( new_node );
+                edge_ptr->set_head( &new_node );
 
                 // Copy outgoing edges from next node to splitting node
                 for (int out_edge_idx = 0; out_edge_idx < next_node->get_out_edges().size(); ++out_edge_idx) {
