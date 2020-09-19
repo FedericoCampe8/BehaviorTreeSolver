@@ -10,7 +10,6 @@
 #include <string>
 #include <vector>
 
-#include "cp/model.hpp"
 #include "cp/constraint.hpp"
 #include "cp/variable.hpp"
 #include "system/system_export_defs.hpp"

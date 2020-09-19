@@ -1,54 +1,47 @@
 #include "bt/node.hpp"
 
 #include <algorithm>  // for std::find
+#include <cassert>
 #include <stdexcept>  // for std::runtime_error
 
 #include "bt/behavior_tree_arena.hpp"
-
-namespace {
-constexpr uint32_t kDefaultNumEdges{100};
-}  // namespace
 
 namespace btsolver {
 
 // Initialize unique Identifier for nodes
 uint32_t Node::kNextID = 0;
 
-Node::Node(const std::string& name,
-           BehaviorTreeArena* arena,
-           Blackboard* blackboard)
+Node::Node(const std::string& name, NodeType nodeType, BehaviorTreeArena* arena)
 : pNodeId(Node::kNextID++),
   pNodeName(name),
   pArena(arena),
-  pBlackboard(blackboard)
+  pNodeType(nodeType)
 {
   if (pArena == nullptr)
   {
     throw std::invalid_argument("Node: empty pointer to the arena");
   }
-
-  if (pBlackboard == nullptr)
-  {
-    throw std::invalid_argument("Node: empty pointer to the blackboard");
-  }
-
-  pIncomingEdges.reserve(10);
-  pOutgoingEdges.reserve(kDefaultNumEdges);
 }
 
 Node::~Node()
 {
-  // Remove this node from the edges
-  for (auto inEdge : pIncomingEdges)
+  // Remove this node from all edges
+  auto inEdgeListCopy = pIncomingEdges;
+  for (auto inEdge : inEdgeListCopy)
   {
-    auto edge = pArena->getEdge(inEdge);
-    edge->resetTail();
+    if (inEdge != nullptr)
+    {
+      inEdge->removeTail();
+    }
   }
 
-  for (auto inEdge : pOutgoingEdges)
+  auto outEdgeListCopy = pOutgoingEdges;
+  for (auto outEdge : outEdgeListCopy)
   {
-    auto edge = pArena->getEdge(inEdge);
-    edge->resetHead();
+    if (outEdge != nullptr)
+    {
+      outEdge->removeHead();
+    }
   }
 }
 
@@ -57,7 +50,7 @@ void Node::configure()
   if (pConfigureCallback)
   {
     // Run the user provided callback
-    pConfigureCallback(pBlackboard);
+    pConfigureCallback();
   }
 
   // Change the status to active
@@ -74,7 +67,7 @@ void Node::cleanup()
   if (pCleanupCallback)
   {
     // Run the user provided callback
-    pCleanupCallback(pBlackboard);
+    pCleanupCallback();
   }
 
   // Reset the status to pending
@@ -90,13 +83,12 @@ NodeStatus Node::run() {
   }
   else if (pRunCallback)
   {
-    pResult = pRunCallback(pBlackboard);
+    pResult = pRunCallback();
   }
   else
   {
     throw std::runtime_error("Node - run: callback not found");
   }
-  pBlackboard->setNodeStatus(getUniqueId(), pResult);
   return pResult;
 }
 
@@ -106,7 +98,7 @@ void Node::cancel()
   if (pCancelCallback)
   {
     // Run the user provided callback
-    pCancelCallback(pBlackboard);
+    pCancelCallback();
   }
 
   // Run the node after canceling
@@ -131,22 +123,72 @@ NodeStatus Node::tick()
   return result;
 }
 
-void Node::removeIncomingEdge(uint32_t edgeId)
+void Node::addIncomingEdge(Edge* edge)
 {
-  auto iter = std::find(pIncomingEdges.begin(), pIncomingEdges.end(), edgeId);
-  if (iter != pIncomingEdges.end())
+  if (edge == nullptr || (pIncomingEdgeSet.find(edge->getUniqueId()) != pIncomingEdgeSet.end()))
   {
-    pIncomingEdges.erase(iter);
+    return;
   }
+  pIncomingEdges.push_back(edge);
+  pIncomingEdgeSet.insert(edge->getUniqueId());
+
+  // Set this node as the tail of the given edge
+  edge->setTail(this);
 }
 
-void Node::removeOutgoingEdge(uint32_t edgeId)
+void Node::addOutgoingEdge(Edge* edge)
 {
-  auto iter = std::find(pOutgoingEdges.begin(), pOutgoingEdges.end(), edgeId);
-  if (iter != pOutgoingEdges.end())
+  if (edge == nullptr || (pOutgoingEdgeSet.find(edge->getUniqueId()) != pOutgoingEdgeSet.end()))
   {
-    pOutgoingEdges.erase(iter);
+    return;
   }
+  pOutgoingEdges.push_back(edge);
+  pOutgoingEdgeSet.insert(edge->getUniqueId());
+
+  // Set this node as the head of the given edge
+  edge->setHead(this);
+}
+
+Edge* Node::getIncomingEdge() const noexcept
+{
+  if (pIncomingEdges.empty())
+  {
+    return nullptr;
+  }
+  return pIncomingEdges.at(0);
+}
+
+void Node::removeIncomingEdge(Edge* edge)
+{
+  if (edge == nullptr || (pIncomingEdgeSet.find(edge->getUniqueId()) == pIncomingEdgeSet.end()))
+  {
+    return;
+  }
+
+  auto iter = std::find(pIncomingEdges.begin(), pIncomingEdges.end(), edge);
+  assert(iter != pIncomingEdges.end());
+  pIncomingEdges.erase(iter);
+  pIncomingEdgeSet.erase(edge->getUniqueId());
+
+  // Update the edge
+  edge->removeTail();
+}
+
+void Node::removeOutgoingEdge(Edge* edge)
+{
+
+  if (edge == nullptr || (pOutgoingEdgeSet.find(edge->getUniqueId()) == pOutgoingEdgeSet.end()))
+  {
+    return;
+  }
+
+  auto iter = std::find(pOutgoingEdges.begin(), pOutgoingEdges.end(), edge);
+  assert(iter != pOutgoingEdges.end());
+  pOutgoingEdges.erase(iter);
+  pOutgoingEdgeSet.erase(edge->getUniqueId());
+
+  // Update the edge
+  edge->removeHead();
 }
 
 }  // namespace btsolver

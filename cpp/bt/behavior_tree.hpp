@@ -13,7 +13,6 @@
 #include <sparsepp/spp.h>
 
 #include "bt/behavior_tree_arena.hpp"
-#include "bt/blackboard.hpp"
 #include "bt/node_status.hpp"
 #include "bt/node_status.hpp"
 #include "cp/variable.hpp"
@@ -34,8 +33,6 @@ class SYS_EXPORT_CLASS BehaviorTree {
  public:
    BehaviorTree(BehaviorTreeArena::UPtr arena);
    ~BehaviorTree() = default;
-
-   Blackboard::SPtr getBlackboard() const noexcept { return pBlackboard; }
 
    /// Sets the total number of ticks
    void setTotNumTicks(uint32_t numTicks) noexcept { pTotNumTicks = numTicks; }
@@ -89,9 +86,6 @@ class SYS_EXPORT_CLASS BehaviorTree {
 
    /// Arena for creating nodes
    BehaviorTreeArena::UPtr pArena{};
-
-   /// Blackboard memory shared among the children of this BT
-   Blackboard::SPtr pBlackboard{};
 
    /// First and unique child of this BT.
    /// All other children are attached to this entry node

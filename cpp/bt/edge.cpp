@@ -1,13 +1,19 @@
 #include "bt/edge.hpp"
 
-#include "bt/opt_node.hpp"
+#include <algorithm>  // for std::max, std::min
+#include <stdexcept>  // for std::invalid_argument
 
-#include <stdexcept>
+#include "bt/opt_node.hpp"
 
 namespace btsolver {
 
 // Initialize unique Identifier for edges
 uint32_t Edge::kNextID = 0;
+
+Edge::Edge()
+: pEdgeId(Edge::kNextID++)
+{
+}
 
 Edge::Edge(Node* head, Node* tail)
 : pEdgeId(Edge::kNextID++),
@@ -19,128 +25,94 @@ Edge::Edge(Node* head, Node* tail)
     throw std::invalid_argument("Edge - empty pointers to Head/Tail");
   }
 
-  // Set this edge in the list of edges on the head/tail nodes
-  setEdgeOnNodes();
+  pHead->addOutgoingEdge(this);
+  pTail->addIncomingEdge(this);
 }
 
 Edge::~Edge()
 {
   removeEdgeFromNodes();
-
-  if (pOwnsDomain)
-  {
-    // Delete the domain if owned by this edge
-    delete pDomain;
-  }
-}
-
-void Edge::setEdgeOnNodes()
-{
-  if (pHead)
-  {
-    pHead->addOutgoingEdge(this->getUniqueId());
-  }
-  if (pTail)
-  {
-    pTail->addIncomingEdge(this->getUniqueId());
-  }
-  pEdgeAddedToNodes = true;
 }
 
 void Edge::removeEdgeFromNodes()
 {
-  if (pEdgeAddedToNodes)
+  removeHead();
+  removeTail();
+}
+
+void Edge::removeHead() noexcept
+{
+  if (pHead)
   {
-    if (pHead)
-    {
-      pHead->removeOutgoingEdge(this->getUniqueId());
-    }
-
-    if (pTail)
-    {
-      pTail->removeIncomingEdge(this->getUniqueId());
-    }
-    pEdgeAddedToNodes = false;
+    pHead->removeOutgoingEdge(this);
   }
+  pHead = nullptr;
 }
 
-void Edge::resetHead(Node* head)
+void Edge::removeTail() noexcept
 {
-  pHead = head;
+  if (pTail)
+  {
+    pTail->removeIncomingEdge(this);
+  }
+  pTail = nullptr;
 }
 
-void Edge::resetTail(Node* tail)
+void Edge::setHead(Node* node) noexcept
 {
-  pTail = tail;
-}
-
-void Edge::changeHead(Node* head)
-{
-  if (head == pHead)
+  if (node == nullptr || node == pHead || node == pTail)
   {
     return;
   }
 
-  // Remove this edge from the previous node
   if (pHead)
   {
-    pHead->removeOutgoingEdge(this->getUniqueId());
+    removeHead();
   }
-
-  // Set this edge on the new node
-  pHead = head;
-  if (pHead)
-  {
-    pHead->addOutgoingEdge(this->getUniqueId());
-  }
+  pHead = node;
+  pHead->addOutgoingEdge(this);
 }
 
-void Edge::changeTail(Node* tail)
+void Edge::setTail(Node* node) noexcept
 {
-  if (tail == pTail)
+  if (node == nullptr || node == pTail || node == pHead)
   {
     return;
   }
 
-  // Remove this edge from the previous node
   if (pTail)
   {
-    pTail->removeIncomingEdge(this->getUniqueId());
+    removeTail();
   }
-
-  // Set this edge on the new node
-  pTail = tail;
-  if (pTail)
-  {
-    pTail->addIncomingEdge(this->getUniqueId());
-  }
-}
-
-void Edge::setDomainAndOwn(cp::Variable::FiniteDomain* domain)
-{
-  pDomain = domain;
-  pOwnsDomain = true;
+  pTail = node;
+  pTail->addIncomingEdge(this);
 }
 
 double Edge::getCostValue() const noexcept
 {
-  if (!pTail)
+  if (pTail == nullptr || pTail->getNodeType() != NodeType::State)
   {
+    // The edge is not connected to anything, the cost is +INF
     return std::numeric_limits<double>::max();
   }
 
-  auto stateNode = reinterpret_cast<optimization::OptimizationState*>(pTail);
-  if (!this->isParallelEdge())
+  auto state = pTail->cast<optimization::OptimizationState>();
+  if (!isParallelEdge())
   {
-    return stateNode->getDPStateMutable()->cost(pDomainLowerBound);
+    return state->getDPStateMutable()->cost(pDomainLowerBound);
   }
   else
   {
     double cost{0.0};
-    auto dpState = stateNode->getDPStateMutable();
+    auto dpState = state->getDPStateMutable();
     for (auto domVal{pDomainLowerBound}; domVal <= pDomainUpperBound; ++domVal)
     {
-      cost += dpState->cost(domVal);
+      if (isElementInDomain(domVal))
+      {
+        // Sum the cost only for the elements in the domain,
+        // i.e., skip the holes
+        cost += dpState->cost(domVal);
+      }
     }
     return cost;
   }
@@ -148,32 +120,29 @@ double Edge::getCostValue() const noexcept
 
 std::pair<double, double> Edge::getCostBounds() const noexcept
 {
-  if (!pTail)
+  if (pTail == nullptr || pTail->getNodeType() != NodeType::State)
   {
     return {std::numeric_limits<double>::lowest(), std::numeric_limits<double>::max()};
   }
 
-  auto stateNode = reinterpret_cast<optimization::OptimizationState*>(pTail);
-  if (!this->isParallelEdge())
+  auto state = pTail->cast<optimization::OptimizationState>();
+  if (!isParallelEdge())
   {
-    auto cost = stateNode->getDPStateMutable()->cost(pDomainLowerBound);
+    auto cost = state->getDPStateMutable()->cost(pDomainLowerBound);
     return {cost, cost};
   }
   else
   {
     double lbCost{std::numeric_limits<double>::max()};
     double ubCost{std::numeric_limits<double>::lowest()};
-    auto dpState = stateNode->getDPStateMutable();
+    auto dpState = state->getDPStateMutable();
     for (auto domVal{pDomainLowerBound}; domVal <= pDomainUpperBound; ++domVal)
     {
-      auto cost = dpState->cost(domVal);
-      if (lbCost > cost)
+      if (isElementInDomain(domVal))
       {
-        lbCost = cost;
-      }
-      else if (ubCost < cost)
-      {
-        ubCost = cost;
+        const auto cost = dpState->cost(domVal);
+        lbCost = std::min(lbCost, cost);
+        ubCost = std::max(ubCost, cost);
       }
     }
     return {lbCost, ubCost};
@@ -193,12 +162,28 @@ void Edge::setDomainBounds(int32_t lowerBound, int32_t upperBound)
 
 uint32_t Edge::getDomainSize() const noexcept
 {
-  return static_cast<uint32_t>(
-          (pDomainUpperBound - pDomainLowerBound + 1) - pInvalidDomainElements.size());
+  if (pDomainLowerBound > pDomainUpperBound)
+  {
+    return 0;
+  }
+  else if (pDomainLowerBound == pDomainUpperBound)
+  {
+    return 1;
+  }
+  else
+  {
+    return static_cast<uint32_t>(
+            (pDomainUpperBound - pDomainLowerBound + 1) - pInvalidDomainElements.size());
+  }
 }
 
 void Edge::finalizeDomain() noexcept
 {
+  if (pDomainLowerBound >= pDomainUpperBound)
+  {
+    return;
+  }
+
   while(pDomainLowerBound <= pDomainUpperBound)
   {
     if (isElementInDomain(pDomainLowerBound))
@@ -220,18 +205,40 @@ void Edge::finalizeDomain() noexcept
 
 void Edge::reinsertElementInDomain(int32_t element) noexcept
 {
-  if (pDomainLowerBound <= element &&
-          element <= pDomainUpperBound &&
-          !isElementInDomain(element))
+  if (element < pDomainLowerBound)
   {
-    pInvalidDomainElements.erase(element);
+    const auto oldLB = pDomainLowerBound;
+    pDomainLowerBound = element;
+    for (auto val{pDomainLowerBound+1}; val < oldLB; ++val)
+    {
+      pInvalidDomainElements.insert(val);
+    }
   }
+  else if (element > pDomainUpperBound)
+  {
+    const auto oldUB = pDomainUpperBound;
+    pDomainUpperBound = element;
+    for (auto val{oldUB+1}; val < pDomainUpperBound; ++val)
+    {
+      pInvalidDomainElements.insert(val);
+    }
+  }
+  pInvalidDomainElements.erase(element);
 }
 
 void Edge::removeElementFromDomain(int32_t element) noexcept
 {
-  if (pDomainLowerBound <= element && element <= pDomainUpperBound)
+  if (element == pDomainLowerBound)
   {
+    pDomainLowerBound++;
+  }
+  else if (element == pDomainUpperBound)
+  {
+    pDomainUpperBound--;
+  }
+  else
+  {
+    // Create a "hole" in the domain
     pInvalidDomainElements.insert(element);
   }
 }
@@ -240,8 +247,16 @@ bool Edge::isDomainEmpty() const noexcept
 {
   // Check if all distinct elements in the domain
   // have been removed/marked as invalid elements
-  return static_cast<int32_t>(pInvalidDomainElements.size()) ==
-          (pDomainUpperBound - pDomainLowerBound + 1);
+  if (pDomainLowerBound > pDomainUpperBound)
+  {
+    return true;
+  }
+  else if (static_cast<int32_t>(pInvalidDomainElements.size()) >
+  (pDomainUpperBound - pDomainLowerBound + 1))
+  {
+    return true;
+  }
+  return false;
 }
 
 bool Edge::isElementInDomain(int32_t element) const noexcept

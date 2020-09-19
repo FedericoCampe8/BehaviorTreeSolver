@@ -1,34 +1,34 @@
 #include "bt/opt_node.hpp"
 
 #include <algorithm>  // for std::min, std::max
+#include <cassert>
 #include <stdexcept>  // for std::invalid_argument
 
 namespace btsolver {
 namespace optimization {
 
 OptimizationStateCondition::OptimizationStateCondition(const std::string& name,
-                                                       BehaviorTreeArena* arena,
-                                                       Blackboard* blackboard)
-: Node(name, arena, blackboard)
+                                                       BehaviorTreeArena* arena)
+: Node(name, NodeType::ConditionState, arena)
 {
   // Register the run callback
-  registerRunCallback([=](Blackboard* bb) {
-    return this->runOptimizationStateConditionNode(bb);
+  registerRunCallback([=]() {
+    return this->runNode();
   });
 
   // Register the cleanup callback
-  registerCleanupCallback([=](Blackboard* bb) {
-    return this->cleanupNode(bb);
+  registerCleanupCallback([=]() {
+    return this->cleanupNode();
   });
 }
 
-void OptimizationStateCondition::pairWithOptimizationState(uint32_t state)
+void OptimizationStateCondition::pairWithOptimizationState(Node* state)
 {
-  pPairedState.push_back(
-          reinterpret_cast<optimization::OptimizationState*>(getArena()->getNode(state)));
+  assert(state != nullptr);
+  pPairedState.push_back(state->cast<OptimizationState>());
 
   // Register this condition node with the paired state
-  pPairedState.back()->pairStateConditionNode(this->getUniqueId());
+  pPairedState.back()->pairStateConditionNode(this);
 }
 
 void OptimizationStateCondition::setGlbLowerBoundOnCost(double lb) noexcept
@@ -46,48 +46,30 @@ void OptimizationStateCondition::setGlbUpperBoundOnCost(double ub) noexcept
   pTotUpperBoundCost = std::max<double>(ub, pTotUpperBoundCost);
 }
 
-NodeStatus OptimizationStateCondition::runOptimizationStateConditionNode(Blackboard* blackboard)
+NodeStatus OptimizationStateCondition::runNode()
 {
-  if (pIsActive)
-  {
-    return NodeStatus::kSuccess;
-  }
-  return NodeStatus::kFail;
+  return pIsActive ? NodeStatus::kSuccess : NodeStatus::kFail;
 }
 
-void OptimizationStateCondition::cleanupNode(Blackboard* blackboard)
+void OptimizationStateCondition::cleanupNode()
 {
   // Reset the active flag
   pIsActive = false;
 }
 
-OptimizationState::OptimizationState(const std::string& name, BehaviorTreeArena* arena,
-                                     Blackboard* blackboard)
-: Node(name, arena, blackboard),
+OptimizationState::OptimizationState(const std::string& name, BehaviorTreeArena* arena)
+: Node(name, NodeType::State, arena),
   pDefaultDPState(std::make_shared<DPState>())
 {
   pDPState = pDefaultDPState;
 
   // Register the run callback
-  registerRunCallback([=](Blackboard* bb) {
-    return this->runOptimizationStateNode(bb);
+  registerRunCallback([=]() {
+    return this->runNode();
   });
 }
 
-void OptimizationState::mapNodeOnBlackboard(uint32_t btLevel)
-{
-  // Register this optimization state in the blackboard.
-  // The Behavior Tree owning this node should be able to retrieve all state nodes in the tree
-  // getBlackboard()->registerOptimizationStateNode(this, btLevel);
-}
-
-void OptimizationState::pairStateConditionNode(uint32_t stateCondition) noexcept
-{
-  pPairedStateCondition = reinterpret_cast<optimization::OptimizationStateCondition*>(
-          getArena()->getNode(stateCondition));
-}
-
-NodeStatus OptimizationState::runOptimizationStateNode(Blackboard* blackboard)
+NodeStatus OptimizationState::runNode()
 {
   // This node does two main things:
   // 1) activates the paired state condition (if any); and
@@ -108,42 +90,56 @@ NodeStatus OptimizationState::runOptimizationStateNode(Blackboard* blackboard)
   // x_1 = {2}, x_2 = {1}.
   // Therefore, a different edge should be considered at each tick
   const auto& allEdges = getAllIncomingEdges();
-  auto inEdgeId = allEdges[pCurrentTickedEdge++];
-  if (pCurrentTickedEdge >= static_cast<uint32_t>(allEdges.size()))
+  assert(pParentConditionsList.empty() || pParentConditionsList.size() == allEdges.size());
+
+  if (pCurrentTickedEdge > allEdges.size())
   {
     // Reset the counter
     pCurrentTickedEdge = 0;
   }
 
-  if (inEdgeId != std::numeric_limits<uint32_t>::max())
-  {
-    auto edge = getArena()->getEdge(inEdgeId);
+  // Notice that the parent state condition list is either empty (first child,
+  // no parent states activating a first child node), or equal to the number
+  // of incoming edges (one condition state for each edge leading to this node)
+  auto parentStateCondition = pParentConditionsList.empty() ?
+          nullptr :pParentConditionsList.at(pCurrentTickedEdge);
+  auto inEdge = allEdges.at(pCurrentTickedEdge++);
+  assert(inEdge != nullptr);
 
-    // Check if the edge is a parallel one
-    if (edge->isParallelEdge())
-    {
-      auto cost = edge->getCostBounds();
-      pLowerBoundCost = cost.first;
-      pUpperBoundCost = cost.second;
-    }
-    else
-    {
-      pLowerBoundCost = edge->getCostValue();
-      pUpperBoundCost = pLowerBoundCost;
-    }
-    pTotLowerBoundCost = pLowerBoundCost;
-    pTotUpperBoundCost = pUpperBoundCost;
+  if (inEdge->isParallelEdge())
+  {
+    // The incoming edge is a parallel edge.
+    // Take the lower and upper bounds on the cost
+    // according to the lower/upper bounds domain values
+    // on the parallel edge
+    auto cost = inEdge->getCostBounds();
+    pLowerBoundCost = cost.first;
+    pUpperBoundCost = cost.second;
+  }
+  else
+  {
+    // The incoming edge has a single value which
+    // represents the value that leads to this state
+    // with a correspondent cost
+    pLowerBoundCost = inEdge->getCostValue();
+    pUpperBoundCost = pLowerBoundCost;
   }
 
-  if (pParentStateConditionNode != std::numeric_limits<uint32_t>::max())
+  // Initialize the total lower/upper bound costs representing
+  // the total cost of the solution when this state is taken
+  pTotLowerBoundCost = pLowerBoundCost;
+  pTotUpperBoundCost = pUpperBoundCost;
+
+  // Sum the cost so far, coming from the parent state condition node (if any)
+  if (parentStateCondition != nullptr)
   {
-    auto parentOptState = reinterpret_cast<OptimizationStateCondition*>(
-            getArena()->getNode(pParentStateConditionNode));
-    pTotLowerBoundCost += parentOptState->getGlbLowerBoundOnCost();
-    pTotUpperBoundCost += parentOptState->getGlbUpperBoundOnCost();
+    pTotLowerBoundCost += parentStateCondition->getGlbLowerBoundOnCost();
+    pTotUpperBoundCost += parentStateCondition->getGlbUpperBoundOnCost();
   }
 
-  if (pPairedStateCondition)
+  // As last step on this node, activate the paired state condition,
+  // i.e., the condition node on the right-side brother for the next variable (if any)
+  if (pPairedStateCondition != nullptr)
   {
     // Activate the paired state condition node
     pPairedStateCondition->activate();
@@ -151,31 +147,20 @@ NodeStatus OptimizationState::runOptimizationStateNode(Blackboard* blackboard)
     pPairedStateCondition->setGlbUpperBoundOnCost(pTotUpperBoundCost);
   }
 
-  // Push this node into the queue of state nodes processed
-  // by the runner optimizer node
-  // TODO Check if this is really needed
-  blackboard->getOptimizationQueueMutable()->queue.push_back(this);
-
   // Return FAIL
   return NodeStatus::kFail;
 }
 
-RunnerOptimizer::RunnerOptimizer(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard)
-: Behavior(name, arena, blackboard),
-  pOptimizationQueue(blackboard->getOptimizationQueue())
+RunnerOptimizer::RunnerOptimizer(const std::string& name, BehaviorTreeArena* arena)
+: Behavior(name, NodeType::OptimizationRunner, arena)
 {
-  if(pOptimizationQueue == nullptr)
-  {
-    throw std::invalid_argument("RunnerOptimizer - empty optimization queue");
-  }
-
   // Register the run callback
-  registerRunCallback([=](Blackboard* bb) {
-    return this->runOptimizer(bb);
+  registerRunCallback([=]() {
+    return this->runOptimizer();
   });
 }
 
-NodeStatus RunnerOptimizer::runOptimizer(Blackboard* blackboard)
+NodeStatus RunnerOptimizer::runOptimizer()
 {
   // Reset the status of all children before running
   resetChildrenStatus();
@@ -201,11 +186,6 @@ NodeStatus RunnerOptimizer::runOptimizer(Blackboard* blackboard)
               stateNode->getGlbUpperBoundOnCost() << ")\n";
     }
     */
-    if (idx < static_cast<int>(getChildren().size()) - 1)
-    {
-      // Store the last states for variable backtracking assignments
-      pOptimizationQueue->queue.clear();
-    }
   }
 
   // All children run

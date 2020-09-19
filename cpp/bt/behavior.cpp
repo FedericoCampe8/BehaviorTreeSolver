@@ -1,80 +1,80 @@
 #include "bt/behavior.hpp"
 
 #include <algorithm>  // for std::find
+#include <cassert>
 #include <limits>     // for std::numeric_limits
 #include <stdexcept>  // for std::invalid_argument
 #include <utility>    // for std::move
 
 #include "bt/behavior_tree_arena.hpp"
-
-namespace {
-constexpr std::size_t kDefaultNumChildren{16};
-}  // namespace
+#include "bt/edge.hpp"
 
 namespace btsolver {
 
-Behavior::Behavior(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard)
-: Node(name, arena, blackboard)
+Behavior::Behavior(const std::string& name, NodeType nodeType, BehaviorTreeArena* arena)
+: Node(name, nodeType, arena)
 {
-  pChildren.reserve(kDefaultNumChildren);
-  pOpenNodes.reserve(kDefaultNumChildren);
 }
 
-void Behavior::addChild(uint32_t childId)
+Edge* Behavior::addChild(Node* child)
 {
   // Insert the children in the list of children
-  pChildren.push_back(childId);
+  if (child != nullptr)
+  {
+    // Create an edge connecting the two nodes
+    return getArena()->buildEdge(this, child);
+  }
+  return nullptr;
 }
 
-uint32_t Behavior::popChild()
+std::pair<Node*, Edge*> Behavior::popChild() noexcept
 {
-  if (pChildren.empty())
+  if (pOutgoingEdges.empty())
   {
-    return std::numeric_limits<uint32_t>::max();
+    return {nullptr, nullptr};
   }
 
   // Pop the node from the list of children
-  auto outNode = pChildren.back();
-  pChildren.pop_back();
+  // by removing the connecting edge
+  auto edge = pOutgoingEdges.back();
+  removeOutgoingEdge(edge);
+
+  auto outNode = edge->getTail();
+  edge->removeTail();
 
   // Return the node (identifier)
-  return outNode;
+  return {outNode, edge};
 }
 
-void Behavior::replaceChild(uint32_t oldChild, uint32_t newChild)
+Behavior::ChildrenList Behavior::getChildren() const noexcept
 {
-  auto iter = std::find(pChildren.begin(), pChildren.end(), oldChild);
-  if (iter != pChildren.end())
+  ChildrenList list;
+  list.reserve(pOutgoingEdges.size());
+  for (auto edge : pOutgoingEdges)
   {
-    // Replace the child
-    *iter = newChild;
+    assert(edge->getTail() != nullptr);
+    list.push_back(edge->getTail());
   }
+  return list;
 }
 
-Node* Behavior::getChildMutable(uint32_t childId) const
+NodeStatus Behavior::tickChild(Node* child)
 {
-  return getArena()->getNode(childId);
-}
-
-NodeStatus Behavior::tickChild(uint32_t childId)
-{
-  auto child = this->getChildMutable(childId);
+  assert(child != nullptr);
 
   // Run the node and get its result
   const auto result = child->tick();
   if (result == NodeStatus::kActive)
   {
-    auto nodeId = child->getUniqueId();
-    if (std::find(pOpenNodes.begin(), pOpenNodes.end(), nodeId) == pOpenNodes.end())
+    if (std::find(pOpenNodes.begin(), pOpenNodes.end(), child) == pOpenNodes.end())
     {
       // The node is still active, add it to the set of open nodes (if not already present)
-      pOpenNodes.push_back(nodeId);
+      pOpenNodes.push_back(child);
     }
   }
   else if (result == NodeStatus::kPending)
   {
-    auto nodeId = child->getUniqueId();
-    auto iter = std::find(pOpenNodes.begin(), pOpenNodes.end(), nodeId);
+    auto iter = std::find(pOpenNodes.begin(), pOpenNodes.end(), child);
     if (iter != pOpenNodes.end())
     {
       // The node is can be removed since is not longer opened
@@ -86,9 +86,10 @@ NodeStatus Behavior::tickChild(uint32_t childId)
 
 void Behavior::cancelChildren()
 {
-  for (auto& child : pChildren)
+  for (auto edge : pOutgoingEdges)
   {
-    this->cancelChild(child);
+    assert(edge->getTail() != nullptr);
+    this->cancelChild(edge->getTail());
   }
 }
 
@@ -98,9 +99,13 @@ void Behavior::cancel()
   Node::cancel();
 }
 
-void Behavior::cancelChild(uint32_t childId)
+void Behavior::cancelChild(Node* child)
 {
-  auto child = this->getChildMutable(childId);
+  if (child == nullptr)
+  {
+    return;
+  }
+
   if (child->getResult() != NodeStatus::kPending)
   {
     child->cancel();
@@ -109,14 +114,13 @@ void Behavior::cancelChild(uint32_t childId)
 
 void Behavior::cleanupChildren()
 {
-  for (auto& childId : pChildren)
+  for (auto edge : pOutgoingEdges)
   {
-    auto child = getChildMutable(childId);
-    if (child->getResult() != NodeStatus::kPending)
+    assert(edge->getTail() != nullptr);
+    if (edge->getTail()->getResult() != NodeStatus::kPending)
     {
-      child->cleanup();
-      auto nodeId = child->getUniqueId();
-      auto iter = std::find(pOpenNodes.begin(), pOpenNodes.end(), nodeId);
+      edge->getTail()->cleanup();
+      auto iter = std::find(pOpenNodes.begin(), pOpenNodes.end(), edge->getTail());
       if (iter != pOpenNodes.end())
       {
         // The node is can be removed since is not longer opened
@@ -131,14 +135,6 @@ void Behavior::cleanup()
   this->cancelChildren();
   this->cleanupChildren();
   Node::cleanup();
-}
-
-void Behavior::resetChildrenStatus()
-{
-  for (auto& child : pChildren)
-  {
-    // TODO with blackboard
-  }
 }
 
 }  // namespace btsolver

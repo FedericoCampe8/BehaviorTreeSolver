@@ -91,7 +91,7 @@ std::string AllDifferentState::toString() const noexcept
 }
 
 AllDifferent::AllDifferent(BehaviorTreeArena* arena, const std::string& name)
-: BTOptConstraint(cp::ConstraintType::kAllDifferent, arena, name),
+: BTConstraint(cp::ConstraintType::kAllDifferent, arena, name),
   pInitialDPState(std::make_shared<AllDifferentState>())
 {
 }

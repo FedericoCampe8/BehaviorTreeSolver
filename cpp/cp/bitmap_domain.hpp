@@ -19,12 +19,27 @@ namespace cp {
 class SYS_EXPORT_CLASS BitmapDomain {
 public:
   BitmapDomain() = default;
+  BitmapDomain(int32_t lowerBound,  int32_t upperBound);
 
   ~BitmapDomain() = default;
 
-  /// Return original bounds
+  /// Returns original lower bound
   int32_t getOriginalLowerBound() const noexcept { return pLowerBound; }
+
+  /// Returns original upper bound
   int32_t getOriginalUpperBound() const noexcept { return pUpperBound; }
+
+  /// Comparison operators "=="
+  bool operator == (const BitmapDomain& intset)
+  {
+    return this->pBitset == intset.pBitset;
+  }
+
+  /// Comparison operators "<"
+  bool operator < (const BitmapDomain& intset)
+  {
+    return this->pBitset < intset.pBitset;
+  }
 
   /// Returns the minimum element in the domain
   int32_t min() const noexcept;
@@ -32,11 +47,26 @@ public:
   /// Returns the maximum element in the domain
   int32_t max() const noexcept;
 
+  /// Get first element of the set
+  int32_t getFirst() const noexcept { return pBitset.find_first(); }
+
   /// Set the domain to [lowerBound, upperBound]
   void configure(int32_t lowerBound,  int32_t upperBound);
 
+  /// Add an element to the set
+  void add(int32_t elem);
+
+  /// Add all possible elements to the set
+  void addAllElements();
+
+  /// Get next element higher than the one passed as parameter
+  int32_t getNext(int32_t elem);
+
   /// Sets this domain to be empty
-  void setEmpty() noexcept { pBitset.reset(); }
+  void setEmpty() noexcept { clear(); }
+
+  /// Clear set
+  void clear() noexcept { pBitset.reset(); }
 
   /// Sets this domain to be empty WITHOUT changing the bounds of this domain
   void setEmptyAndPreserveBounds() noexcept { pBitset.reset(); }
@@ -60,13 +90,22 @@ public:
   /// Returns false otherwise
   bool containsElementAtPosition(uint32_t pos) const noexcept { return pBitset.test(pos); }
 
-private:
-  /// Bitset data structure for contiguous elements
-  boost::dynamic_bitset<> pBitset;
+  /// Intersect with another domain
+  void intersectWith(BitmapDomain& intset);
 
-  // Original domain bounds
+  /// Set minus operation
+  void setMin(BitmapDomain& intset);
+
+private:
+  /// Original domain bounds
   int32_t pLowerBound{0};
   int32_t pUpperBound{0};
+
+  /// Domain size
+  int32_t pSize{0};
+
+  /// Bitset data structure for contiguous elements
+  boost::dynamic_bitset<> pBitset;
 };
 
 }  // namespace cp

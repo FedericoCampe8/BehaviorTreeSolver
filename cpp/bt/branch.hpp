@@ -25,6 +25,9 @@ namespace btsolver {
  *        execution of this behavior stops and it returns NodeStatus.SUCCESS.
  *        If no child succeed, Selector returns NodeStatus.FAIL.
  *        If a child is still ACTIVE, then a NodeStatus.ACTIVE status is returned.
+ *        +---+
+ *        | ? |
+ *        +---+
  */
 class SYS_EXPORT_CLASS Selector : public Behavior {
  public:
@@ -32,10 +35,10 @@ class SYS_EXPORT_CLASS Selector : public Behavior {
    using SPtr = std::shared_ptr<Selector>;
 
  public:
-   Selector(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr);
+   Selector(const std::string& name, BehaviorTreeArena* arena);
 
  private:
-   NodeStatus runSelector(Blackboard* blackboard);
+   NodeStatus runSelector();
 };
 
 /**
@@ -43,6 +46,9 @@ class SYS_EXPORT_CLASS Selector : public Behavior {
  *        If one fails, the executiong of this behavior stops and it returns NodeStatus.FAIL.
  *        This behavior returns NodeStatus.ACTIVE until all children have finished
  *        or one failed.  It returns NodeStatus.SUCCESS if all children succeed.
+ *        +---+
+ *        | ->|
+ *        +---+
  */
 class SYS_EXPORT_CLASS Sequence : public Behavior {
  public:
@@ -50,10 +56,10 @@ class SYS_EXPORT_CLASS Sequence : public Behavior {
    using SPtr = std::shared_ptr<Sequence>;
 
  public:
-   Sequence(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr);
+   Sequence(const std::string& name, BehaviorTreeArena* arena);
 
  private:
-   NodeStatus runSequence(Blackboard* blackboard);
+   NodeStatus runSequence();
 };
 
 }  // namespace btsolver

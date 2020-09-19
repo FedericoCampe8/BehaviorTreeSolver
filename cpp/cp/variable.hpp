@@ -7,20 +7,11 @@
 #pragma once
 
 #include <cstdint>  // for uint32_t
+#include <limits>   // for std::numeric_limits
 #include <memory>   // for std::shared_ptr
 #include <string>
-#include <vector>
 
-#include "cp/domain.hpp"
-#include "cp/bitmap_domain.hpp"
 #include "system/system_export_defs.hpp"
-
-// Forward declarations
-namespace btsolver {
-namespace cp {
-class Constraint;
-}  // namespace cp
-}  // namespace btsolver
 
 namespace btsolver {
 namespace cp {
@@ -32,7 +23,6 @@ class SYS_EXPORT_CLASS Variable {
 public:
   using UPtr = std::unique_ptr<Variable>;
   using SPtr = std::shared_ptr<Variable>;
-  using FiniteDomain = Domain<BitmapDomain>;
 
 public:
   /**
@@ -47,25 +37,19 @@ public:
   /// Returns this variable's name
   const std::string& getName() const noexcept { return pName; }
 
-  /// Returns the raw pointer to the internal domain.
-  /// Note: use it only if you know what you are doing!
-  FiniteDomain* getDomainMutable() const noexcept { return pDomain.get(); }
-
   /// Returns true if this variable is ground (i.e., labeled).
   /// Returns false otherwise
-  bool isGround() const noexcept { return (pDomain->size() == 1); }
+  bool isGround() const noexcept { return pLowerBound == pUpperBound; }
 
   /// Returns the value of this variable if ground, otherwise returns the
   /// lower bound element
-  int32_t getValue() const noexcept;
+  int32_t getValue() const noexcept {  return pLowerBound; }
 
-  /// Returns true if the domain of this variable is empty.
-  /// Returns false otherwise
-  bool isInvalid() const noexcept { return pDomain->isEmpty(); }
+  /// Returns the original lower bound
+  int32_t getLowerBound() const noexcept { return pLowerBound; }
 
-  /// Register the given constraint as callback constraint.
-  /// This means that this variable is part of the scope of the given constraint
-  void registerCallbackConstraint(Constraint* constraint);
+  /// Returns the original upper bound
+  int32_t getUpperBound() const noexcept { return pUpperBound; }
 
 private:
   static uint32_t kNextID;
@@ -77,8 +61,11 @@ private:
   /// This variable's name
   const std::string pName{};
 
-  /// Variable's domain
-  std::shared_ptr<FiniteDomain> pDomain;
+  /// Lower bound on this variable
+  int32_t pLowerBound{std::numeric_limits<int32_t>::min()};
+
+  /// Upper bound on this variable
+  int32_t pUpperBound{std::numeric_limits<int32_t>::max()};
 };
 
 }  // namespace cp

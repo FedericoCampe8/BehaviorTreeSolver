@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "bt/behavior_tree_arena.hpp"
-#include "bt/blackboard.hpp"
 #include "bt/branch.hpp"
 #include "bt/edge.hpp"
 #include "bt/node.hpp"
@@ -36,30 +35,32 @@ namespace optimization {
  *        In other words, when this node is activated, it enables a
  *        path in the Behavior Tree that considers the
  *        correspondent state.
+ *        /---\
+ *        |U_i|
+ *        \---/
  */
 class SYS_EXPORT_CLASS OptimizationStateCondition : public Node {
  public:
-   using UPtr = std::unique_ptr<OptimizationStateCondition>;
+  using PairedStatesList = std::vector<OptimizationState*>;
+  using UPtr = std::unique_ptr<OptimizationStateCondition>;
 
  public:
-   OptimizationStateCondition(const std::string& name, BehaviorTreeArena* arena,
-                              Blackboard* blackboard=nullptr);
+   OptimizationStateCondition(const std::string& name, BehaviorTreeArena* arena);
 
    /// Activates this state condition node.
    /// If active, it means that the BT considered the correspondent state
    /// as part of the solution
    void activate() noexcept { pIsActive = true; }
 
-   /// Returns the list of paired states
-   const std::vector<OptimizationState*>& getPairedStatesList() const noexcept
-   {
-     return pPairedState;
-   }
-
    /// Pairs this state condition with a state node.
    /// Notice that multiple optimization states can lead to
-   /// the same state condition
-   void pairWithOptimizationState(uint32_t state);
+   /// the same state condition, i.e., more than one state
+   /// can activate this condition.
+   /// However, each state that activates this condition shares
+   /// the same Dynamic Programming state.
+   /// @note this method DOES NOT create an edge between
+   ///       this and the given state node
+   void pairWithOptimizationState(Node* state);
 
    /// Sets the lower bound on the solution cost
    void setGlbLowerBoundOnCost(double lb) noexcept;
@@ -73,13 +74,16 @@ class SYS_EXPORT_CLASS OptimizationStateCondition : public Node {
    /// Returns the upper bound on the solution cost
    double getGlbUpperBoundOnCost() const noexcept { return pTotUpperBoundCost; }
 
+   /// Returns the list of paired states
+   const PairedStatesList& getPairedStatesList() const noexcept { return pPairedState; }
+
  private:
    /// Flag indicating whether or not this state condition is active
    bool pIsActive{false};
 
    /// Paired optimization state node used to "walk back" when
    /// an (sub) optimal solution is found
-   std::vector<OptimizationState*> pPairedState;
+   PairedStatesList pPairedState;
 
    /// Total lower bound on the solution on this edge,
    /// i.e., the sum of the costs until and with this state transition
@@ -90,10 +94,10 @@ class SYS_EXPORT_CLASS OptimizationStateCondition : public Node {
    double pTotUpperBoundCost{std::numeric_limits<double>::lowest()};
 
    /// Run function invoked when this node is ticked
-   NodeStatus runOptimizationStateConditionNode(Blackboard* blackboard);
+   NodeStatus runNode();
 
    /// Cleanup code invoked when this node is done ticking
-   void cleanupNode(Blackboard* blackboard);
+   void cleanupNode();
 };
 
 /**
@@ -104,39 +108,64 @@ class SYS_EXPORT_CLASS OptimizationStateCondition : public Node {
  *        When it ticks, it activates the correspondent state
  *        condition node (if any) and set its edge's lower/upper bound
  *        costs.
- *
+ *        +---+
+ *        |U_i|
+ *        +---+
  */
 class SYS_EXPORT_CLASS OptimizationState : public Node {
 public:
+  using ParentConditionsList = std::vector<OptimizationStateCondition*>;
   using UPtr = std::unique_ptr<OptimizationState>;
 
 public:
-  OptimizationState(const std::string& name, BehaviorTreeArena* arena,
-                    Blackboard* blackboard=nullptr);
+  OptimizationState(const std::string& name, BehaviorTreeArena* arena);
 
-  /// Sets the parent condition node
-  void setParentConditionNode(uint32_t stateCondition) noexcept
+  /// Adds a parent condition node,
+  /// i.e., the condition node activating this state.
+  /// Notice that the same state condition can be activated by different
+  /// parent conditions.
+  /// Indeed, a state can be shared by different sub-trees since different
+  /// paths can lead to the same state (i.e., same DP state).
+  /// For example, in the AllDifferent DP model, the state
+  ///   {1, 2}
+  /// can be reached by
+  ///   {1} -> {2}
+  /// or by
+  ///   {2} -> {1}
+  /// In the first case, the activating condition for {1, 2} is {1} while,
+  /// in the second case, the activating condition for {1, 2} (= {2, 1}) is {2}.
+  /// @note there is no direct edge between parent conditions this state
+  void addParentConditionNode(OptimizationStateCondition* stateCondition) noexcept
   {
-    pParentStateConditionNode = stateCondition;
+    if (stateCondition != nullptr)
+    {
+      pParentConditionsList.push_back(stateCondition);
+    }
   }
 
   /// Returns the parent condition node
-  uint32_t getParentConditionNode() const noexcept { return pParentStateConditionNode; }
+  const ParentConditionsList& getParentConditionsList() const noexcept
+  {
+    return pParentConditionsList;
+  }
 
   /// Returns whether or not this node has a parent condition activating it
   bool hasParentConditionNode() const noexcept
   {
-    return getParentConditionNode() < std::numeric_limits<uint32_t>::max();
+    return !pParentConditionsList.empty();
   }
 
-  /// Pairs a state condition node to be activated once this node is ticked
-  void pairStateConditionNode(uint32_t stateCondition) noexcept;
+  /// Pairs a state condition node to be activated when this node is ticked
+  void pairStateConditionNode(OptimizationStateCondition* stateCondition) noexcept
+  {
+    if (stateCondition != nullptr)
+    {
+      pPairedStateCondition = stateCondition;
+    }
+  }
 
   /// Returns the condition state paired (ticked) by this node (if any)
   OptimizationStateCondition* getPairedCondition() const noexcept { return pPairedStateCondition; }
-
-  /// Register this node in the blackboard given its tree vertical level
-  void mapNodeOnBlackboard(uint32_t btLevel);
 
   /// Resets the internal DP state
   void resetDPState(DPState::SPtr dpState) noexcept
@@ -205,13 +234,13 @@ private:
 
   /// State condition node that is "parent" of this node
   /// i.e., the node that once activate, allows this node to tick
-  uint32_t pParentStateConditionNode{std::numeric_limits<uint32_t>::max()};
+  ParentConditionsList pParentConditionsList;
 
   /// Paired state condition node
   OptimizationStateCondition* pPairedStateCondition{nullptr};
 
   /// Run function executed at each node's tick
-  NodeStatus runOptimizationStateNode(Blackboard* blackboard);
+  NodeStatus runNode();
 };
 
 /**
@@ -229,15 +258,11 @@ class SYS_EXPORT_CLASS RunnerOptimizer : public Behavior {
    using SPtr = std::shared_ptr<Selector>;
 
  public:
-   RunnerOptimizer(const std::string& name, BehaviorTreeArena* arena,
-                   Blackboard* blackboard);
+   RunnerOptimizer(const std::string& name, BehaviorTreeArena* arena);
 
  private:
-   /// Optimization queue used for BSF cost exploration
-   StateOptimizationQueue::SPtr pOptimizationQueue;
-
    /// The run function called on ticks
-   NodeStatus runOptimizer(Blackboard* blackboard);
+   NodeStatus runOptimizer();
 };
 
 }  // namespace optimization

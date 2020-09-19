@@ -30,12 +30,12 @@ public:
   using UPtr = std::unique_ptr<LogNode>;
 
 public:
-  LogNode(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr)
-  : Node(name, arena, blackboard)
+  LogNode(const std::string& name, BehaviorTreeArena* arena)
+  : Node(name, NodeType::Log, arena)
   {
     // Register the run callback
-    registerRunCallback([=](Blackboard* bb) {
-      return this->runLog(bb);
+    registerRunCallback([=]() {
+      return this->runLog();
     });
   }
 
@@ -43,7 +43,7 @@ public:
 
 private:
   std::string pLog{};
-  NodeStatus runLog(Blackboard* blackboard)
+  NodeStatus runLog()
   {
     std::cout << pLog << std::endl;
     return NodeStatus::kSuccess;

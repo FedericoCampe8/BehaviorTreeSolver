@@ -11,13 +11,14 @@
 #include <vector>
 
 #include <sparsepp/spp.h>
+#include "cp/bt_constraint.hpp"
 
 #include "bt/behavior_tree.hpp"
 #include "bt/behavior_tree_arena.hpp"
 #include "bt/branch.hpp"
 #include "bt/node.hpp"
+#include "bt/opt_node.hpp"
 #include "cp/model.hpp"
-#include "cp/opt_constraint.hpp"
 #include "system/system_export_defs.hpp"
 
 namespace btsolver {
@@ -101,15 +102,15 @@ class SYS_EXPORT_CLASS BTOptSolver {
   BehaviorTree::SPtr pBehaviorTree{nullptr};
 
   /// Separates the given constraint in the given BT
-  void separateConstraintInBehaviorTree(BehaviorTree* bt, BTOptConstraint* con);
+  void separateConstraintInBehaviorTree(BehaviorTree* bt, BTConstraint* con);
 
   /// Process the separation on the given current node
   void processSeparationOnChild(Selector* currNode,
                                 Selector* nextNode,
-                                BTOptConstraint* con,
+                                BTConstraint* con,
                                 BehaviorTree* bt,
                                 std::vector<OptimizationState*>& newStatesList,
-                                spp::sparse_hash_set<uint32_t>& conditionStatesToRemove);
+                                spp::sparse_hash_set<OptimizationStateCondition*>& conditionStatesToRemove);
 
   /// Removes a node and all its incoming edges from the BT
   void removeNodeFromBT(Node* node, BehaviorTreeArena* arena);

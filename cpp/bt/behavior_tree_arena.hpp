@@ -14,7 +14,6 @@
 
 #include <sparsepp/spp.h>
 
-#include "bt/blackboard.hpp"
 #include "bt/node.hpp"
 #include "bt/edge.hpp"
 #include "system/system_export_defs.hpp"
@@ -36,7 +35,7 @@ class SYS_EXPORT_CLASS BehaviorTreeArena {
   {
     // TODO add garbage collector: check if size is greater than max and, if so,
     // resize the pool
-    pNodePool.push_back(std::make_unique<NodeType>(name, this, pBlackboard.get()));
+    pNodePool.push_back(std::make_unique<NodeType>(name, this));
     pNodeArena[pNodePool.back()->getUniqueId()] = static_cast<uint32_t>((pNodePool.size() - 1));
     return pNodePool.back().get();
   }
@@ -69,9 +68,6 @@ class SYS_EXPORT_CLASS BehaviorTreeArena {
   /// Deletes the edge with given id
   void deleteEdge(uint32_t edgeId);
 
-  /// Returns the pointer to the internal blackboard
-  Blackboard::SPtr getBlackboard() const noexcept { return pBlackboard; }
-
  private:
   /// Map from node id to its index in the node list
   using NodeArena = spp::sparse_hash_map<uint32_t, uint32_t>;
@@ -91,11 +87,6 @@ private:
 
   /// List of all the edge instances in the Behavior Tree
   std::vector<Edge::UPtr> pEdgePool;
-
-  /// Blackboard instance shared with all nodes created
-  /// in this arena
-  Blackboard::SPtr pBlackboard{nullptr};
-
 };
 
 }  // namespace btsolver

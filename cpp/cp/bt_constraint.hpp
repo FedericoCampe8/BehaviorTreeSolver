@@ -1,7 +1,7 @@
 //
 // Copyright OptiLab 2020. All rights reserved.
 //
-// CP constraints specialized for BT solvers.
+// CP constraints specialized for BT optimization solvers.
 //
 
 #pragma once
@@ -11,38 +11,28 @@
 #include <vector>
 
 #include "bt/behavior_tree_arena.hpp"
-#include "bt/branch.hpp"
-#include "bt/cp_node.hpp"
+#include "bt_optimization/dp_model.hpp"
 #include "cp/constraint.hpp"
 #include "system/system_export_defs.hpp"
 
 namespace btsolver {
-namespace cp {
+namespace optimization {
 
-class SYS_EXPORT_CLASS BTConstraint : public Constraint {
+/**
+ * \brief Class representing a constraint used with Behavior Trees solving.
+ *        Constraints used with BT solvers need to provide the corresponding
+ *        Dynamic Programming model.
+ */
+class SYS_EXPORT_CLASS BTConstraint : public cp::Constraint {
  public:
    using UPtr = std::unique_ptr<BTConstraint>;
    using SPtr = std::shared_ptr<BTConstraint>;
 
  public:
-   BTConstraint(ConstraintType type, BehaviorTreeArena* arena, const std::string& name="");
+   BTConstraint(cp::ConstraintType type, BehaviorTreeArena* arena, const std::string& name="");
 
-   /**
-    * \brief Creates the relaxed BT for this constraint.
-    *        Throws std::runtime_error if the scope is empty
-    */
-   void buildRelaxedBT();
-
-   /**
-    * \brief Returns the internal Behavior Tree representing this constraint.
-    */
-   btsolver::Sequence* getSemanticBT() const noexcept { return pSemanticBT; }
-
-   /**
-    * \brief Builds and returns the COMPLETE Behavior Tree used to propagate
-    *        this constraint.
-    */
-   virtual btsolver::Sequence* builBehaviorTreePropagator() = 0;
+   /// Returns the initial state of the DP transformation chain
+   virtual DPState::SPtr getInitialDPState() const noexcept = 0;
 
  protected:
    inline BehaviorTreeArena* getArena() const noexcept { return pArena; }
@@ -50,10 +40,7 @@ class SYS_EXPORT_CLASS BTConstraint : public Constraint {
  private:
    /// Arena: memory area
    BehaviorTreeArena* pArena{nullptr};
-
-   /// Behavior Tree encapsulating the semantic of this constraint
-   btsolver::Sequence* pSemanticBT{nullptr};
 };
 
-}  // namespace cp
+}  // namespace optimization
 }  // namespace btsolver

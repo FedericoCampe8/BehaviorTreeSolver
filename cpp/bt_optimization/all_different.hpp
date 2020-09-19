@@ -9,10 +9,10 @@
 #include <string>
 
 #include <sparsepp/spp.h>
+#include "cp/bt_constraint.hpp"
 
 #include "bt/behavior_tree_arena.hpp"
 #include "bt_optimization/dp_model.hpp"
-#include "cp/opt_constraint.hpp"
 #include "system/system_export_defs.hpp"
 
 namespace btsolver {
@@ -48,7 +48,7 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
   spp::sparse_hash_set<int32_t> pElementList;
 };
 
-class SYS_EXPORT_CLASS AllDifferent : public BTOptConstraint {
+class SYS_EXPORT_CLASS AllDifferent : public BTConstraint {
  public:
    using UPtr = std::unique_ptr<AllDifferent>;
    using SPtr = std::shared_ptr<AllDifferent>;

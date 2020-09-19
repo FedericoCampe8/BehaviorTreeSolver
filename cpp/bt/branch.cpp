@@ -1,28 +1,32 @@
 #include "bt/branch.hpp"
 
+#include <cassert>
 #include <functional>  // for std::function
 #include <iostream>
 
+#include "bt/behavior_tree_arena.hpp"
+
 namespace btsolver {
 
-Selector::Selector(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard)
-: Behavior(name, arena, blackboard)
+Selector::Selector(const std::string& name, BehaviorTreeArena* arena)
+: Behavior(name, NodeType::Selector, arena)
 {
   // Register the run callback
-  registerRunCallback([=](Blackboard* bb) {
-    return this->runSelector(bb);
+  registerRunCallback([=]() {
+    return this->runSelector();
   });
 }
 
-NodeStatus Selector::runSelector(Blackboard* blackboard)
+NodeStatus Selector::runSelector()
 {
   // Reset the status of all children before running
   resetChildrenStatus();
 
   // Run one child at a time, from left to right
-  for (auto& child : getChildren())
+  for (auto& edge : pOutgoingEdges)
   {
-    auto result = tickChild(child);
+    assert(edge->getTail());
+    auto result = tickChild(edge->getTail());
     if (result == NodeStatus::kActive || result == NodeStatus::kPending)
     {
       // The current child is still active, return asap
@@ -41,24 +45,25 @@ NodeStatus Selector::runSelector(Blackboard* blackboard)
   return NodeStatus::kFail;
 }
 
-Sequence::Sequence(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard)
-: Behavior(name, arena, blackboard)
+Sequence::Sequence(const std::string& name, BehaviorTreeArena* arena)
+: Behavior(name, NodeType::Sequence, arena)
 {
   // Register the run callback
-  registerRunCallback([=](Blackboard* bb) {
-    return this->runSequence(bb);
+  registerRunCallback([=]() {
+    return this->runSequence();
   });
 }
 
-NodeStatus Sequence::runSequence(Blackboard* blackboard)
+NodeStatus Sequence::runSequence()
 {
   // Reset the status of all children before running
   resetChildrenStatus();
 
   // Run one child at a time, from left to right
-  for (auto& child : getChildren())
+  for (auto& edge : pOutgoingEdges)
   {
-    const auto result = tickChild(child);
+    assert(edge->getTail());
+    auto result = tickChild(edge->getTail());
     if (result == NodeStatus::kActive || result == NodeStatus::kPending)
     {
       // The current child is still active, return asap

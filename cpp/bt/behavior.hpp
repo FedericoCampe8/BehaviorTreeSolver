@@ -7,9 +7,10 @@
 
 #pragma once
 
-#include <cstdio>  // for std::size_t
-#include <memory>  // for std::unique_ptr
+#include <cstdio>   // for std::size_t
+#include <memory>   // for std::unique_ptr
 #include <string>
+#include <utility>  // for std::pair
 #include <vector>
 
 #include "bt/node.hpp"
@@ -19,39 +20,41 @@
 // Forward declarations
 namespace btsolver {
 class BehaviorTreeArena;
+class Edge;
 }  // namespace btsolver
 
 namespace btsolver {
 
 class SYS_EXPORT_CLASS Behavior : public Node {
  public:
+  using ChildrenList = std::vector<Node*>;
   using UPtr = std::unique_ptr<Behavior>;
   using SPtr = std::shared_ptr<Behavior>;
 
  public:
-   Behavior(const std::string& name, BehaviorTreeArena* arena, Blackboard* blackboard=nullptr);
+   Behavior(const std::string& name, NodeType nodeType, BehaviorTreeArena* arena);
 
-   /// Adds a child to this behavior.
-   /// Note: children are run in the sequence they are added.
-   void addChild(uint32_t childId);
+   /// Adds a child to this behavior creating an edge between the two nodes.
+   /// Returns the edge created to link the two nodes.
+   /// @note children are run in the sequence they are added.
+   Edge* addChild(Node* child);
 
-   /// Pops the child from the list of children and returns its unique identifier
-   uint32_t popChild();
-
-   /// Replace child "oldChild" with child "newChild"
-   void replaceChild(uint32_t oldChild, uint32_t newChild);
+   /// Pops the child from the list of children,
+   /// removes the edge between the two nodes,
+   /// and returns the removed child, and the connecting edge
+   std::pair<Node*, Edge*> popChild() noexcept;
 
    /// Cancel all children currently running
    void cancelChildren();
 
    /// Cancel run of a particular child
-   void cancelChild(uint32_t childId);
+   void cancelChild(Node* child);
 
    /// Cleanup all active children
    void cleanupChildren();
 
    /// Resets the current node status for all children
-   void resetChildrenStatus();
+   void resetChildrenStatus() {}
 
    /// Forces the current state to CANCEL and calls the cancel
    /// callback, if any
@@ -62,21 +65,15 @@ class SYS_EXPORT_CLASS Behavior : public Node {
    void cleanup() override;
 
    /// Returns the list of children of this node
-   const std::vector<uint32_t>& getChildren() const noexcept { return pChildren; }
+   ChildrenList getChildren() const noexcept;
 
  protected:
    /// Ticks the specified child
-   NodeStatus tickChild(uint32_t childId);
-
-   /// Get the child given its identifier
-   Node* getChildMutable(uint32_t childId) const;
+   NodeStatus tickChild(Node* child);
 
  private:
-   /// List of children nodes
-   std::vector<uint32_t> pChildren;
-
    /// List of open nodes (running nodes)
-   std::vector<uint32_t> pOpenNodes;
+   ChildrenList pOpenNodes;
 };
 
 }  // namespace btsolver

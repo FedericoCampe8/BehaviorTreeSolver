@@ -7,7 +7,6 @@ constexpr uint32_t kPreallocatedMemorySize{100};
 namespace btsolver {
 
 BehaviorTreeArena::BehaviorTreeArena()
-: pBlackboard(std::make_shared<Blackboard>())
 {
   pNodePool.reserve(kPreallocatedMemorySize);
   pEdgePool.reserve(kPreallocatedMemorySize);

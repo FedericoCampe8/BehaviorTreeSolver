@@ -1,5 +1,6 @@
 #include "bt_optimization/bt_solver.hpp"
 
+#include <cassert>
 #include <limits>     // for std::numeric_limits
 #include <stdexcept>  // for std::runtime_error
 #include <string>
@@ -47,28 +48,28 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
   {
     // Set the order on the variables
     bt->addVariableMapping(0, varsList[0]);
-    auto domain = varsList[0]->getDomainMutable();
+    const auto domainLB = varsList[0]->getLowerBound();
+    const auto domainUB = varsList[0]->getUpperBound();
 
     // Handle the first variable separately.
     // a) Add the selector node and set the variable domain into it
     auto topSelector = reinterpret_cast<Selector*>(arena->buildNode<Selector>("Selector"));
-    root->addChild(topSelector->getUniqueId());
-    auto topSelectorEdge = arena->buildEdge(root, topSelector);
-    topSelectorEdge->setDomainBounds(domain->minElement(), domain->maxElement());
+    auto topSelectorEdge = root->addChild(topSelector);
+
+    assert(topSelectorEdge != nullptr);
+    topSelectorEdge->setDomainBounds(domainLB, domainUB);
 
     // b) Add the state nodearena->buildEdge(selector, stateNode);
     auto stateNode = reinterpret_cast<OptimizationState*>(
             arena->buildNode<OptimizationState>("Optimization_State"));
-    topSelector->addChild(stateNode->getUniqueId());
-
-    // Create a new edge between the selector and the state node
-    auto domainEdge = arena->buildEdge(topSelector, stateNode);
+    auto domainEdge = topSelector->addChild(stateNode);
 
     // Add the lower and upper bounds.
     // If lower != upper, this single edge represents a "parallel" edge.
     // In other words, to avoid creating an edge per domain element,
     // a single edge representing the whole domain is set
-    domainEdge->setDomainBounds(domain->minElement(), domain->maxElement());
+    assert(domainEdge != nullptr);
+    domainEdge->setDomainBounds(domainLB, domainUB);
 
     // Add the state node to the list
     prevStateNode = stateNode;
@@ -78,7 +79,8 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
   for (int idx{1}; idx < static_cast<int>(varsList.size()); ++idx)
   {
     bt->addVariableMapping(idx, varsList[idx]);
-    auto domain = varsList[idx]->getDomainMutable();
+    const auto domainLB = varsList[idx]->getLowerBound();
+    const auto domainUB = varsList[idx]->getUpperBound();
 
     // a) Add the selector node
     //      +---+
@@ -89,9 +91,10 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
     //    Add the full domain variable to it. This is the original domain
     //    and it will be used later on children
     auto topSelector = reinterpret_cast<Selector*>(arena->buildNode<Selector>("Selector"));
-    root->addChild(topSelector->getUniqueId());
-    auto topSelectorEdge = arena->buildEdge(root, topSelector);
-    topSelectorEdge->setDomainBounds(domain->minElement(), domain->maxElement());
+    auto topSelectorEdge = root->addChild(topSelector);
+
+    assert(topSelectorEdge != nullptr);
+    topSelectorEdge->setDomainBounds(domainLB, domainUB);
 
     // b) Add the sequence node
     //      +---+
@@ -101,7 +104,7 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
     //    if it returns SUCCESS, we can continue with the states
     auto sequence = reinterpret_cast<Sequence*>(arena->buildNode<Sequence>("Sequence"));
     auto sequenceEdge = arena->buildEdge(topSelector, sequence);
-    topSelector->addChild(sequence->getUniqueId());
+    topSelector->addChild(sequence);
 
     // c) Add the optimization state condition
     //    paired with the previous state node
@@ -113,9 +116,8 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
     //   following state nodes
     auto condition = reinterpret_cast<OptimizationStateCondition*>(
             arena->buildNode<OptimizationStateCondition>("State_Condition"));
-    condition->pairWithOptimizationState(prevStateNode->getUniqueId());
-    auto conditionEdge = arena->buildEdge(sequence, condition);
-    sequence->addChild(condition->getUniqueId());
+    condition->pairWithOptimizationState(prevStateNode);
+    sequence->addChild(condition);
 
     // d) Add the selector node
     //      +---+
@@ -126,8 +128,7 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
     //    during optimization
     auto domainSelector = reinterpret_cast<Selector*>(
             arena->buildNode<Selector>("Domain_Selector"));
-    auto domainSelectorEdge = arena->buildEdge(sequence, domainSelector);
-    sequence->addChild(domainSelector->getUniqueId());
+    sequence->addChild(domainSelector);
 
     // e) Add the state node
     //      +---+
@@ -137,8 +138,8 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
     //    variable on this child can be in
     auto stateNode = reinterpret_cast<OptimizationState*>(
             arena->buildNode<OptimizationState>("Optimization_State"));
-    stateNode->setParentConditionNode(condition->getUniqueId());
-    domainSelector->addChild(stateNode->getUniqueId());
+    stateNode->addParentConditionNode(condition);
+    auto domainEdge = domainSelector->addChild(stateNode);
 
     // Create a new edge between the domain selector and the state node
     //  +---+
@@ -148,13 +149,12 @@ BehaviorTree::SPtr BTOptSolver::buildRelaxedBT()
     //  +---+
     //  |U_j|
     //  +---+
-    auto domainEdge = arena->buildEdge(domainSelector, stateNode);
-
     // Add the lower and upper bounds.
     // If lower != upper, this single edge represents a "parallel" edge.
     // In other words, to avoid creating an edge per domain element,
     // a single edge representing the whole domain is set
-    domainEdge->setDomainBounds(domain->minElement(), domain->maxElement());
+    assert(domainEdge != nullptr);
+    domainEdge->setDomainBounds(domainLB, domainUB);
 
     // Update previous node pointer
     prevStateNode = stateNode;
@@ -181,7 +181,7 @@ void BTOptSolver::separateBehaviorTree(BehaviorTree::SPtr bt)
   for (auto& modelConstraint : conList)
   {
     // Convert the constraint to an optimization constraint
-    auto con = std::dynamic_pointer_cast<BTOptConstraint>(modelConstraint);
+    auto con = std::dynamic_pointer_cast<BTConstraint>(modelConstraint);
     if (con == nullptr)
     {
       throw std::runtime_error("BTOptSolver - separateBehaviorTree: invalid constraint downcast");
@@ -195,23 +195,27 @@ void BTOptSolver::separateBehaviorTree(BehaviorTree::SPtr bt)
   // If not, the problem doesn't have a solution
 }
 
-void BTOptSolver::separateConstraintInBehaviorTree(BehaviorTree* bt, BTOptConstraint* con)
+void BTOptSolver::separateConstraintInBehaviorTree(BehaviorTree* bt, BTConstraint* con)
 {
   auto arena = bt->getArenaMutable();
 
   // Keep track of the condition states to remove during the process.
   // A condition state (and all is correspondent subtree) may be removed
   // due to invalid states
-  spp::sparse_hash_set<uint32_t> conditionStatesToRemove;
+  spp::sparse_hash_set<OptimizationStateCondition*> conditionStatesToRemove;
 
   // Proceed one variable at a time, i.e., one child at a time
   auto root =  reinterpret_cast<RunnerOptimizer*>(arena->getNode(bt->getEntryNode()));
-  const auto& childrenIdList = root->getChildren();
+  const auto& childrenList = root->getChildren();
+
   std::vector<OptimizationState*> newStatesList;
   newStatesList.reserve(kDefaultNumNewStates);
-  for (uint32_t childCtr{0}; childCtr < static_cast<uint32_t>(childrenIdList.size()); ++childCtr)
+  for (uint32_t childCtr{0}; childCtr < static_cast<uint32_t>(childrenList.size()); ++childCtr)
   {
-    // Clear the list of new state before processing the current child
+    // Clear the list of new state before processing the current child.
+    // This list represents all the new states created and possibly shared under these child.
+    // For example, for the AllDifferent constraint, state {1, 2} and {2, 1} belong to
+    // different branches of the same child
     newStatesList.clear();
 
     // Skip children that are not part of the scope of the current constraint
@@ -220,27 +224,30 @@ void BTOptSolver::separateConstraintInBehaviorTree(BehaviorTree* bt, BTOptConstr
       continue;
     }
 
-    // Get the child which should be a selector node.
-    // Under the selector it is rooted the whole BT for the current variable
-    auto topSelector = reinterpret_cast<Selector*>(arena->getNode(childrenIdList[childCtr]));
+    // Get the direct child of the root which is selector node.
+    // Under this selector it is rooted the whole BT for the current variable
+    auto topSelector = childrenList[childCtr]->cast<Selector>();
 
     // The "topSelector" can have two types of children:
-    // 1 - one or more optimization state node: if the current variable is the first in the BT; or
-    // 2 - one or more sequence nodes: if the current variable is not the first one in the BT
+    // 1 - one or more state node -> for the first child on the far left (i.e., first variable); or
+    // 2 - one or more sequence nodes: all other children
     // Process every selector child, one at a time
-    for (auto selectorChildId : topSelector->getChildren())
+    for (auto selectorChild : topSelector->getChildren())
     {
+      // Depending on case (1) or (2) get the selector direct parent of the state nodes
       Selector* childSelector{nullptr};
       if (childCtr == 0)
       {
-        // Case (1): the top selector is the child selector itself
+        // Case (1): the top selector is the child selector itself:
+        // root -> top selector -> state node
         childSelector = topSelector;
       }
       else
       {
-        // Case (2) the selector is rooted under a sequence node.
+        // Case (2) the selector is rooted under a sequence node:
+        // root -> top selector -> sequence -> condition and selector -> state node
         // See step (b) and (d) of the relaxed BT construction
-        auto sequenceNode = reinterpret_cast<Sequence*>(arena->getNode(selectorChildId));
+        auto sequenceNode = selectorChild->cast<Sequence>();
 
         // From the sequence, get the selector children.
         // Notice that the sequence node has/should have two children:
@@ -251,17 +258,34 @@ void BTOptSolver::separateConstraintInBehaviorTree(BehaviorTree* bt, BTOptConstr
           throw std::runtime_error("BTOptSolver - separateConstraintInBehaviorTree: "
                   "invalid sequence node num. children");
         }
-        childSelector = reinterpret_cast<Selector*>(arena->getNode(sequenceNodeChildren[1]));
+        childSelector = sequenceNodeChildren.at(1)->cast<Selector>();
       }
 
-      // Now it is possible to separate the single selector w.r.t.
-      // the DP transition function.
+      // Now "childSelector" represents the selector right before the state node:
+      //     +---+
+      //     |-> |
+      //     +---+
+      //       |
+      //   +---+---+
+      //   |       |
+      // /---\   +---+
+      // |U_i|   | ? | <--- This selector is "childSelector"
+      // \---/   +---+
+      //           |   <--- This edge can be a parallel edge
+      //   ^     +---+
+      //   |     |U_j| <--- Current state node to separate
+      //   |     +---+
+      //   |
+      //
+      // Only for variables 2, 3, ...
+      //
+      // It is possible to separate the single selector w.r.t. the DP transition function.
       // Pass also the next top selector (if not on the last child) since the child on the right
       // could be modified due to splitting
       Selector* nextSelector =
-              (childCtr == (static_cast<uint32_t>(childrenIdList.size()) - 1)) ?
+              (childCtr == (static_cast<uint32_t>(childrenList.size()) - 1)) ?
               nullptr :
-              reinterpret_cast<Selector*>(arena->getNode(childrenIdList[childCtr+1]));
+              childrenList[childCtr+1]->cast<Selector>();
       processSeparationOnChild(childSelector,
                                nextSelector,
                                con,
@@ -275,7 +299,8 @@ void BTOptSolver::separateConstraintInBehaviorTree(BehaviorTree* bt, BTOptConstr
       //   return no solution
       if (childCtr > 0)
       {
-        auto sequenceNode = reinterpret_cast<Sequence*>(arena->getNode(selectorChildId));
+
+        auto sequenceNode = selectorChild->cast<Sequence>();
         if (sequenceNode->getAllOutgoingEdges().empty())
         {
           removeNodeFromBT(sequenceNode, arena);
@@ -292,12 +317,10 @@ void BTOptSolver::separateConstraintInBehaviorTree(BehaviorTree* bt, BTOptConstr
   }
 }
 
-void BTOptSolver::processSeparationOnChild(Selector* currNode,
-                                           Selector* nextNode,
-                                           BTOptConstraint* con,
-                                           BehaviorTree* bt,
-                                           std::vector<OptimizationState*>& newStatesList,
-                                           spp::sparse_hash_set<uint32_t>& conditionStatesToRemove)
+void BTOptSolver::processSeparationOnChild(
+        Selector* currNode, Selector* nextNode, BTConstraint* con, BehaviorTree* bt,
+        std::vector<OptimizationState*>& newStatesList,
+        spp::sparse_hash_set<OptimizationStateCondition*>& conditionStatesToRemove)
 {
   auto arena = bt->getArenaMutable();
 
@@ -305,49 +328,81 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
   auto childrenStateList = currNode->getChildren();
   if (childrenStateList.empty())
   {
+    std::cout << "NO CHILDREN ON SELECTOR WHILE SEPARATING CHILD\n";
     return;
   }
 
   // Step 2: check if the state node under the given selector needs to be removed.
   //         In other words, check if there is a parent condition and the condition is in the set
-  //         of states to remove
-  auto stateNode = reinterpret_cast<OptimizationState*>(arena->getNode(childrenStateList.front()));
+  //         of states to remove.
+  //         This can happen, for example, if a previous DP node on a previous variable
+  //         found an invalid state
+  auto stateNode = childrenStateList.front()->cast<OptimizationState>();
   if (stateNode->hasParentConditionNode())
   {
-    auto parentCondition = stateNode->getParentConditionNode();
-    if (conditionStatesToRemove.find(parentCondition) != conditionStatesToRemove.end())
+    auto parentConditionList = stateNode->getParentConditionsList();
+    for (auto parentCondition : parentConditionList)
     {
-      // All these nodes need to be removed since the condition will never be triggered.
-      // Step 2.1: remove the parentCondition id from the set
-      conditionStatesToRemove.erase(parentCondition);
-
-      // Step 2.2: add the paired conditions to the set for next child
-      std::vector<OptimizationState*> childrenToRemove;
-      childrenToRemove.reserve(childrenStateList.size());
-      for (auto childId : childrenStateList)
+      if ((conditionStatesToRemove.find(parentCondition) != conditionStatesToRemove.end()) &&
+              (parentCondition->getIncomingEdge()->getHead()->getUniqueId() ==
+                      currNode->getIncomingEdge()->getHead()->getUniqueId()))
       {
-        auto child = reinterpret_cast<OptimizationState*>(arena->getNode(childId));
-        childrenToRemove.push_back(child);
-        if (child->getPairedCondition() != nullptr)
+        // The subtree activated by the parent condition needs to be removed since
+        // the parent condition itself needs to be removed (i.e., it is an invalid condition).
+        // Notice that the parent condition belongs subtree of "currNode" as per check above.
+        // Update the set of conditions to be removed (condition are unique nodes, meaning that
+        // if it is removed now, it won't be removed again)
+        conditionStatesToRemove.erase(parentCondition);
+
+        // All the children of the selector node should be removed
+        std::vector<OptimizationState*> childrenToRemove;
+        for (auto childNode : childrenStateList)
         {
-          conditionStatesToRemove.insert(child->getPairedCondition()->getUniqueId());
+          auto stateNode = childNode->cast<OptimizationState>();
+          if (stateNode->getAllIncomingEdges().size() > 1)
+          {
+            // The current state that should be removed has more than one parent.
+            // Remove only the edge connected to the current selector since this state
+            // could still be ticked by another edge
+            for (auto incomingEdge : stateNode->getAllIncomingEdges())
+            {
+              if (incomingEdge->getHead()->getUniqueId() == currNode->getUniqueId())
+              {
+                incomingEdge->removeEdgeFromNodes();
+                break;
+              }
+            }
+          }
+          else
+          {
+            // The current state ha only one parent, remove it
+            childrenToRemove.push_back(stateNode);
+
+            // Remove also the paired condition on next variable/child since that condition
+            // will never be triggered (this state won't trigger it since it is going to be
+            // removed)
+            if (stateNode->getPairedCondition() != nullptr)
+            {
+              conditionStatesToRemove.insert(stateNode->getPairedCondition());
+            }
+          }
         }
+
+        // Remove all the children
+        for(auto child : childrenToRemove)
+        {
+          removeNodeFromBT(child, arena);
+        }
+
+        // Remove the parent condition
+        removeNodeFromBT(parentCondition, arena);
+
+        // Finally, remove also the current node
+        removeNodeFromBT(currNode, arena);
+
+        // Return from processing this child
+        return;
       }
-
-      // Step 2.3: remove everything under the given selector "currNode"
-      for(auto child : childrenToRemove)
-      {
-        removeNodeFromBT(child, arena);
-      }
-
-      // Step 2.4: remove the parent condition node (and its connecting edge
-      removeNodeFromBT(arena->getNode(parentCondition), arena);
-
-      // Step 2.5: remove the input selector node
-      removeNodeFromBT(currNode, arena);
-
-      // Step 2.6: nothing else to do, return
-      return;
     }
   }
 
@@ -355,13 +410,13 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
   // Step 3.1: reset the state of the current selector to a default state
   std::vector<OptimizationState*> stateNodeList;
   stateNodeList.reserve(childrenStateList.size());
-  for (auto childId : childrenStateList)
+  for (auto child : childrenStateList)
   {
-    auto node = reinterpret_cast<OptimizationState*>(arena->getNode(childId));
-    stateNodeList.push_back(node);
-    if (!node->hasDefaultDPState())
+    auto state = child->cast<OptimizationState>();
+    stateNodeList.push_back(state);
+    if (!state->hasDefaultDPState())
     {
-      node->setDefaultDPState();
+      state->setDefaultDPState();
     }
   }
 
@@ -377,8 +432,18 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
     auto recursiveNode = node;
     while (recursiveNode->hasDefaultDPState() && recursiveNode->hasParentConditionNode())
     {
-      auto parentNode = reinterpret_cast<OptimizationStateCondition*>(
-              arena->getNode(recursiveNode->getParentConditionNode()));
+      OptimizationStateCondition* parentNode{nullptr};
+      for (auto parentCondition : recursiveNode->getParentConditionsList())
+      {
+        // Find the parent that is under the same subtree of this state node
+        if (parentCondition->getIncomingEdge()->getHead()->getUniqueId() ==
+                currNode->getIncomingEdge()->getHead()->getUniqueId())
+        {
+          parentNode = parentCondition;
+          break;
+        }
+      }
+      assert(parentNode != nullptr);
 
       // The parent condition node has the same state of the paired node on the left.
       // All the paired states must have the same DP state (otherwise they wouldn't be
@@ -392,32 +457,29 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
       }
     }
 
-    DPState::SPtr initState{nullptr};
+    DPState::SPtr currDPState{nullptr};
     if (!recursiveNode->hasParentConditionNode() && recursiveNode->hasDefaultDPState())
     {
       // The node doesn't have a parent.
       // This mean that the node belongs to the first child.
       // Moreover, The first child has a default state:
       // use this constraint's initial state to start the DP chain
-      initState = con->getInitialDPState();
+      currDPState = con->getInitialDPState();
     }
     else
     {
-      // Everything else already has a non-default DP state (for example, set by some
-      // previous separation on brother nodes)
-      initState = recursiveNode->getDPState();
+      // Every other state -- as per recursion -- has a non-default DP state
+      currDPState = recursiveNode->getDPState();
     }
 
     // For each incoming arc, check if the state leading to the current node
     // using the value on the arc is consistent with the DP transition function
-    // of the DP model representing the current constraint
-    std::vector<uint32_t> edges = node->getAllIncomingEdges();
-    for (auto edgeId: edges)
+    auto edgeList = node->getAllIncomingEdges();
+    for (auto edge: edgeList)
     {
       // Get the incoming edge and the domain values.
       // Notice that if the edge is a parallel edge,
       // there will be multiple values to process
-      auto edge = arena->getEdge(edgeId);
       auto startEdgeValue = edge->getDomainLowerBound();
       auto endEdgeValue = edge->getDomainUpperBound();
       for (; startEdgeValue <= endEdgeValue; ++startEdgeValue)
@@ -429,50 +491,89 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
         }
 
         // Remove the current element from the domain.
-        // It will end-up on another edge (if the produced DP state is feasible)
+        // It will end-up on a new edge when the state node is split
         edge->removeElementFromDomain(startEdgeValue);
 
-        auto newDPState = initState->next(startEdgeValue);
-        //std::cout << "Processing state " << newDPState->toString() << std::endl;
+        // Calculate the next DP state, i.e., the state reachable from the current one
+        // by applying the given edge/arc value
+        auto newDPState = currDPState->next(startEdgeValue);
+
+        // Check if the value leads "no-where", i.e., if the newly produced
+        // DP state is infeasible
         if (newDPState->isInfeasible())
         {
-          // If the edge has an empty domain,
-          // the full edge should be removed together with the node, parent and so on
+          // If the newly produced DP state is infeasible, check if the removed element
+          // "startEdgeValue" made the domain empty.
+          // If so, the full edge should be removed altogether with the node, parent and so on.
+          // Notice that the current state may have been produced by a previous split
           if (edge->isDomainEmpty())
           {
-            // Remove the edge
+            // Remove the edge.
+            // Notice that this will remove also the edge from the head and tail nodes
             arena->deleteEdge(edge->getUniqueId());
             if (node->getPairedCondition() != nullptr)
             {
-              conditionStatesToRemove.insert(node->getPairedCondition()->getUniqueId());
+              // If there is a condition paired to the current state "node", the condition
+              // should be removed since this node/DP state is about to be removed and
+              // it will never trigger it
+              conditionStatesToRemove.insert(node->getPairedCondition());
             }
 
-            // Remove the node (check whether or not the state has a condition, meaning that
-            // it is not the first child)
-            bool isFirstChild = !node->hasParentConditionNode();
-            auto parentCondition = node->getParentConditionNode();
-            arena->deleteNode(node->getUniqueId());
-
-            // Check if the parent selector is not the first child and there is only the
-            // condition node left.
-            // If this is true, remove both the condition and the selector.
-            // If this is the first child and there are no states under it,
-            // the problem is infeasible and the caller will return no solutions
-            if (!isFirstChild && (currNode->getAllOutgoingEdges().size() < 2))
+            // Remove the node and check if all the parent selectors, after removing this node
+            // become parents with no children. If so, remove also the parent selectors and
+            // the corresponding state condition nodes
+            if (!node->hasParentConditionNode())
             {
-              // Remove the state condition
-              removeNodeFromBT(arena->getNode(parentCondition), arena);
-
-              // Remove the selector
-              removeNodeFromBT(currNode, arena);
-
-              // Return asap
-              return;
+              // If this node doesn't have parents (i.e., first variable),
+              // simply delete the child.
+              // Notice that when this method will return, the caller will take care
+              // of removing the parent selector node, if any
+              arena->deleteNode(node->getUniqueId());
             }
+            else
+            {
+              // There is one or more parent conditions in one or more sub-trees.
+              // For each sub-tree follow the edge of the current state to the parent selector
+              // and check if this state node is the only child. If so, remove everything.
+              // Note: copy the lists without using references since list will be modified when
+              // a node is removed
+              OptimizationState::ParentConditionsList parentConditionsList =
+                      node->getParentConditionsList();
+              Node::EdgeList incomingEdgesList = node->getAllIncomingEdges();
+              assert(parentConditionsList.size() == incomingEdgesList.size());
+
+              for (int edgeIdx{0}; edgeIdx < static_cast<int>(incomingEdgesList.size()); ++edgeIdx)
+              {
+                if ((incomingEdgesList[edgeIdx]->getHead()->getAllOutgoingEdges().size()) == 1)
+                {
+                  // The current state node "node" is the only child and it will be removed soon.
+                  // Remove also is parent and related condition
+                  auto parentSelector = incomingEdgesList[edgeIdx]->getHead();
+
+                  // Get the state condition on this sub-tree
+                  auto conditionEdge = (parentSelector->getIncomingEdge()->getHead()->
+                          getAllOutgoingEdges()).at(0);
+                  auto conditionEdgeNode = conditionEdge->getTail();
+
+                  // Remove both condition state and parent selector
+                  arena->deleteNode(conditionEdgeNode->getUniqueId());
+                  arena->deleteNode(parentSelector->getUniqueId());
+                }
+              }
+
+              // Now remove the current state node
+              arena->deleteNode(node->getUniqueId());
+            }
+
+            // Node has been removed due to empty domain,
+            // return asap
+            return;
           }
         }
         else
         {
+          // === NEW DP STATE IS FEASIBLE ===
+
           // Split the nodes if parallel edge
           // and change the domain bounds on the original edge
 
@@ -481,15 +582,18 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
           if (node->hasDefaultDPState())
           {
             // The node has a default state, set this state as its new state reachable
-            // from the edge and re-insert the value on the edge
+            // from the edge and re-insert the value on the edge (since the value was removed
+            // from the edge but it is actually an admissible value)
             edge->reinsertElementInDomain(startEdgeValue);
             node->resetDPState(newDPState);
             newStatesList.push_back(node);
           }
           else
           {
-            // This node must be split:
-            // a) check the same DP state has been used already under this child, if so, re-use it
+            // This doesn't have a default state, i.e., has been set from a previous loop iteration
+            // and hence it must be split:
+            // a) check if the same DP state has been used already, if so, re-use it.
+            //    For example, in AllDifferent, the state {1, 2} and {2, 1} are the same DP state
             // b) if the DP state is a new one, create a new state node and edge. Create also
             //    a new child on the right and pair it with this new state
             bool foundSameState{false};
@@ -502,7 +606,8 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
                 //    This can happen, for example, if the DP transition function returns the
                 //    same state for different domain elements in the variable's domain;
                 // b) if the same state is under another selector (in the same child),
-                auto sameStateEdge = arena->getEdge(newState->getIncomingEdge());
+                //    simply connect the edges
+                auto sameStateEdge = newState->getIncomingEdge();
                 if (sameStateEdge->getHead() == currNode)
                 {
                   // There is no need to create a new state under the same node.
@@ -511,18 +616,27 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
                 }
                 else
                 {
-                  // TODO re-use the same state.
-                  // In the current implementation is very complex to re-use a state.
-                  // A new one is created.
-                  // The same state can be re-used when the BT structure changes to link
-                  // nodes directly with edges
+                  /*
+                  auto domainSelectorEdge = arena->buildEdge(sameStateEdge->getHead(), node);
+                  domainSelectorEdge->setDomainBounds(startEdgeValue, startEdgeValue);
+
+                  // Add this node's condition to the other node's condition
+                  for (auto condition : node->getParentConditionsList())
+                  {
+                    newState->addParentConditionNode(condition);
+                  }
+                   */
+                  // Here we create a new state instead of re-using the previous one
                   auto stateNode = reinterpret_cast<OptimizationState*>(
                           arena->buildNode<OptimizationState>("Optimization_State"));
-                  stateNode->setParentConditionNode(node->getParentConditionNode());
-                  currNode->addChild(stateNode->getUniqueId());
-                  auto domainSelectorEdge = arena->buildEdge(currNode, stateNode);
+                  auto theSelector = node->getIncomingEdge()->getHead();
+                  auto theSequence = theSelector->getIncomingEdge()->getHead();
+                  auto theCondition = theSequence->getAllOutgoingEdges().at(0)->getTail();
+                  auto parentConditionNode = theCondition->cast<OptimizationStateCondition>();
+                  stateNode->addParentConditionNode(parentConditionNode);
+                  auto domainSelectorEdge = currNode->addChild(stateNode);
                   domainSelectorEdge->setDomainBounds(startEdgeValue, startEdgeValue);
-                  stateNode->pairStateConditionNode(newState->getPairedCondition()->getUniqueId());
+                  stateNode->pairStateConditionNode(newState->getPairedCondition());
                   stateNode->resetDPState(newDPState);
                 }
                 foundSameState = true;
@@ -536,9 +650,16 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
               // of new states. Also create a new node on the next right brother
               auto stateNode = reinterpret_cast<OptimizationState*>(
                       arena->buildNode<OptimizationState>("Optimization_State"));
-              stateNode->setParentConditionNode(node->getParentConditionNode());
-              currNode->addChild(stateNode->getUniqueId());
-              auto domainSelectorEdge = arena->buildEdge(currNode, stateNode);
+
+              // Set the parent condition of the split node.
+              // Note: use ONLY the condition on the current sub-tree
+              auto theSelector = node->getIncomingEdge()->getHead();
+              auto theSequence = theSelector->getIncomingEdge()->getHead();
+              auto theCondition = theSequence->getAllOutgoingEdges().at(0)->getTail();
+              auto parentConditionNode = theCondition->cast<OptimizationStateCondition>();
+              stateNode->addParentConditionNode(parentConditionNode);
+
+              auto domainSelectorEdge = currNode->addChild(stateNode);
               domainSelectorEdge->setDomainBounds(startEdgeValue, startEdgeValue);
               stateNode->resetDPState(newDPState);
               newStatesList.push_back(stateNode);
@@ -549,27 +670,22 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
               {
                 auto newSequence = reinterpret_cast<Sequence*>(
                         arena->buildNode<Sequence>("Sequence"));
-                auto newSequenceEdge = arena->buildEdge(nextNode, newSequence);
-                nextNode->addChild(newSequence->getUniqueId());
+                nextNode->addChild(newSequence);
 
                 auto newCondition = reinterpret_cast<OptimizationStateCondition*>(
                         arena->buildNode<OptimizationStateCondition>("State_Condition"));
-                newCondition->pairWithOptimizationState(stateNode->getUniqueId());
-                auto newConditionEdge = arena->buildEdge(newSequence, newCondition);
-                newSequence->addChild(newCondition->getUniqueId());
+                newCondition->pairWithOptimizationState(stateNode);
+                newSequence->addChild(newCondition);
 
                 auto newDomainSelector = reinterpret_cast<Selector*>(
                         arena->buildNode<Selector>("Domain_Selector"));
-                auto newDomainSelectorEdge = arena->buildEdge(newSequence, newDomainSelector);
-                newSequence->addChild(newDomainSelector->getUniqueId());
+                newSequence->addChild(newDomainSelector);
 
                 auto newStateNode = reinterpret_cast<OptimizationState*>(
                         arena->buildNode<OptimizationState>("Optimization_State"));
-                newStateNode->setParentConditionNode(newCondition->getUniqueId());
-                newDomainSelector->addChild(newStateNode->getUniqueId());
-
-                auto newDomainEdge = arena->buildEdge(newDomainSelector, newStateNode);
-                auto entryEdge = arena->getEdge(nextNode->getIncomingEdge());
+                newStateNode->addParentConditionNode(newCondition);
+                auto newDomainEdge = newDomainSelector->addChild(newStateNode);
+                auto entryEdge = nextNode->getIncomingEdge();
                 newDomainEdge->setDomainBounds(entryEdge->getDomainLowerBound(),
                                                entryEdge->getDomainUpperBound());
               }
@@ -583,9 +699,8 @@ void BTOptSolver::processSeparationOnChild(Selector* currNode,
 
 void BTOptSolver::removeNodeFromBT(Node* node, BehaviorTreeArena* arena)
 {
-  for (auto edgeId : node->getAllIncomingEdges())
+  for (auto edge : node->getAllIncomingEdges())
   {
-    auto edge = arena->getEdge(edgeId);
     edge->removeEdgeFromNodes();
     arena->deleteEdge(edge->getUniqueId());
   }
@@ -610,11 +725,7 @@ void BTOptSolver::solve(uint32_t numSolutions)
       if (++solutionCtr >= numSolutions) break;
     }
   }
-
-  // Last states collect the bounds on the solution cost
-  auto blackboard = pBehaviorTree->getBlackboard();
-  auto finalStates = blackboard->getOptimizationQueueMutable()->queue;
-
+  /*
   // Choose the best final state
   OptimizationState* bestState{nullptr};
   double bestObjectiveValue = pModel->maximization() ?
@@ -719,6 +830,7 @@ void BTOptSolver::solve(uint32_t numSolutions)
   {
     std::cout << (*it).first << ": " << (*it).second << std::endl;
   }
+  */
 }
 
 }  // namespace optimization

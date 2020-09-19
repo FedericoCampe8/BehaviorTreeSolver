@@ -17,8 +17,6 @@
 #include "bt/node.hpp"
 #include "bt/node_status.hpp"
 #include "bt/std_node.hpp"
-#include "bt_solver/all_different.hpp"
-#include "bt_solver/bt_solver.hpp"
 #include "bt_optimization/all_different.hpp"
 #include "bt_optimization/bt_solver.hpp"
 #include "cp/bitmap_domain.hpp"
@@ -40,119 +38,6 @@ void printHelp(const std::string& programName) {
       << "  --help|-h          Print this help message."
       << std::endl;
 }  // printHelp
-
-void runBehaviorTreeTest()
-{
-  using namespace btsolver;
-  using namespace btsolver::cp;
-
-  auto arena = std::make_unique<BehaviorTreeArena>();
-
-  auto root = arena->buildNode<btsolver::Sequence>("sequence");
-  auto log1 = arena->buildNode<btsolver::LogNode>("log_1");
-  auto log2 = arena->buildNode<btsolver::LogNode>("log_2");
-  auto log3 = arena->buildNode<btsolver::LogNode>("log_3");
-  reinterpret_cast<btsolver::LogNode*>(log1)->setLog("log_1");
-  reinterpret_cast<btsolver::LogNode*>(log2)->setLog("log_2");
-  reinterpret_cast<btsolver::LogNode*>(log3)->setLog("log_3");
-  reinterpret_cast<btsolver::Sequence*>(root)->addChild(log1->getUniqueId());
-  reinterpret_cast<btsolver::Sequence*>(root)->addChild(log2->getUniqueId());
-  reinterpret_cast<btsolver::Sequence*>(root)->addChild(log3->getUniqueId());
-
-  btsolver::BehaviorTree bt(std::move(arena));
-  bt.setEntryNode(root->getUniqueId());
-  bt.run();
-
-  Domain<BitmapDomain> domain(120, 130);
-  std::cout << domain.minElement() << std::endl;
-  std::cout << domain.maxElement() << std::endl;
-  std::cout << domain.size() << std::endl;
-  auto& it = domain.getIterator();
-  while(!it.atEnd())
-  {
-    std::cout << it.value() << std::endl;
-    it.moveToNext();
-  }
-
-  // Print last element "atEnd()"
-  std::cout << it.value() << std::endl;
-
-  // Reset the iterator
-  it.reset();
-
-  std::cout << "Remove 125 from domain\n";
-
-  // Remove an element
-  domain.removeElement(125);
-  std::cout << domain.size() << std::endl;
-  while(!it.atEnd())
-  {
-    std::cout << it.value() << std::endl;
-    it.moveToNext();
-  }
-  std::cout << it.value() << std::endl;
-  it.reset();
-
-  std::cout << "Remove bounds 120, 121 and 130 from domain\n";
-
-  // Remove lower and upper bounds
-  domain.removeElement(120);
-  domain.removeElement(121);
-  domain.removeElement(130);
-  std::cout << domain.minElement() << std::endl;
-  std::cout << domain.maxElement() << std::endl;
-  std::cout << domain.size() << std::endl;
-
-  while(!it.atEnd())
-  {
-    std::cout << it.value() << std::endl;
-    it.moveToNext();
-  }
-  std::cout << it.value() << std::endl;
-  it.reset();
-}
-
-
-void runSolverSat()
-{
-  using namespace btsolver;
-  using namespace btsolver::cp;
-
-  BTSolver solver;
-
-  // Create a simple model
-  auto model = std::make_shared<Model>("basic_model");
-
-  int maxVars{40};
-  for (int idx{0}; idx < maxVars; ++idx)
-  {
-    model->addVariable(std::make_shared<Variable>("var_" + std::to_string(idx), 1, maxVars));
-  }
-
-  tools::Timer timer;
-
-  // Build AllDifferent constraint
-  auto arena = std::make_unique<BehaviorTreeArena>();
-  auto allDiff = std::make_unique<AllDifferent>(arena.get(), "AllDifferent");
-  allDiff->setScope(model->getVariables());
-  allDiff->builBehaviorTreePropagator();
-
-  std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
-
-  return;
-
-  // Set the model into the solver
-  solver.setModel(model);
-
-  // Build the relaxed BT
-  auto bt = solver.buildRelaxedBT();
-
-  // Run the solver on the exact BT
-  solver.setBehaviorTree(bt);
-
-  // Run solver on the relaxed Behavior Tree
-  solver.solve(1);
-}
 
 void runSolverOpt()
 {

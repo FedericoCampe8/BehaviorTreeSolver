@@ -6,12 +6,17 @@
 namespace btsolver {
 namespace cp {
 
+BitmapDomain::BitmapDomain(int32_t lowerBound,  int32_t upperBound)
+{
+  configure(lowerBound, upperBound);
+}
+
 void BitmapDomain::configure(int32_t lowerBound,  int32_t upperBound)
 {
   pLowerBound = lowerBound;
   pUpperBound = upperBound;
   pBitset = boost::dynamic_bitset<>(upperBound - lowerBound + 1);
-  pBitset.flip();
+  pBitset.set();
 }
 
 int32_t BitmapDomain::min() const noexcept
@@ -20,7 +25,7 @@ int32_t BitmapDomain::min() const noexcept
   {
     return std::numeric_limits<int32_t>::min();
   }
-  return pLowerBound + pBitset.find_first();
+  return pLowerBound + getFirst();
 }
 
 int32_t BitmapDomain::max() const noexcept
