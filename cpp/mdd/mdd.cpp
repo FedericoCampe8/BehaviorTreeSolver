@@ -127,30 +127,27 @@ void MDD::enforce_alldifff_sequential( Node *node )
             if (position > -1) {
                 // edge points to conflicting value, so split node
                 Node* new_node = new Node( next_node->get_variable(), next_node->get_layer() );
-                this->nodes_per_layer[ next_node->get_layer() ].push_back( new_node );
 
                 std::vector<int>* new_available_values = new_node->get_values();
                 new_available_values->erase( new_available_values->begin() + position );
 
+                // if new node has no available values, then it is unfeasable so do not add it to the graph
+                if (new_available_values->size() > 0) {
+                    nodes_per_layer[ next_node->get_layer() ].push_back( new_node );
 
-                // Need to remove nodes with only invalid outgoing edges...
-                // TODO
-                // if (next_node->get_out_edges().size() == 1 && next_node->get_out_edges()[0]->get_value() == edge->get_value()) {
-                //     continue;
-                // }
+                    // Move incoming conflicting edge from next node to splitting node
+                    next_node->remove_in_edge( edge );
+                    new_node->add_in_edge( edge );
+                    edge->set_head( new_node );
 
-                // Move incoming conflicting edge from next node to splitting node
-                next_node->remove_in_edge( edge );
-                new_node->add_in_edge( edge );
-                edge->set_head( new_node );
-
-                // Copy outgoing edges from next node to splitting node
-                for (int out_edge_idx = 0; out_edge_idx < next_node->get_out_edges().size(); ++out_edge_idx) {
-                    Edge* edge_to_copy = next_node->get_out_edges()[out_edge_idx];
-                    if (edge_to_copy->get_value() != conflicting_value) {
-                        Edge* new_out_edge = new Edge( new_node,  edge_to_copy->get_head(), edge_to_copy->get_value() );
-                        new_node->add_out_edge( new_out_edge );
-                        edge_to_copy->get_head()->add_in_edge( new_out_edge );
+                    // Copy outgoing edges from next node to splitting node
+                    for (int out_edge_idx = 0; out_edge_idx < next_node->get_out_edges().size(); ++out_edge_idx) {
+                        Edge* edge_to_copy = next_node->get_out_edges()[out_edge_idx];
+                        if (edge_to_copy->get_value() != conflicting_value) {
+                            Edge* new_out_edge = new Edge( new_node,  edge_to_copy->get_head(), edge_to_copy->get_value() );
+                            new_node->add_out_edge( new_out_edge );
+                            edge_to_copy->get_head()->add_in_edge( new_out_edge );
+                        }
                     }
                 }
 
