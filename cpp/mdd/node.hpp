@@ -16,8 +16,8 @@ private:
     Variable* variable;
     float optimization_value;
     Edge* selected_edge;
-    std::vector<Edge> inEdges;
-    std::vector<Edge> outEdges;
+    std::vector<Edge*> inEdges;
+    std::vector<Edge*> outEdges;
     std::vector<int> available_values;
 
 
@@ -28,12 +28,14 @@ public:
     void add_in_edge( Edge* edge );
     void add_out_edge( Edge* edge );
 
-    void remove_in_edge( int position );
-    void remove_out_edge( int position );
+    void remove_in_edge( Edge* edge );
+    void remove_out_edge( Edge* edge );
 
-    std::vector<Edge> get_out_edges();
-    std::vector<Edge> get_in_edges();
+    std::vector<Edge*> get_out_edges();
+    std::vector<Edge*> get_in_edges();
     Variable* get_variable();
+
+    bool is_leaf();
 
     void set_optimization_value( float opt_value );
     float get_optimization_value( );

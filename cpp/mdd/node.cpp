@@ -5,8 +5,11 @@ Node::Node( Variable* variable, uint32_t layer)
     this->variable = variable;
     this->layer = layer;
 
-    for (int i = 0; i < variable->get_available_values().size(); ++i) {
-        this->available_values.push_back( variable->get_available_values()[i] );
+    // Null variable indicates leaf node of mdd...only incoming edges from last variable of problem.
+    if (variable != NULL) {
+        for (int i = 0; i < variable->get_available_values().size(); ++i) {
+            this->available_values.push_back( variable->get_available_values()[i] );
+        }
     }
 
 } 
@@ -24,32 +27,42 @@ uint32_t Node::get_layer()
 
 void Node::add_in_edge( Edge* edge ) 
 { 
-    this->inEdges.push_back( *edge ); 
+    this->inEdges.push_back( edge ); 
 }
 
 void Node::add_out_edge( Edge* edge ) 
 { 
-    this->outEdges.push_back( *edge); 
+    this->outEdges.push_back( edge); 
 }
 
 
-void Node::remove_in_edge( int position ) 
+void Node::remove_in_edge( Edge* edge ) 
 { 
-    this->inEdges.erase(inEdges.begin()+position); 
+    for (int k = 0; k < inEdges.size(); ++k) {
+        if (edge == inEdges[k] ) {
+            inEdges.erase(inEdges.begin()+k); 
+            break;
+        }
+    }
 }
     
-void Node::remove_out_edge( int position ) 
+void Node::remove_out_edge( Edge* edge ) 
 { 
-    this->outEdges.erase(outEdges.begin()+position); 
+    for (int k = 0; k < outEdges.size(); ++k) {
+        if (edge == outEdges[k] ) {
+            outEdges.erase(outEdges.begin()+k); 
+            break;
+        }
+    }
 }
 
 
-std::vector<Edge> Node::get_out_edges() 
+std::vector<Edge*> Node::get_out_edges() 
 { 
     return outEdges; 
 }
 
-std::vector<Edge> Node::get_in_edges() 
+std::vector<Edge*> Node::get_in_edges() 
 { 
     return inEdges; 
 }
@@ -77,4 +90,9 @@ void Node::set_selected_edge( Edge* edge )
 Edge* Node::get_selected_edge() 
 { 
     return selected_edge; 
+}
+
+bool Node::is_leaf()
+{
+    return variable == NULL;
 }
