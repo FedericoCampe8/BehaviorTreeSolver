@@ -1,6 +1,7 @@
 
 #include "mdd.hpp"
-
+#include <vector>
+#include <iostream>
 
 using namespace std;
 
@@ -20,9 +21,18 @@ int main()
     problem.add_variable(x1);
     problem.add_variable(x2);
 
+    cout << "Problem created." << endl;
+
     MDD mdd = MDD( 2, 10, problem);
     mdd.build_mdd();
 
+    std::vector<Edge> solution = mdd.maximize();
+
+    for (int i = 0; i < solution.size(); ++i)
+    {
+        Edge edge = solution.at(i);
+        cout << edge.get_tail()->get_layer() << " - " << edge.get_head()->get_layer() << ": " << edge.get_value() << endl;
+    }
 
 
 }

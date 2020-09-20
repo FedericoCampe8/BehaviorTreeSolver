@@ -10,6 +10,7 @@ MDD::MDD(int32_t vars, int32_t width, Problem problem)
     this->problem = &problem;
     this->nodes_per_layer = std::vector< std::vector<Node> > (vars);
 
+    cout << "MDD initialized." << endl;
 }
 
 

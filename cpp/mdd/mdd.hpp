@@ -14,6 +14,9 @@
 // #include <ext/hash_map>
 // using namespace __gnu_cxx;
 
+#include <iostream>
+using namespace std;
+
 class SYS_EXPORT_CLASS MDD {
 
 private:

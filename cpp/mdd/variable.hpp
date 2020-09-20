@@ -6,7 +6,8 @@
 #include <vector>
 #include "../system/system_export_defs.hpp"
 
-class SYS_EXPORT_CLASS Variable {
+// class SYS_EXPORT_CLASS Variable {
+class Variable {
 
 private:
     uint32_t id;
