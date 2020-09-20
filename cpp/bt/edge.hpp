@@ -51,7 +51,7 @@ class SYS_EXPORT_CLASS Edge {
    /// Sets the head of this edge
    void setHead(Node* node) noexcept;
 
-   /// Sets the tail of
+   /// Sets the tail of this edge
    void setTail(Node* node) noexcept;
 
    /// Removes this edge from the head and tail node

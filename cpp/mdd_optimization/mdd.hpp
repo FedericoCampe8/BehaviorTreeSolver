@@ -22,7 +22,7 @@ namespace mdd {
 class SYS_EXPORT_CLASS MDD {
  public:
   /// List of all the (pointers to the) nodes in an MDD layer
-  using NodesLayerList = std::vector<Node*>;
+  using NodesLayerList = std::vector<Node::UPtr>;
 
   /// List of all the layers of the MDD
   using MDDLayersList = std::vector<NodesLayerList>;
@@ -48,6 +48,27 @@ private:
 
   /// List of all layers with nodes in this MDD
   MDDLayersList pNodesPerLayer;
+
+  /// Builds the relaxed MDD w.r.t. the given problem.
+  /// Given n variables it builds the MDD as
+  ///
+  ///  [ r ]           L_1
+  ///    |     Dx_1
+  ///  [u_1]           L_2
+  ///    |
+  ///   ...
+  ///    |     Dx_j
+  ///  [u_j]           L_j+1
+  ///    |     Dx_j+1
+  ///   ...
+  ///    |     Dx_n
+  ///  [ t ]           L_n+1
+  ///
+  /// Where r is the root node, t is the terminal node
+  /// and each edge is a parallel edge with values equal to the
+  /// domain of the correspondent variable.
+  /// @note in the MDD papers they start counting layers from 1
+  void buildRelaxedMDD();
 };
 
 }  // namespace mdd

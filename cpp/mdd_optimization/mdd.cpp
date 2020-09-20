@@ -2,6 +2,10 @@
 
 #include <stdexcept>  // for std::invalid_argument
 
+namespace {
+constexpr uint32_t kLayerZero{0};
+}  // namespace
+
 namespace mdd {
 
 MDD::MDD(MDDProblem::SPtr problem, int32_t width)
@@ -20,8 +24,22 @@ MDD::MDD(MDDProblem::SPtr problem, int32_t width)
 
   // TODO: max width not implemented in constraints
 
-  // Resize the number of layers of this MDD to have one layer per variable in the problem
-  pNodesPerLayer.resize(pProblem->getVariables().size());
+  // Resize the number of layers of this MDD to have one layer per variable in the problem.
+  // Note: there is one more corresponding to the terminal node layer
+  pNodesPerLayer.resize(pProblem->getVariables().size() + 1);
+}
+
+void MDD::buildMDD()
+{
+  // Build relaxed MDD
+  buildRelaxedMDD();
+}
+
+
+void MDD::buildRelaxedMDD()
+{
+  // Build the root node
+  pNodesPerLayer.at(kLayerZero).push_back(std::make_unique<Node>(kLayerZero));
 }
 
 }  // namespace mdd
