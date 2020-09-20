@@ -7,7 +7,7 @@
 #pragma once
 
 #include <cstdint>  // for int64_t
-#include <limits>
+#include <limits>   // for std::numeric_limits
 #include <memory>   // for std::unique_ptr
 
 #include "system/system_export_defs.hpp"
@@ -22,6 +22,7 @@ namespace mdd {
 class SYS_EXPORT_CLASS Edge {
  public:
   using UPtr = std::unique_ptr<Edge>;
+
  public:
   /**
    * \brief Constructor, it does NOT take ownership of the given object instances.
