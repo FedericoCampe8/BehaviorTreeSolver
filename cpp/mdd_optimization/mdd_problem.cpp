@@ -13,4 +13,13 @@ void MDDProblem::addVariable(Variable::SPtr var)
   pVariablesList.push_back(var);
 }
 
+void MDDProblem::addConstraint(MDDConstraint::SPtr con)
+{
+  if (con == nullptr)
+  {
+    throw std::invalid_argument("MDDProblem - addConstraint: empty pointer to constraint");
+  }
+  pConstraintsList.push_back(con);
+}
+
 }  // namespace mdd

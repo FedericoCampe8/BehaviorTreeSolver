@@ -31,12 +31,22 @@ MDD::MDD(MDDProblem::SPtr problem, int32_t width)
   pNodesPerLayer.resize(pProblem->getVariables().size() + 1);
 }
 
-void MDD::buildMDD()
+void MDD::enforceConstraints(Node* relaxedMDD, MDDConstructionAlgorithm algorithmType)
 {
-  // Build relaxed MDD
-  buildRelaxedMDD();
-}
+  if (relaxedMDD == nullptr)
+  {
+    throw std::invalid_argument("MDD - enforceConstraints: empty pointer to the MDD");
+  }
 
+  if (algorithmType == MDDConstructionAlgorithm::Separation)
+  {
+    runSeparationProcedure(relaxedMDD);
+  }
+  else
+  {
+    runTopDownProcedure(relaxedMDD);
+  }
+}
 
 Node* MDD::buildRelaxedMDD()
 {
@@ -89,6 +99,28 @@ Node* MDD::expandNode(Node* node)
 
   // Return next node
   return nextNode;
+}
+
+void MDD::runSeparationProcedure(Node* node)
+{
+
+}
+
+void MDD::runTopDownProcedure(Node* node)
+{
+  // Enforce all constraints
+  auto totLayers = static_cast<uint32_t>(pProblem->getVariables().size());
+  for (auto& con : pProblem->getConstraints())
+  {
+    for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)
+    {
+      for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
+      {
+        auto node = pNodesPerLayer.at(layerIdx).at(nodeIdx);
+        con->enforceConstraint(node);
+      }
+    }
+  }
 }
 
 }  // namespace mdd

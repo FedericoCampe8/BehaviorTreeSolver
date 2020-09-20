@@ -1,7 +1,7 @@
 //
 // Copyright OptiLab 2020. All rights reserved.
 //
-// All different constraint based on BT optimization.
+// Base class for MDD.
 //
 
 #pragma once
@@ -22,6 +22,16 @@ namespace mdd {
 
 class SYS_EXPORT_CLASS MDD {
  public:
+  /**
+   * \brief Type of algorithm to be used to build the MDD
+   */
+  enum class MDDConstructionAlgorithm {
+    /// Build the MDD by separation
+    Separation = 0,
+    /// Build the MDD using the Top-Down approach
+    TopDown
+  };
+
   /// List of all the (pointers to the) nodes in an MDD layer
   using NodesLayerList = std::vector<Node*>;
 
@@ -55,7 +65,8 @@ class SYS_EXPORT_CLASS MDD {
   /// Returns the pointer to the root node
   Node* buildRelaxedMDD();
 
-  void buildMDD();
+  /// Enforces the constraints of the problem onto the given (relaxed) MDD
+  void enforceConstraints(Node* relaxedMDD, MDDConstructionAlgorithm algorithmType);
 
   const MDDLayersList& getNodesPerLayer() const noexcept
   {
@@ -83,6 +94,12 @@ private:
 
   /// Expands vertically the given node to build a relaxed MDD
   Node* expandNode(Node* node);
+
+  /// Runs the separation algorithm on the given MDD w.r.t. the constraint in the problem
+  void runSeparationProcedure(Node* root);
+
+  /// Runs the top-down algorithm on the given MDD w.r.t. the constraint in the problem
+  void runTopDownProcedure(Node* root);
 };
 
 }  // namespace mdd

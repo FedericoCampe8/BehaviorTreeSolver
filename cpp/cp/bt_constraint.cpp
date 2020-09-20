@@ -1,5 +1,6 @@
+#include "cp/bt_constraint.hpp"
+
 #include <stdexcept>  // for std::invalid_argument
-#include "bt_constraint.hpp"
 
 namespace btsolver {
 namespace optimization {
