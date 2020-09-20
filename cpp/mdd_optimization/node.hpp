@@ -104,9 +104,9 @@ class SYS_EXPORT_CLASS Node {
   /// Layer this node is at
   uint32_t pLayer{0};
 
-  /// Raw pointer to the variable with domain defining
-  /// the labels of the incoming edges on this node.
-  /// @note the root node does not have any variable
+  /// Raw pointer to the variable that has the domain defining
+  /// the labels of the outgoing edges on this node.
+  /// @note the terminal node does not have any variable
   Variable* pVariable{nullptr};
 
   /// List of incoming edges

@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "mdd_optimization/mdd.hpp"
+#include "mdd_optimization/mdd_problem.hpp"
 #include "mdd_optimization/variable.hpp"
 #include "tools/timer.hpp"
 
@@ -18,14 +20,24 @@ void runMDDOpt()
 {
   using namespace mdd;
 
+  // Create the MDD problem
+  auto problem = std::make_shared<MDDProblem>();
+
+  // Add the list of variables
+  int maxVars{10};
+  for (int idx{0}; idx < maxVars; ++idx)
+  {
+    problem->addVariable(std::make_shared<Variable>(idx, idx, 1, maxVars));
+  }
+
+  // Create the MDD
+  int32_t width{10};
+  MDD mdd(problem, width);
+
   tools::Timer timer;
 
-  std::vector<int64_t> values = {1, 2, 3};
-  auto var = std::make_shared<Variable>(0, 0, values);
-  for (auto value : var->getAvailableValues())
-  {
-    std::cout << "Var val: " << value << std::endl;
-  }
+  // Build the relaxed MDD
+  mdd.buildRelaxedMDD();
 
   std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
 }

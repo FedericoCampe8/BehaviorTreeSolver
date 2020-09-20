@@ -28,6 +28,9 @@ class SYS_EXPORT_CLASS Edge {
  public:
   /**
    * \brief Constructor, it does NOT take ownership of the given object instances.
+   * \note given an edge, tail and head are, respectively:
+   *       ------>
+   *     tail   head
    */
   Edge(Node* tail,
        Node* head,

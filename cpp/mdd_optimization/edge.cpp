@@ -25,8 +25,8 @@ Edge::Edge(Node *tail, Node *head, int64_t valueLB, int64_t valueUB)
     throw std::invalid_argument("Edge - empty pointer to tail node");
   }
 
-  pHead->addOutEdge(this);
-  pTail->addInEdge(this);
+  pHead->addInEdge(this);
+  pTail->addOutEdge(this);
 }
 
 Edge::~Edge()
@@ -44,7 +44,7 @@ void Edge::removeHead() noexcept
 {
   if (pHead)
   {
-    pHead->removeOutEdgeGivenPtr(this);
+    pHead->removeInEdgeGivenPtr(this);
   }
   pHead = nullptr;
 }
@@ -53,7 +53,7 @@ void Edge::removeTail() noexcept
 {
   if (pTail)
   {
-    pTail->removeInEdgeGivenPtr(this);
+    pTail->removeOutEdgeGivenPtr(this);
   }
   pTail = nullptr;
 }
@@ -70,7 +70,7 @@ void Edge::setHead(Node* node)
     removeHead();
   }
   pHead = node;
-  pHead->addOutEdge(this);
+  pHead->addInEdge(this);
 }
 
 void Edge::setTail(Node* node) noexcept
@@ -85,7 +85,7 @@ void Edge::setTail(Node* node) noexcept
     removeTail();
   }
   pTail = node;
-  pTail->addInEdge(this);
+  pTail->addOutEdge(this);
 }
 
 void Edge::setDomainBounds(int64_t lowerBound, int64_t upperBound)

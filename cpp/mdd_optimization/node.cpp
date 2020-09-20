@@ -23,7 +23,7 @@ Node::~Node()
   {
     if (inEdge != nullptr)
     {
-      inEdge->removeTail();
+      inEdge->removeHead();
     }
   }
 
@@ -32,7 +32,7 @@ Node::~Node()
   {
     if (outEdge != nullptr)
     {
-      outEdge->removeHead();
+      outEdge->removeTail();
     }
   }
 }
@@ -54,7 +54,7 @@ void Node::addInEdge(Edge* edge)
   pInEdgeSet.insert(edge->getUniqueId());
 
   // Set this node as the tail of the given edge
-  edge->setTail(this);
+  edge->setHead(this);
 }
 
 void Node::addOutEdge(Edge* edge)
@@ -74,7 +74,7 @@ void Node::addOutEdge(Edge* edge)
   pOutEdgeSet.insert(edge->getUniqueId());
 
   // Set this node as the head of the given edge
-  edge->setHead(this);
+  edge->setTail(this);
 }
 
 void Node::removeInEdge(uint32_t position)
@@ -102,7 +102,7 @@ void Node::removeInEdgeGivenPtr(Edge* edge)
   pInEdgeSet.erase(edge->getUniqueId());
 
   // Update the edge
-  edge->removeTail();
+  edge->removeHead();
 }
 
 void Node::removeOutEdgeGivenPtr(Edge* edge)
@@ -118,7 +118,7 @@ void Node::removeOutEdgeGivenPtr(Edge* edge)
   pOutEdgeSet.erase(edge->getUniqueId());
 
   // Update the edge
-  edge->removeHead();
+  edge->removeTail();
 }
 
 void Node::setSelectedEdge(Edge* edge)
