@@ -134,7 +134,7 @@ endif()
 # Create a variable to keep track of the source files and one
 # to keep track of the executable files
 set(bt_SOURCES "")
-set(exe_file_list "bt_client/bt_client.cpp")
+set(exe_file_list "bt_client/bt_client.cpp" "mdd_client/mdd_client.cpp")
 
 # Create a variable to track the sources of the main target.
 # Note: the following include will call a macro that recursively looks
@@ -188,5 +188,9 @@ endif()
 add_executable(bt_solver cpp/bt_client/bt_client.cpp)
 target_link_libraries(bt_solver LINK_PUBLIC BTSolver)
 
+add_executable(mdd_solver cpp/mdd_client/mdd_client.cpp)
+target_link_libraries(mdd_solver LINK_PUBLIC BTSolver)
+
 # Install the target executable into the specified folder
 install(TARGETS bt_solver RUNTIME DESTINATION "${INSTALL_BINDIR}")
+install(TARGETS mdd_solver RUNTIME DESTINATION "${INSTALL_BINDIR}")

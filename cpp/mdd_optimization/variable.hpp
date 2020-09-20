@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>  // for int64_t
+#include <memory>   // for std::unique_ptr
 #include <vector>
 
 #include "system/system_export_defs.hpp"
@@ -14,7 +15,11 @@
 namespace mdd {
 
 class SYS_EXPORT_CLASS Variable {
-public:
+ public:
+  using UPtr = std::unique_ptr<Variable>;
+  using SPtr = std::shared_ptr<Variable>;
+
+ public:
     Variable(uint32_t id, uint32_t layer, const std::vector<int64_t>& availableValues);
 
     /// Return this variable's unique identifier
@@ -23,7 +28,7 @@ public:
     /// Returns this variable' domain
     const std::vector<int64_t>& getAvailableValues() const noexcept { return pAvailableValues; }
 
-private:
+ private:
     /// Variable unique identifier
     uint32_t pId;
 
