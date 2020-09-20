@@ -616,8 +616,8 @@ void BTOptSolver::processSeparationOnChild(
                 }
                 else
                 {
-                  /*
-                  auto domainSelectorEdge = arena->buildEdge(sameStateEdge->getHead(), node);
+
+                  auto domainSelectorEdge = arena->buildEdge(sameStateEdge->getHead(), newState);
                   domainSelectorEdge->setDomainBounds(startEdgeValue, startEdgeValue);
 
                   // Add this node's condition to the other node's condition
@@ -625,19 +625,27 @@ void BTOptSolver::processSeparationOnChild(
                   {
                     newState->addParentConditionNode(condition);
                   }
-                   */
+
                   // Here we create a new state instead of re-using the previous one
+                  /*
                   auto stateNode = reinterpret_cast<OptimizationState*>(
                           arena->buildNode<OptimizationState>("Optimization_State"));
+
+                  Node* theCondition{nullptr};
                   auto theSelector = node->getIncomingEdge()->getHead();
-                  auto theSequence = theSelector->getIncomingEdge()->getHead();
-                  auto theCondition = theSequence->getAllOutgoingEdges().at(0)->getTail();
-                  auto parentConditionNode = theCondition->cast<OptimizationStateCondition>();
-                  stateNode->addParentConditionNode(parentConditionNode);
+                  if (theSelector->getIncomingEdge()->getHead()->getNodeType() ==
+                          NodeType::Sequence)
+                  {
+                    // This is not the first child, the parent of the selector is a sequence node
+                    auto theSequence = theSelector->getIncomingEdge()->getHead();
+                    theCondition = theSequence->getAllOutgoingEdges().at(0)->getTail();
+                  }
+                  stateNode->addParentConditionNode(theCondition->cast<OptimizationStateCondition>());
                   auto domainSelectorEdge = currNode->addChild(stateNode);
                   domainSelectorEdge->setDomainBounds(startEdgeValue, startEdgeValue);
                   stateNode->pairStateConditionNode(newState->getPairedCondition());
                   stateNode->resetDPState(newDPState);
+                  */
                 }
                 foundSameState = true;
                 break;
@@ -653,11 +661,16 @@ void BTOptSolver::processSeparationOnChild(
 
               // Set the parent condition of the split node.
               // Note: use ONLY the condition on the current sub-tree
+              Node* theCondition{nullptr};
               auto theSelector = node->getIncomingEdge()->getHead();
-              auto theSequence = theSelector->getIncomingEdge()->getHead();
-              auto theCondition = theSequence->getAllOutgoingEdges().at(0)->getTail();
-              auto parentConditionNode = theCondition->cast<OptimizationStateCondition>();
-              stateNode->addParentConditionNode(parentConditionNode);
+              if (theSelector->getIncomingEdge()->getHead()->getNodeType() ==
+                      NodeType::Sequence)
+              {
+                // This is not the first child, the parent of the selector is a sequence node
+                auto theSequence = theSelector->getIncomingEdge()->getHead();
+                theCondition = theSequence->getAllOutgoingEdges().at(0)->getTail();
+              }
+              stateNode->addParentConditionNode(theCondition->cast<OptimizationStateCondition>());
 
               auto domainSelectorEdge = currNode->addChild(stateNode);
               domainSelectorEdge->setDomainBounds(startEdgeValue, startEdgeValue);
