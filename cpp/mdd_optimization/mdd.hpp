@@ -33,6 +33,8 @@ class SYS_EXPORT_CLASS MDD {
     SeparationWithIncrementalRefinement,
     /// Build the MDD using the Top-Down approach
     TopDown,
+    /// Build a restricted MDD using the Top-Down approach
+    RestrictedTopDown,
     /// Build the MDD by filtering and splitting a relaxed MDD
     Filtering
   };
@@ -122,8 +124,10 @@ private:
   /// Runs the separation algorithm on the specific constraint
   void runSeparationAndRefinementProcedureOnConstraint(Node* root, MDDConstraint* con);
 
-  /// Runs the top-down algorithm on the given MDD w.r.t. the constraint in the problem
-  void runTopDownProcedure(Node* root);
+  /// Runs the top-down algorithm on the given MDD w.r.t. the constraint in the problem.
+  /// The caller can specify whether or not running the restricted compilation
+  /// by setting the flag "isRestricted"
+  void runTopDownProcedure(Node* root, bool isRestricted = false);
 
   /// Runs the filtering algorithm on the given MDD w.r.t. the constraint in the problem
   void runFilteringProcedure(Node* root);

@@ -63,7 +63,17 @@ void MDD::enforceConstraints(MDDConstructionAlgorithm algorithmType)
   {
     // Start from the root node
     auto rootNode = buildRootMDD();
-    runTopDownProcedure(rootNode);
+    runTopDownProcedure(rootNode, false);
+  }
+  else if(algorithmType == MDDConstructionAlgorithm::RestrictedTopDown)
+  {
+    // Start from the root node
+    auto rootNode = buildRootMDD();
+    runTopDownProcedure(rootNode, true);
+  }
+  else
+  {
+    throw std::runtime_error("MDD - enforceConstraints: MDD compilation type not supported");
   }
 }
 
@@ -575,7 +585,7 @@ void MDD::runSeparationAndRefinementProcedureOnConstraint(Node* root, MDDConstra
   }  // for each layer
 }
 
-void MDD::runTopDownProcedure(Node* node)
+void MDD::runTopDownProcedure(Node* node, bool isRestricted)
 {
   if (node == nullptr)
   {
@@ -604,8 +614,8 @@ void MDD::runTopDownProcedure(Node* node)
     // Reset the list of new states
     newDPStates.clear();
 
-    // Apply merging procedure
-    while(layerIdx > 0 && (pNodesPerLayer.at(layerIdx).size() > pMaxWidth))
+    // Apply merging procedure for relaxed MDDs
+    while((!isRestricted) && (layerIdx > 0) && (pNodesPerLayer.at(layerIdx).size() > pMaxWidth))
     {
       // Step I: select a subset of nodes to merge
       auto subsetNodes = conDPModel->mergeNodeSelect(layerIdx, getMDDRepresentation());
@@ -653,6 +663,26 @@ void MDD::runTopDownProcedure(Node* node)
         assert(node->getOutEdges().empty());
         pArena->deleteNode(node->getUniqueId());
       }
+    }
+
+    // Apply filtering procedure for restricted MDDs
+    while(isRestricted && (pMaxWidth > 1) && (pNodesPerLayer.at(layerIdx).size() > pMaxWidth))
+    {
+      // Simply remove nodes
+      auto lastNode = pNodesPerLayer.at(layerIdx).back();
+      pNodesPerLayer.at(layerIdx).pop_back();
+
+      // Note: remove all the connected edges as well
+      assert(lastNode->getOutEdges().empty());
+      auto allEdges = lastNode->getInEdges();
+      for (auto inEdgeToRemove : allEdges)
+      {
+        inEdgeToRemove->removeEdgeFromNodes();
+        pArena->deleteEdge(inEdgeToRemove->getUniqueId());
+      }
+
+      // Remove the node
+      pArena->deleteNode(lastNode->getUniqueId());
     }
 
     // For all nodes per layer

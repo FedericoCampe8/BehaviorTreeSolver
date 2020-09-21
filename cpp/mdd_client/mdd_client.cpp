@@ -46,7 +46,7 @@ void runMDDOpt()
 
   // Enforce all the constraints on the MDD
   //MDD::MDDConstructionAlgorithm::Separation
-  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::SeparationWithIncrementalRefinement);
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::RestrictedTopDown);
   std::cout << "Wallclock time enforce constraints (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
 
