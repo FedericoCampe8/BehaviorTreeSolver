@@ -5,6 +5,7 @@
 //
 #include <exception>
 #include <iostream>
+#include <limits>  // for std::numeric_limits
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,7 +26,7 @@ void runMDDOpt()
   auto problem = std::make_shared<MDDProblem>();
 
   // Add the list of variables
-  int maxVars{10};
+  int32_t maxVars{10};
   for (int idx{0}; idx < maxVars; ++idx)
   {
     problem->addVariable(std::make_shared<Variable>(idx, idx, 1, maxVars));
@@ -37,14 +38,15 @@ void runMDDOpt()
   problem->addConstraint(allDiff);
 
   // Create the MDD
-  int32_t width{10};
+  int32_t width{std::numeric_limits<int32_t>::max()};
+  width = 3;
   MDD mdd(problem, width);
 
   tools::Timer timer;
 
   // Enforce all the constraints on the MDD
   //MDD::MDDConstructionAlgorithm::Separation
-  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::TopDown);
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::SeparationWithIncrementalRefinement);
   std::cout << "Wallclock time enforce constraints (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
 

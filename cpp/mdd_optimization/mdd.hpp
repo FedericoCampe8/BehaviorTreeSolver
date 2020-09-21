@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>  // for int32_t
+#include <limits>   // for std::numeric_limits
 #include <memory>   // for std::unique_ptr
 #include <vector>
 
@@ -28,6 +29,8 @@ class SYS_EXPORT_CLASS MDD {
   enum class MDDConstructionAlgorithm {
     /// Build the MDD by separation
     Separation = 0,
+    /// Build a relaxed MDD using the separation and refinement algorithms
+    SeparationWithIncrementalRefinement,
     /// Build the MDD using the Top-Down approach
     TopDown,
     /// Build the MDD by filtering and splitting a relaxed MDD
@@ -43,13 +46,16 @@ class SYS_EXPORT_CLASS MDD {
   using UPtr = std::unique_ptr<MDD>;
 
  public:
-  MDD(MDDProblem::SPtr problem, int32_t width);
+  MDD(MDDProblem::SPtr problem, int32_t width=std::numeric_limits<int32_t>::max());
 
   /// Returns the root of the current MDD
   Node* getMDD() const noexcept { return pRootNode; }
 
   /// Enforces the constraints of the problem onto the internal MDD
   void enforceConstraints(MDDConstructionAlgorithm algorithmType);
+
+  /// Returns the internal MDD representation
+  const MDDLayersList& getMDDRepresentation() const noexcept { return getNodesPerLayer(); }
 
   /// Returns all layers and nodes
   const MDDLayersList& getNodesPerLayer() const noexcept { return pNodesPerLayer; }
@@ -109,6 +115,12 @@ private:
 
   /// Runs the separation algorithm on the specific constraint
   void runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con);
+
+  /// Runs the separation algorithm on the given MDD w.r.t. the constraint in the problem
+  void runSeparationAndRefinementProcedure(Node* root);
+
+  /// Runs the separation algorithm on the specific constraint
+  void runSeparationAndRefinementProcedureOnConstraint(Node* root, MDDConstraint* con);
 
   /// Runs the top-down algorithm on the given MDD w.r.t. the constraint in the problem
   void runTopDownProcedure(Node* root);

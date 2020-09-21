@@ -2,6 +2,7 @@
 
 #include <sparsepp/spp.h>
 
+#include <algorithm>  // for std::find
 #include <cassert>
 #include <iostream>
 #include <stack>
@@ -52,7 +53,13 @@ void MDD::enforceConstraints(MDDConstructionAlgorithm algorithmType)
     auto relaxedMDD = buildRelaxedMDD();
     runFilteringProcedure(relaxedMDD);
   }
-  else
+  else if(algorithmType == MDDConstructionAlgorithm::SeparationWithIncrementalRefinement)
+  {
+    // Start from the relaxed MDD
+    auto relaxedMDD = buildRelaxedMDD();
+    runSeparationAndRefinementProcedure(relaxedMDD);
+  }
+  else if(algorithmType == MDDConstructionAlgorithm::TopDown)
   {
     // Start from the root node
     auto rootNode = buildRootMDD();
@@ -315,6 +322,259 @@ void MDD::runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con)
 #endif
 }
 
+void MDD::runSeparationAndRefinementProcedure(Node* root)
+{
+  for (auto& con : pProblem->getConstraints())
+  {
+    runSeparationAndRefinementProcedureOnConstraint(root, con.get());
+  }
+}
+
+void MDD::runSeparationAndRefinementProcedureOnConstraint(Node* root, MDDConstraint* con)
+{
+  // Step 1: set default state on each node
+  for (auto& layer : pNodesPerLayer)
+  {
+    for (auto node : layer)
+    {
+      if (!node->hasDefaultDPState())
+      {
+        node->setDefaultDPState();
+      }
+    }
+  }
+
+  // Step 2: set the initial constraint DP state on the root
+  root->resetDPState(con->getInitialDPState());
+
+  // Step 3: for each layer, perform filtering and refinement
+  auto totLayers = static_cast<uint32_t>(pProblem->getVariables().size());
+  std::vector<std::pair<DPState*, Node*>> newDPStates;
+  newDPStates.reserve(pMaxWidth);
+  for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)
+  {
+    // Store the states created at each layer
+    newDPStates.clear();
+
+    /******************
+     *   FILTERING
+     ******************/
+    // For each node in the current layer, for each arc leaving the node,
+    // check if the arc is leading to an invalid state.
+    // If so, remove the arc
+    for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
+    {
+      auto node = pNodesPerLayer.at(layerIdx).at(nodeIdx);
+      auto currDPState = node->getDPState();
+
+      // Get all outgoing edges and, for each edge, check next state
+      // w.r.t. the edge's value.
+      // Note: create a copy of the edge list since this will be modifies
+      Node::EdgeList edgeList = node->getOutEdges();
+      for (auto edge : edgeList)
+      {
+        // Notice that if the edge is a parallel edge,
+        // there will be multiple values to process.
+        // However, in current implementation (9/20/2020) we assume
+        // that every edge has one single element on it.
+        // TODO remove the above assumption
+        assert(edge->getDomainSize() == 1);
+        assert(edge->getHead() != nullptr);
+        assert(edge->getTail() != nullptr);
+        auto edgeValue = edge->getDomainLowerBound();
+
+        // Calculate the next DP state, i.e., the state reachable from the current one
+        // by applying the given edge/arc value
+        auto newDPState = currDPState->next(edgeValue);
+        if (newDPState->isInfeasible())
+        {
+          // If the new state is infeasible: remove this arc from tail and head nodes
+          edge->removeEdgeFromNodes();
+        }
+      }  // for each out edge
+    }  // for each node in layer
+
+    /******************
+     *   REFINEMENT
+     ******************/
+    // For each node in the current layer, for each arc leaving the node,
+    // apply standard separation but up to a width limit
+    for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
+    {
+      auto node = pNodesPerLayer.at(layerIdx).at(nodeIdx);
+      auto currDPState = node->getDPState();
+
+      // Get all outgoing edges and, for each edge, check next state
+      // w.r.t. the edge's value.
+      // Note: create a copy of the edge list since this will be modifies.
+      // Note: thanks to the previous filtering step, all edges here are valid edges
+      Node::EdgeList edgeList = node->getOutEdges();
+      for (auto edge : edgeList)
+      {
+        // Notice that if the edge is a parallel edge,
+        // there will be multiple values to process.
+        // However, in current implementation (9/20/2020) we assume
+        // that every edge has one single element on it.
+        // TODO remove the above assumption
+        assert(edge->getDomainSize() == 1);
+        assert(edge->getHead() != nullptr);
+        assert(edge->getTail() != nullptr);
+        auto edgeValue = edge->getDomainLowerBound();
+
+        // Calculate the next DP state, i.e., the state reachable from the current one
+        // by applying the given edge/arc value
+        auto newDPState = currDPState->next(edgeValue);
+        assert(!newDPState->isInfeasible());
+
+        if (edge->getHead()->hasDefaultDPState())
+        {
+          // The head node has a default state: set this state as its new state
+          // and continue
+          edge->getHead()->resetDPState(newDPState);
+          newDPStates.push_back({newDPState.get(), edge->getHead()});
+        }
+        else if(pNodesPerLayer.at(edge->getHead()->getLayer()).size() < pMaxWidth)
+        {
+          // Check if another state similar to the current one has been
+          // already created in the same layer
+          Node* matchingNode{nullptr};
+          for (const auto& state : newDPStates)
+          {
+            if (state.first->isEqual(newDPState.get()))
+            {
+              // A match is found
+              matchingNode = state.second;
+              break;
+            }
+          }
+
+          if (matchingNode != nullptr)
+          {
+            // A match to an existing state is found.
+            // Consider two cases:
+            // a) there is already an edge connecting the two nodes: nothing to do
+            // b) there is no edge connecting the two nodes: remove current edge,
+            //    and create a new edge from the current node to the matching state
+            assert(node != matchingNode);
+            assert(node->getLayer() < matchingNode->getLayer());
+
+            // Note: scan on the new node's edge list with all the most recent inserted edges
+            bool foundCompatibleEdge{false};
+            for (auto nodeTestEdge : node->getOutEdges())
+            {
+              if ((nodeTestEdge->getHead()->getUniqueId() == matchingNode->getUniqueId()) &&
+                      nodeTestEdge->getDomainLowerBound() == edgeValue)
+              {
+                // Found the same edge: nothing to do
+                foundCompatibleEdge = true;
+                break;
+              }
+            }
+
+            if (!foundCompatibleEdge)
+            {
+              // Remove current edge
+              edge->removeEdgeFromNodes();
+
+              // Create a new edge with matching nodes
+              pArena->buildEdge(node, matchingNode, edgeValue, edgeValue);
+            }
+          }
+          else
+          {
+            // No matching node, create, split the node
+            // Head node already has a non-default state: split the node
+            auto nextNode = edge->getHead();
+
+            // Step I: remove the current edge from the two nodes
+            edge->removeEdgeFromNodes();
+
+            // Step II: create a new node with the new DP state
+            auto nextNewNode = pArena->buildNode(nextNode->getLayer(), nextNode->getVariable());
+            nextNewNode->resetDPState(newDPState);
+            newDPStates.push_back({newDPState.get(), nextNewNode});
+
+            // Step III: add arc from node to nextNewNode and value the value that led to newDPState
+            assert(node != nextNewNode);
+            assert(node->getLayer() < nextNewNode->getLayer());
+            auto newEdge = pArena->buildEdge(node, nextNewNode, edgeValue, edgeValue);
+
+            // Step IV: copy outgoing arcs of nextNode on nextNewNode
+            for (auto nextEdge : nextNode->getOutEdges())
+            {
+              assert(nextNewNode != nextEdge->getHead());
+              pArena->buildEdge(nextNewNode, nextEdge->getHead(), nextEdge->getDomainLowerBound(),
+                                nextEdge->getDomainUpperBound());
+            }
+
+            // Step V: add this node to the next layer
+            pNodesPerLayer.at(nextNode->getLayer()).push_back(nextNewNode);
+          }
+        }
+        else
+        {
+          // A max limit is reached and the next state is valid:
+          // update the head of the current edge with the next state "newDPState".
+          // A way to update the head of the current edge is to merge it with
+          // the next state "newDPState".
+          // Before blindly merge the state, check if "newDPState" is equal to one of the states
+          // newly added to the current layer.
+          // If so, don't merge but re-direct the current edge to point to that state.
+          assert(!edge->getHead()->hasDefaultDPState());
+          Node* matchingNode{nullptr};
+          for (const auto& state : newDPStates)
+          {
+            if (state.first->isEqual(newDPState.get()))
+            {
+              // A match is found
+              matchingNode = state.second;
+              break;
+            }
+          }
+
+          if (matchingNode != nullptr)
+          {
+            // A match to an existing state is found.
+            // Consider two cases:
+            // a) there is already an edge connecting the two nodes: nothing to do
+            // b) there is no edge connecting the two nodes: remove current edge,
+            //    and create a new edge from the current node to the matching state
+            assert(node != matchingNode);
+            assert(node->getLayer() < matchingNode->getLayer());
+
+            // Note: scan on the new node's edge list with all the most recent inserted edges
+            bool foundCompatibleEdge{false};
+            for (auto nodeTestEdge : node->getOutEdges())
+            {
+              if ((nodeTestEdge->getHead()->getUniqueId() == matchingNode->getUniqueId()) &&
+                      nodeTestEdge->getDomainLowerBound() == edgeValue)
+              {
+                // Found the same edge: nothing to do
+                foundCompatibleEdge = true;
+                break;
+              }
+            }
+
+            if (!foundCompatibleEdge)
+            {
+              // Remove current edge
+              edge->removeEdgeFromNodes();
+
+              // Create a new edge with matching nodes
+              pArena->buildEdge(node, matchingNode, edgeValue, edgeValue);
+            }
+          }
+          else
+          {
+            // No similar state is found: merge the new state to the head of the current edge
+            edge->getHead()->getDPState()->mergeState(newDPState.get());
+          }
+        }
+      }  // for each out edge
+    }  // for each node in layer
+  }  // for each layer
+}
+
 void MDD::runTopDownProcedure(Node* node)
 {
   if (node == nullptr)
@@ -337,12 +597,65 @@ void MDD::runTopDownProcedure(Node* node)
 
   // For all layers
   std::vector<std::pair<DPState*, Node*>> newDPStates;
-  newDPStates.reserve(pMaxWidth);
+  newDPStates.reserve(std::min(32, pMaxWidth));
   const auto totLayers = static_cast<int>(pProblem->getVariables().size());
   for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)
   {
-    // For all nodes per layer
+    // Reset the list of new states
     newDPStates.clear();
+
+    // Apply merging procedure
+    while(layerIdx > 0 && (pNodesPerLayer.at(layerIdx).size() > pMaxWidth))
+    {
+      // Step I: select a subset of nodes to merge
+      auto subsetNodes = conDPModel->mergeNodeSelect(layerIdx, getMDDRepresentation());
+      assert(subsetNodes.size() > 1);
+
+      // Step II: remove the selected nodes from the MDD
+      std::vector<Edge*> edgesToRedirect;
+      spp::sparse_hash_set<uint32_t> mergingNodes;
+      auto& currentLevel = pNodesPerLayer[layerIdx];
+      for (auto node : subsetNodes)
+      {
+        // Check that there are no duplicate nodes
+        if (mergingNodes.find(node->getUniqueId()) != mergingNodes.end())
+        {
+          throw std::runtime_error("MDD - runTopDownProcedure: "
+                  "duplicate nodes selected for merging");
+        }
+        mergingNodes.insert(node->getUniqueId());
+
+        auto it = std::find(currentLevel.begin(), currentLevel.end(), node);
+        assert(it != currentLevel.end());
+
+        // Keep track of the incoming edges to merge
+        for (auto inEdge : (*it)->getInEdges())
+        {
+          edgesToRedirect.push_back(inEdge);
+        }
+
+        // Remove the node from the level
+        currentLevel.erase(it);
+      }
+
+      // Step III: Merge all the nodes into one and get their representative
+      auto newMergedNode = conDPModel->mergeNodes(subsetNodes, pArena.get());
+
+      // Step IV: Re-route all the edges to the new node
+      for (auto redirectEdge : edgesToRedirect)
+      {
+        redirectEdge->setHead(newMergedNode);
+      }
+
+      // Step V: Delete the merged nodes
+      for (auto node : subsetNodes)
+      {
+        assert(node->getOutEdges().empty());
+        pArena->deleteNode(node->getUniqueId());
+      }
+    }
+
+    // For all nodes per layer
     for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
     {
       // For all values of the domain of the current layer

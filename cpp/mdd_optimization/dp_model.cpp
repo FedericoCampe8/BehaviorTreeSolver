@@ -16,6 +16,11 @@ bool DPState::operator==(const DPState& other)
   return isEqual(&other);
 }
 
+void DPState::mergeState(DPState*) noexcept
+{
+  // No-op
+}
+
 DPState::SPtr DPState::next(int64_t) const noexcept
 {
   return std::make_shared<DPState>();

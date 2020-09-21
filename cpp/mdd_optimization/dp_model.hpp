@@ -30,6 +30,13 @@ class SYS_EXPORT_STRUCT DPState {
   /// Returns the unique identifier for this DP state
   uint32_t getUniqueId() const noexcept { return pStateId; }
 
+  /// Merges "other" into this DP State
+  virtual void mergeState(DPState* other) noexcept;
+
+  /// Returns true if this DP state is merged.
+  /// Returns false otherwise
+  virtual bool isMerged() const noexcept { return false; }
+
   /// Returns the next state reachable from this state given "domainElement".
   /// Returns self by default
   virtual DPState::SPtr next(int64_t domainElement) const noexcept;

@@ -9,6 +9,7 @@
 #include <cstdint>  // for uint32_t
 #include <memory>   // for std::shared_ptr
 
+#include "mdd_optimization/arena.hpp"
 #include "mdd_optimization/constraint.hpp"
 #include "mdd_optimization/dp_model.hpp"
 #include "mdd_optimization/node.hpp"
@@ -29,6 +30,13 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
 
  public:
    MDDConstraint(ConstraintType type, const std::string& name="");
+
+   /// Applies some heuristics to select a subset of nodes in the given layer to merge
+   virtual std::vector<Node*> mergeNodeSelect(
+           int layer, const std::vector<std::vector<Node*>>& mddRepresentation) const noexcept = 0;
+
+   /// Merges the given list of nodes and returns the representative merged node
+   virtual Node* mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const noexcept = 0;
 
    /// Enforces this constraint on the given MDD node
    virtual void enforceConstraint(Node* node) const = 0;

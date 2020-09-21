@@ -32,6 +32,8 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
   AllDifferentState& operator=(const AllDifferentState& other);
   AllDifferentState& operator=(AllDifferentState&& other);
 
+  void mergeState(DPState* other) noexcept override;
+
   DPState::SPtr next(int64_t domainElement) const noexcept override;
 
   double cost(int64_t domainElement) const noexcept override;
@@ -42,9 +44,19 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
 
   bool isEqual(const DPState* other) const noexcept override;
 
+  bool isMerged() const noexcept override { return pStatesList.size() > 1; }
+
+ private:
+  using ValuesSet = spp::sparse_hash_set<int64_t>;
+
  private:
   // Actual state representation
-  spp::sparse_hash_set<int64_t> pElementList;
+  //spp::sparse_hash_set<int64_t> pElementList;
+
+  /// List of DP states.
+  /// If the MDD is exact, there will always be one value set per DP.
+  /// If the MDD is relaxed, there could be more sets, one per merged state
+  std::vector<ValuesSet> pStatesList;
 };
 
 class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
@@ -57,6 +69,14 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
 
    /// Enforces this constraint on the given MDD node
    void enforceConstraint(Node* node) const override;
+
+   /// Applies some heuristics to select a subset of nodes in the given layer to merge
+   std::vector<Node*> mergeNodeSelect(
+           int layer,
+           const std::vector<std::vector<Node*>>& mddRepresentation) const noexcept override;
+
+   /// Merges the given list of nodes and returns the representative merged node
+   Node* mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const noexcept override;
 
    /// Returns the initial DP state
    DPState::SPtr getInitialDPState() const noexcept override;
