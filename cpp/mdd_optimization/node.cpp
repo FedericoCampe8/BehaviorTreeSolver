@@ -11,8 +11,11 @@ uint32_t Node::kNextID = 0;
 Node::Node(uint32_t layer, Variable* variable)
 : pNodeId(Node::kNextID++),
   pLayer(layer),
-  pVariable(variable)
+  pVariable(variable),
+  pIsDPStateChanged(false),
+  pDefaultDPState(std::make_shared<DPState>())
 {
+  pDPState = pDefaultDPState;
 }
 
 Node::~Node()

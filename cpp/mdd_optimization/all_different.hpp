@@ -32,9 +32,9 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
   AllDifferentState& operator=(const AllDifferentState& other);
   AllDifferentState& operator=(AllDifferentState&& other);
 
-  DPState::SPtr next(int32_t domainElement) const noexcept override;
+  DPState::SPtr next(int64_t domainElement) const noexcept override;
 
-  double cost(int32_t domainElement) const noexcept override;
+  double cost(int64_t domainElement) const noexcept override;
 
   bool isInfeasible() const noexcept override;
 
@@ -44,7 +44,7 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
 
  private:
   // Actual state representation
-  spp::sparse_hash_set<int32_t> pElementList;
+  spp::sparse_hash_set<int64_t> pElementList;
 };
 
 class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {

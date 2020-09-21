@@ -16,12 +16,12 @@ bool DPState::operator==(const DPState& other)
   return isEqual(&other);
 }
 
-DPState::SPtr DPState::next(int32_t) const noexcept
+DPState::SPtr DPState::next(int64_t) const noexcept
 {
   return std::make_shared<DPState>();
 }
 
-double DPState::cost(int32_t domainElement) const noexcept
+double DPState::cost(int64_t domainElement) const noexcept
 {
   return static_cast<double>(domainElement);
 }
@@ -33,7 +33,7 @@ bool DPState::isInfeasible() const noexcept
 
 std::string DPState::toString() const noexcept
 {
-  return "";
+  return "{DEFAULT}";
 }
 
 bool DPState::isEqual(const DPState*) const noexcept

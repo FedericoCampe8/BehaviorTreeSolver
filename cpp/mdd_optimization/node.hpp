@@ -13,6 +13,7 @@
 
 #include <sparsepp/spp.h>
 
+#include "mdd_optimization/dp_model.hpp"
 #include "mdd_optimization/edge.hpp"
 #include "mdd_optimization/variable.hpp"
 
@@ -47,6 +48,16 @@ class SYS_EXPORT_CLASS Node {
   /// Returns this node's unique identifier
   uint32_t getUniqueId() const noexcept { return pNodeId; }
 
+  /// Returns true if this node is a leaf node.
+  /// Returns false otherwise
+  bool isLeaf() const noexcept { return getVariable() == nullptr; }
+
+  /// Returns true if this is the root node, returns false otherwise
+  bool isRootNode() const noexcept { return pInEdges.empty(); }
+
+  /// Returns true if this is the terminal node, returns false otherwise
+  bool isTerminalNode() const noexcept { return isLeaf(); }
+
   /// Adds an incoming edge
   void addInEdge(Edge* edge);
 
@@ -65,10 +76,29 @@ class SYS_EXPORT_CLASS Node {
   /// Removes the outgoing edge at given edge instance
   void removeOutEdgeGivenPtr(Edge* edge);
 
-  /// Returns the list of incoming edges
-  const EdgeList& getInEdges() const noexcept {
-    return pInEdges;
+  /// Returns this node DP state
+  DPState* getDPState() const noexcept { return pDPState.get(); }
+
+  /// Resets the internal DP state to the default one
+  void setDefaultDPState()
+  {
+    pIsDPStateChanged = false;
+    pDPState = pDefaultDPState;
   }
+
+  /// Resets the internal DP state
+  void resetDPState(DPState::SPtr dpState) noexcept
+  {
+    pIsDPStateChanged = true;
+    pDPState = dpState;
+  }
+
+  /// Returns true if the nodes contains the original/default DP state.
+  /// Returns false otherwise (e.g., the DP state has been reset)
+  bool hasDefaultDPState() const noexcept { return !pIsDPStateChanged; }
+
+  /// Returns the list of incoming edges
+  const EdgeList& getInEdges() const noexcept { return pInEdges; }
 
   /// Returns the list of outgoing edges
   const EdgeList& getOutEdges() const noexcept {
@@ -76,23 +106,21 @@ class SYS_EXPORT_CLASS Node {
   }
 
   /// Returns the (raw) pointer to the variable paired with this node
-  Variable* getVariable() const noexcept {
-    return pVariable;
-  }
+  Variable* getVariable() const noexcept { return pVariable; }
 
-  void setOptimizationValue(double opt_value) noexcept {
-    pOptimizationValue = opt_value;
+  void setOptimizationValue(double optValue) noexcept {
+    pOptimizationValue = optValue;
   }
 
   double getOptimizationValue() const noexcept {
     return pOptimizationValue;
   }
 
+  /// Sets the selected solution edge for this node
   void setSelectedEdge(Edge *edge);
 
-  Edge* getSelectedEdge() const noexcept {
-    return pSelectedEdge;
-  }
+  /// Returns the selected solution edge for this node
+  Edge* getSelectedEdge() const noexcept { return pSelectedEdge; }
 
  private:
    static uint32_t kNextID;
@@ -118,6 +146,15 @@ class SYS_EXPORT_CLASS Node {
   /// Sets storing incoming/outgoing edges for quick lookup
   spp::sparse_hash_set<uint32_t> pInEdgeSet;
   spp::sparse_hash_set<uint32_t> pOutEdgeSet;
+
+  /// Flag indicating whether or not the original DP state has been changed
+  bool pIsDPStateChanged{false};
+
+  /// The DP state associated with this BT state
+  DPState::SPtr pDPState{nullptr};
+
+  /// The default DP state
+  DPState::SPtr pDefaultDPState{nullptr};
 
   /// Optimization value on this node
   double pOptimizationValue{std::numeric_limits<double>::lowest()};

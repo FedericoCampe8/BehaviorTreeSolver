@@ -29,7 +29,9 @@ class SYS_EXPORT_CLASS MDD {
     /// Build the MDD by separation
     Separation = 0,
     /// Build the MDD using the Top-Down approach
-    TopDown
+    TopDown,
+    /// Build the MDD by filtering and splitting a relaxed MDD
+    Filtering
   };
 
   /// List of all the (pointers to the) nodes in an MDD layer
@@ -43,35 +45,17 @@ class SYS_EXPORT_CLASS MDD {
  public:
   MDD(MDDProblem::SPtr problem, int32_t width);
 
-  /// Builds the relaxed MDD w.r.t. the given problem.
-  /// Given n variables it builds the MDD as
-  ///
-  ///  [ r ]           L_1
-  ///    |     Dx_1
-  ///  [u_1]           L_2
-  ///    |
-  ///   ...
-  ///    |     Dx_j
-  ///  [u_j]           L_j+1
-  ///    |     Dx_j+1
-  ///   ...
-  ///    |     Dx_n
-  ///  [ t ]           L_n+1
-  ///
-  /// Where r is the root node, t is the terminal node
-  /// and each edge is a parallel edge with values equal to the
-  /// domain of the correspondent variable.
-  /// @note in the MDD papers they start counting layers from 1.
-  /// Returns the pointer to the root node
-  Node* buildRelaxedMDD();
+  /// Returns the root of the current MDD
+  Node* getMDD() const noexcept { return pRootNode; }
 
-  /// Enforces the constraints of the problem onto the given (relaxed) MDD
-  void enforceConstraints(Node* relaxedMDD, MDDConstructionAlgorithm algorithmType);
+  /// Enforces the constraints of the problem onto the internal MDD
+  void enforceConstraints(MDDConstructionAlgorithm algorithmType);
 
-  const MDDLayersList& getNodesPerLayer() const noexcept
-  {
-    return pNodesPerLayer;
-  }
+  /// Returns all layers and nodes
+  const MDDLayersList& getNodesPerLayer() const noexcept { return pNodesPerLayer; }
+
+  /// Returns the path with maximum value from root to terminal node
+  std::vector<Edge*> maximize();
 
 private:
   /// Max width of the MDD
@@ -95,11 +79,42 @@ private:
   /// Expands vertically the given node to build a relaxed MDD
   Node* expandNode(Node* node);
 
+  /// Builds the relaxed MDD w.r.t. the given problem.
+  /// Given n variables it builds the MDD as
+  ///
+  ///  [ r ]           L_1
+  ///    |     Dx_1
+  ///  [u_1]           L_2
+  ///    |
+  ///   ...
+  ///    |     Dx_j
+  ///  [u_j]           L_j+1
+  ///    |     Dx_j+1
+  ///   ...
+  ///    |     Dx_n
+  ///  [ t ]           L_n+1
+  ///
+  /// Where r is the root node, t is the terminal node
+  /// and each edge is a parallel edge with values equal to the
+  /// domain of the correspondent variable.
+  /// @note in the MDD papers they start counting layers from 1.
+  /// Returns the pointer to the root node
+  Node* buildRelaxedMDD();
+
+  /// Builds, sets and returns the root of the MDD
+  Node* buildRootMDD();
+
   /// Runs the separation algorithm on the given MDD w.r.t. the constraint in the problem
   void runSeparationProcedure(Node* root);
 
+  /// Runs the separation algorithm on the specific constraint
+  void runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con);
+
   /// Runs the top-down algorithm on the given MDD w.r.t. the constraint in the problem
   void runTopDownProcedure(Node* root);
+
+  /// Runs the filtering algorithm on the given MDD w.r.t. the constraint in the problem
+  void runFilteringProcedure(Node* root);
 };
 
 }  // namespace mdd

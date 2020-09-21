@@ -55,7 +55,7 @@ bool AllDifferentState::isInfeasible() const noexcept
   return pElementList.empty();
 }
 
-DPState::SPtr AllDifferentState::next(int32_t domainElement) const noexcept
+DPState::SPtr AllDifferentState::next(int64_t domainElement) const noexcept
 {
   auto state = std::make_shared<AllDifferentState>();
   if (std::find(pElementList.begin(), pElementList.end(), domainElement) == pElementList.end())
@@ -66,7 +66,7 @@ DPState::SPtr AllDifferentState::next(int32_t domainElement) const noexcept
   return state;
 }
 
-double AllDifferentState::cost(int32_t domainElement) const noexcept
+double AllDifferentState::cost(int64_t domainElement) const noexcept
 {
   return static_cast<double>(domainElement);
 }
@@ -108,7 +108,32 @@ void AllDifferent::enforceConstraint(Node* node) const
     throw std::invalid_argument("AllDifferent - enforceConstraint: empty pointer to the node");
   }
 
-  // TODO port implementation here
+  // Find all children nodes
+  std::vector<Node*> children;
+  children.reserve(node->getOutEdges().size());
+
+  // Use a set for quick lookup to avoid duplicate nodes
+  spp::sparse_hash_set<uint32_t> uniqueNodes;
+  for (auto edge : node->getOutEdges())
+  {
+    auto nextNode = edge->getHead();
+
+    // Check that the node hasn't already been added
+    if ((uniqueNodes.find(nextNode->getUniqueId()) == uniqueNodes.end()) &&
+            (!nextNode->isLeaf()))
+    {
+      uniqueNodes.insert(nextNode->getUniqueId());
+      children.push_back(nextNode);
+    }
+  }
+
+  // Enforce all diff contraint by splitting nodes
+  for (int nodeIdx{0}; nodeIdx < static_cast<int>(children.size()); ++nodeIdx)
+  {
+    auto nextNode = children.at(nodeIdx);
+    //std::vector<int>* available_values_tail = node->get_values();
+    //std::vector<int>* available_values_head = next_node->get_values();
+  }
 }
 
 };

@@ -32,12 +32,12 @@ class SYS_EXPORT_STRUCT DPState {
 
   /// Returns the next state reachable from this state given "domainElement".
   /// Returns self by default
-  virtual DPState::SPtr next(int32_t domainElement) const noexcept;
+  virtual DPState::SPtr next(int64_t domainElement) const noexcept;
 
   /// Returns the cost of going to next state from this state
   /// given "domainElement".
   /// Returns the value of the element by default
-  virtual double cost(int32_t domainElement) const noexcept;
+  virtual double cost(int64_t domainElement) const noexcept;
 
   /// Returns whether or not this
   virtual bool isInfeasible() const noexcept;

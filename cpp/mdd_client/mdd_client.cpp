@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "mdd_optimization/all_different.hpp"
 #include "mdd_optimization/mdd.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
 #include "mdd_optimization/variable.hpp"
@@ -30,16 +31,34 @@ void runMDDOpt()
     problem->addVariable(std::make_shared<Variable>(idx, idx, 1, maxVars));
   }
 
+  // Create the constraint
+  auto allDiff = std::make_shared<AllDifferent>();
+  allDiff->setScope(problem->getVariables());
+  problem->addConstraint(allDiff);
+
   // Create the MDD
   int32_t width{10};
   MDD mdd(problem, width);
 
   tools::Timer timer;
 
-  // Build the relaxed MDD
-  mdd.buildRelaxedMDD();
+  // Enforce all the constraints on the MDD
+  //MDD::MDDConstructionAlgorithm::Separation
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::TopDown);
+  std::cout << "Wallclock time enforce constraints (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
 
-  std::cout << "Wallclock time (msec.): " << timer.getWallClockTimeMsec() << std::endl;
+  timer.reset();
+  timer.start();
+  auto solution = mdd.maximize();
+  for (int idx = 0; idx < solution.size(); idx++)
+  {
+      auto edge = solution[idx];
+      std::cout << edge->getTail()->getLayer() << " - " << edge->getHead()->getLayer() << ": " <<
+              edge->getValue() << std::endl;
+  }
+  std::cout << "Wallclock time solution (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
 }
 
 }  // namespace
