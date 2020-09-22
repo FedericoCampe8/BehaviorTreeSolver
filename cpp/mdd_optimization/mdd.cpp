@@ -749,16 +749,17 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
 void MDD::runFilteringProcedure(Node* node)
 {
   // Initialize all node domains
-  for (auto& layer : pNodesPerLayer)
+  auto totLayers = static_cast<uint32_t>(pProblem->getVariables().size());
+  for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)
   {
-    for (auto node : layer)
+    for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
     {
+      auto node = pNodesPerLayer.at(layerIdx).at(nodeIdx);
       node->initializeNodeDomain();
     }
   }
 
   // Enforce all constraints
-  auto totLayers = static_cast<uint32_t>(pProblem->getVariables().size());
   for (auto& con : pProblem->getConstraints())
   {
     for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)

@@ -275,9 +275,11 @@ void AllDifferent::enforceConstraint(Node* node, Arena* arena,
         newNode->initializeNodeDomain();
         auto newAvailableValues = newNode->getValuesMutable();
 
-        // TODO check the below, I (Federico) think that it shouldn't be the index "position".
-        // In other words, I believe we should remove "conflictingValue" from the domain
-        newAvailableValues->erase(newAvailableValues->begin() + position);
+        auto itNonAdmissibleValue = std::find(newAvailableValues->begin(),
+                                              newAvailableValues->end(),
+                                              conflictingValue);
+        assert(itNonAdmissibleValue != newAvailableValues->end());
+        newAvailableValues->erase(itNonAdmissibleValue);
 
         // If new node has no available values, then it is infeasible so do not add it to the graph
         if (newAvailableValues->size() > 0)

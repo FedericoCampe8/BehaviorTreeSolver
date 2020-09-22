@@ -26,7 +26,7 @@ void runMDDOpt()
   auto problem = std::make_shared<MDDProblem>();
 
   // Add the list of variables
-  int32_t maxVars{10};
+  int32_t maxVars{3};
   for (int idx{0}; idx < maxVars; ++idx)
   {
     problem->addVariable(std::make_shared<Variable>(idx, idx, 1, maxVars));
