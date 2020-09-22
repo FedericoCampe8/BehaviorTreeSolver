@@ -12,7 +12,7 @@ Variable::Variable(uint32_t id, uint32_t layer, int64_t lowerBound, int64_t uppe
   pLowerBound(lowerBound),
   pUpperBound(upperBound)
 {
-  if (pLowerBound > pLowerBound)
+  if (pLowerBound > pUpperBound)
   {
     throw std::invalid_argument("Variable - invalid bounds");
   }

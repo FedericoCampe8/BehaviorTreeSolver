@@ -69,7 +69,8 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
 
    /// Enforces this constraint on the given MDD node
    void enforceConstraint(Node* node, Arena* arena,
-                          std::vector<std::vector<Node*>>& mddRepresentation) const override;
+                          std::vector<std::vector<Node*>>& mddRepresentation,
+                          std::vector<Node*>& newNodesList) const override;
 
    /// Applies some heuristics to select a subset of nodes in the given layer to merge
    std::vector<Node*> mergeNodeSelect(

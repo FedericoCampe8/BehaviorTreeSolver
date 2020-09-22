@@ -38,9 +38,18 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
    /// Merges the given list of nodes and returns the representative merged node
    virtual Node* mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const noexcept = 0;
 
-   /// Enforces this constraint on the given MDD node
+   /**
+    * \brief Enforces this constraint on the given MDD node.
+    * \arg node: the node on which to enforce this constraint
+    * \arg arena: node and edge builder
+    * \arg mddRepresentation: full MDD representation (layer by layer)
+    * \arg newNodesList: list of all the new nodes created on the same level
+    */
+   ///
+   ///
    virtual void enforceConstraint(Node* node, Arena* arena,
-                                  std::vector<std::vector<Node*>>& mddRepresentation) const = 0;
+                                  std::vector<std::vector<Node*>>& mddRepresentation,
+                                  std::vector<Node*>& newNodesList) const = 0;
 
    /// Returns the initial state of the DP transformation chain
    virtual DPState::SPtr getInitialDPState() const noexcept = 0;

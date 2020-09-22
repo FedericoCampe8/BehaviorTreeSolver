@@ -1,8 +1,11 @@
 #include "mdd_optimization/all_different.hpp"
 
 #include <cassert>
+#include <iostream>
 #include <stdexcept>  // for std::invalid_argument
 #include <utility>    // for std::move
+
+// #define DEBUG
 
 namespace {
 constexpr int32_t kDefaultBitmapSize{32};
@@ -200,7 +203,8 @@ DPState::SPtr AllDifferent::getInitialDPState() const noexcept
 }
 
 void AllDifferent::enforceConstraint(Node* node, Arena* arena,
-                                     std::vector<std::vector<Node*>>& mddRepresentation) const
+                                     std::vector<std::vector<Node*>>& mddRepresentation,
+                                     std::vector<Node*>& newNodesList) const
 {
   if (node == nullptr)
   {
@@ -232,79 +236,164 @@ void AllDifferent::enforceConstraint(Node* node, Arena* arena,
   }
 
   // Enforce AllDifferent constraint by splitting nodes
+#ifdef DEBUG
+  std::cout << "check nodes (num) " << children.size() << std::endl;
+#endif
+
   for (int nodeIdx{0}; nodeIdx < static_cast<int>(children.size()); ++nodeIdx)
   {
     auto nextNode = children.at(nodeIdx);
     const auto& availableValuesTail = node->getValues();
     auto availableValuesHead = nextNode->getValuesMutable();
-    std::vector<int64_t> conflictingValues;
+
+#ifdef DEBUG
+    std::cout << "Check for " << availableValuesTail.size() << " values\n";
+#endif
 
     // Find all conflicting values
+    std::vector<int64_t> conflictingValues;
     for (auto val : availableValuesTail)
     {
       if (std::find(availableValuesHead->begin(), availableValuesHead->end(), val) !=
               availableValuesHead->end())
       {
+
+#ifdef DEBUG
+        std::cout << "Value is conflicting " << val << std::endl;
+#endif
         conflictingValues.push_back(val);
       }
     }
 
+#ifdef DEBUG
+    std::cout << "check edges (num) " << node->getOutEdges().size() << std::endl;
+#endif
+
     for (auto edge : node->getOutEdges())
     {
-      int64_t conflictingValue;
-      int position = -1;
-
       // If outgoing edge is in conflicting values find its position
+      bool foundConflictingEdge{false};
+      int64_t conflictingValue;
       for (int idx{0}; idx < static_cast<int>(conflictingValues.size()); ++idx)
       {
         if (conflictingValues.at(idx) == edge->getValue())
         {
+
+#ifdef DEBUG
+          std::cout << "Found a conflicting edge " << edge->getValue() << std::endl;
+#endif
+
           conflictingValue = edge->getValue();
-          position = idx;
+          foundConflictingEdge = true;
           break;
         }
       }
 
-      if (position > -1)
+      if (foundConflictingEdge)
       {
-        // Edge points to conflicting value, so split node
-        auto newNode = arena->buildNode(nextNode->getLayer(), nextNode->getVariable());
+        // BUG FIX: the domain of newNode was initialized with the full domain of the variable:
+        //      newNode->initializeNodeDomain();
+        // I believe that it should be initialized with the restricted domain of nextVariable
+        auto newReducedDomain = *(node->getValuesMutable());
 
-        // TODO check if it is possible to "build" the domain rather than copying the entire
-        // variable domain and removing values
-        newNode->initializeNodeDomain();
-        auto newAvailableValues = newNode->getValuesMutable();
+        // Remove the non admissible value
+        auto iterValueNotGood = std::find(newReducedDomain.begin(),
+                                          newReducedDomain.end(),
+                                          conflictingValue);
+        assert(iterValueNotGood != newReducedDomain.end());
+        newReducedDomain.erase(iterValueNotGood);
 
-        auto itNonAdmissibleValue = std::find(newAvailableValues->begin(),
-                                              newAvailableValues->end(),
-                                              conflictingValue);
-        assert(itNonAdmissibleValue != newAvailableValues->end());
-        newAvailableValues->erase(itNonAdmissibleValue);
-
-        // If new node has no available values, then it is infeasible so do not add it to the graph
-        if (newAvailableValues->size() > 0)
+        // BUG FIX: before creating a new node, check if the domain/values that would go into
+        // the newNode is already present in another node on the same level.
+        // If so, simply connect the edges
+        Node* mappedNode{nullptr};
+        for (auto newNode : newNodesList)
         {
-          mddRepresentation[nextNode->getLayer()].push_back(newNode);
+          // Note: the following works only on ordered list of values.
+          // TODO move from lists to sets/bitsets/ranges
+          if (newNode->getValues() == newReducedDomain)
+          {
+            mappedNode = newNode;
+            break;
+          }
+        }
 
-          // Move incoming conflicting edge from next node to splitting node
+        if (mappedNode != nullptr)
+        {
+          // A match is found!
+          // Connect the edge to the mapped node and continue
+          // Move incoming conflicting edge from next node to the mapped node
           nextNode->removeInEdgeGivenPtr(edge);
 
           // Set the in edge on the new node.
           // Note: the head on the edge is set automatically
-          newNode->addInEdge(edge);
+          mappedNode->addInEdge(edge);
+        }
+        else
+        {
+          // Edge points to conflicting value, so split node
+          auto newNode = arena->buildNode(nextNode->getLayer(), nextNode->getVariable());
 
-          // Copy outgoing edges from next node to splitting node
-          for (auto outEdge : nextNode->getOutEdges())
+          // TODO check if it is possible to "build" the domain rather than copying the entire
+          // variable domain and removing values
+          auto newAvailableValues = newNode->getValuesMutable();
+          *newAvailableValues = newReducedDomain;
+
+          // If new node has no available values,
+          // then it is infeasible so do not add it to the graph
+          if (newAvailableValues->size() > 0)
           {
-            if (outEdge->getValue() != conflictingValue)
+            // Add the node to the current level
+            mddRepresentation[nextNode->getLayer()].push_back(newNode);
+
+            // Store the new node in the newNodesList for next iteration
+            newNodesList.push_back(newNode);
+
+            // Move incoming conflicting edge from next node to splitting node
+            nextNode->removeInEdgeGivenPtr(edge);
+
+            // Set the in edge on the new node.
+            // Note: the head on the edge is set automatically
+            newNode->addInEdge(edge);
+
+            // Copy outgoing edges from next node to splitting node
+            for (auto outEdge : nextNode->getOutEdges())
             {
-              // Build the edge.
-              // Note: the constructor will automatically set the pointers to the nodes
-              arena->buildEdge(newNode, outEdge->getHead(),
-                               outEdge->getDomainLowerBound(),
-                               outEdge->getDomainUpperBound());
+              // Add an outgoing edge ONLY IF its correspondent label can be taken from the
+              // domain of the curren node
+              const auto outValue = outEdge->getValue();
+              if (std::find(newAvailableValues->begin(), newAvailableValues->end(), outValue) !=
+                      newAvailableValues->end())
+              {
+                // Build the edge.
+                // Note: the constructor will automatically set the pointers to the nodes
+                arena->buildEdge(newNode, outEdge->getHead(),
+                                 outEdge->getDomainLowerBound(),
+                                 outEdge->getDomainUpperBound());
+              }
             }
           }
+        }
+
+        // If nextNode doesn't have any incoming edge, it can be removed
+        // from the layer since it is not reachable anymore
+        if (nextNode->getInEdges().empty())
+        {
+          // Remove all the outgoing edges
+          Node::EdgeList outEdges = nextNode->getOutEdges();
+          for (auto outEdge : outEdges)
+          {
+            outEdge->removeEdgeFromNodes();
+            arena->deleteEdge(outEdge->getUniqueId());
+          }
+
+          // Remove the node from the layer
+          auto& nextNodeLayer = mddRepresentation[nextNode->getLayer()];
+          auto itNode = std::find(nextNodeLayer.begin(), nextNodeLayer.end(), nextNode);
+
+          assert(itNode != nextNodeLayer.end());
+          nextNodeLayer.erase(itNode);
+          arena->deleteNode(nextNode->getUniqueId());
         }
       }  // position > -1
     }  // for all out edges
