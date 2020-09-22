@@ -39,7 +39,8 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
    virtual Node* mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const noexcept = 0;
 
    /// Enforces this constraint on the given MDD node
-   virtual void enforceConstraint(Node* node) const = 0;
+   virtual void enforceConstraint(Node* node, Arena* arena,
+                                  std::vector<std::vector<Node*>>& mddRepresentation) const = 0;
 
    /// Returns the initial state of the DP transformation chain
    virtual DPState::SPtr getInitialDPState() const noexcept = 0;

@@ -199,11 +199,17 @@ DPState::SPtr AllDifferent::getInitialDPState() const noexcept
   return pInitialDPState;
 }
 
-void AllDifferent::enforceConstraint(Node* node) const
+void AllDifferent::enforceConstraint(Node* node, Arena* arena,
+                                     std::vector<std::vector<Node*>>& mddRepresentation) const
 {
   if (node == nullptr)
   {
     throw std::invalid_argument("AllDifferent - enforceConstraint: empty pointer to the node");
+  }
+
+  if (arena == nullptr)
+  {
+    throw std::invalid_argument("AllDifferent - enforceConstraint: empty pointer to the arena");
   }
 
   // Find all children nodes of the current node
@@ -229,9 +235,78 @@ void AllDifferent::enforceConstraint(Node* node) const
   for (int nodeIdx{0}; nodeIdx < static_cast<int>(children.size()); ++nodeIdx)
   {
     auto nextNode = children.at(nodeIdx);
-    //std::vector<int>* available_values_tail = node->get_values();
-    //std::vector<int>* available_values_head = next_node->get_values();
-  }
+    const auto& availableValuesTail = node->getValues();
+    auto availableValuesHead = nextNode->getValuesMutable();
+    std::vector<int64_t> conflictingValues;
+
+    // Find all conflicting values
+    for (auto val : availableValuesTail)
+    {
+      if (std::find(availableValuesHead->begin(), availableValuesHead->end(), val) !=
+              availableValuesHead->end())
+      {
+        conflictingValues.push_back(val);
+      }
+    }
+
+    for (auto edge : node->getOutEdges())
+    {
+      int64_t conflictingValue;
+      int position = -1;
+
+      // If outgoing edge is in conflicting values find its position
+      for (int idx{0}; idx < static_cast<int>(conflictingValues.size()); ++idx)
+      {
+        if (conflictingValues.at(idx) == edge->getValue())
+        {
+          conflictingValue = edge->getValue();
+          position = idx;
+          break;
+        }
+      }
+
+      if (position > -1)
+      {
+        // Edge points to conflicting value, so split node
+        auto newNode = arena->buildNode(nextNode->getLayer(), nextNode->getVariable());
+
+        // TODO check if it is possible to "build" the domain rather than copying the entire
+        // variable domain and removing values
+        newNode->initializeNodeDomain();
+        auto newAvailableValues = newNode->getValuesMutable();
+
+        // TODO check the below, I (Federico) think that it shouldn't be the index "position".
+        // In other words, I believe we should remove "conflictingValue" from the domain
+        newAvailableValues->erase(newAvailableValues->begin() + position);
+
+        // If new node has no available values, then it is infeasible so do not add it to the graph
+        if (newAvailableValues->size() > 0)
+        {
+          mddRepresentation[nextNode->getLayer()].push_back(newNode);
+
+          // Move incoming conflicting edge from next node to splitting node
+          nextNode->removeInEdgeGivenPtr(edge);
+
+          // Set the in edge on the new node.
+          // Note: the head on the edge is set automatically
+          newNode->addInEdge(edge);
+
+          // Copy outgoing edges from next node to splitting node
+          for (auto outEdge : nextNode->getOutEdges())
+          {
+            if (outEdge->getValue() != conflictingValue)
+            {
+              // Build the edge.
+              // Note: the constructor will automatically set the pointers to the nodes
+              arena->buildEdge(newNode, outEdge->getHead(),
+                               outEdge->getDomainLowerBound(),
+                               outEdge->getDomainUpperBound());
+            }
+          }
+        }
+      }  // position > -1
+    }  // for all out edges
+  }  // for all nodes
 }
 
 };

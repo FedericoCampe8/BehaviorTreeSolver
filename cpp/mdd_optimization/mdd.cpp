@@ -748,6 +748,15 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
 
 void MDD::runFilteringProcedure(Node* node)
 {
+  // Initialize all node domains
+  for (auto& layer : pNodesPerLayer)
+  {
+    for (auto node : layer)
+    {
+      node->initializeNodeDomain();
+    }
+  }
+
   // Enforce all constraints
   auto totLayers = static_cast<uint32_t>(pProblem->getVariables().size());
   for (auto& con : pProblem->getConstraints())
@@ -757,7 +766,7 @@ void MDD::runFilteringProcedure(Node* node)
       for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
       {
         auto node = pNodesPerLayer.at(layerIdx).at(nodeIdx);
-        con->enforceConstraint(node);
+        con->enforceConstraint(node, pArena.get(), pNodesPerLayer);
       }
     }
   }

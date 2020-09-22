@@ -36,14 +36,17 @@ class SYS_EXPORT_CLASS Node {
   /// Destructor: removes this node from the edges
   ~Node();
 
-  const std::vector<int64_t>& getValues() const noexcept {
-    return pVariable->getAvailableValues();
-  }
+  /// Initialized the domain of this node based on its variable
+  void initializeNodeDomain();
+
+  /// Returns this node's values
+  const std::vector<int64_t>& getValues() const noexcept { return pNodeDomain; }
+
+  /// Returns the pointer to this node's values
+  std::vector<int64_t>* getValuesMutable() noexcept { return &pNodeDomain; }
 
   /// Returns this node's layer
-  uint32_t getLayer() const noexcept {
-    return pLayer;
-  }
+  uint32_t getLayer() const noexcept { return pLayer; }
 
   /// Returns this node's unique identifier
   uint32_t getUniqueId() const noexcept { return pNodeId; }
@@ -147,6 +150,10 @@ class SYS_EXPORT_CLASS Node {
   spp::sparse_hash_set<uint32_t> pInEdgeSet;
   spp::sparse_hash_set<uint32_t> pOutEdgeSet;
 
+  /// Domain/state paired with this node.
+  /// This is used on filtering compilation
+  std::vector<int64_t> pNodeDomain;
+
   /// Flag indicating whether or not the original DP state has been changed
   bool pIsDPStateChanged{false};
 
@@ -159,6 +166,7 @@ class SYS_EXPORT_CLASS Node {
   /// Optimization value on this node
   double pOptimizationValue{std::numeric_limits<double>::lowest()};
 
+  /// Selected edge on solution
   Edge* pSelectedEdge{nullptr};
 };
 

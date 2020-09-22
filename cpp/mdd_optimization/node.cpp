@@ -40,6 +40,16 @@ Node::~Node()
   }
 }
 
+void Node::initializeNodeDomain()
+{
+  if (pVariable == nullptr)
+  {
+    throw std::runtime_error("Node - getValues: empty pointer to the variable");
+  }
+
+  pNodeDomain = pVariable->getAvailableValues();
+}
+
 void Node::addInEdge(Edge* edge)
 {
   if (edge == nullptr)
