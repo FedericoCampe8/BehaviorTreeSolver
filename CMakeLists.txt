@@ -16,21 +16,17 @@ set(CUDA_MINIMUM_REQUIRED_VERSION 10.1)
 
 # Add headers
 set(HEADERS
-    "include/mdd/edge.hpp"
-    "include/mdd/mdd.hpp"
-    "include/mdd/node.hpp"
-    "include/problem/problem.hpp"
-    "include/problem/variable.hpp"
+        include/MDD/DAG.hh
+        include/MDD/Layer.hh
+        include/MDD/Node.hh
+        include/MDD/Edge.hh
 )
 
 #Add sources
 set(SOURCES
-    "src/main.cpp"
-    "src/mdd/edge.cpp"
-    "src/mdd/mdd.cpp"
-    "src/mdd/node.cpp"
-    "src/problem/problem.cpp"
-    "src/problem/variable.cpp"
+        src/Main.cc
+        src/mdd/DAG.cc
+        src/mdd/Layer.cc
 )
 
 #Add include directory
