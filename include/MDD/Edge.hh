@@ -1,6 +1,13 @@
 #pragma once
 
+#include <CustomTemplateLibrary/CTL.hh>
+
 class Edge
 {
-    int i;
+    public:
+        uint const to;
+        int const value;
+
+    public:
+        Edge(uint to, int value);
 };

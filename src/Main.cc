@@ -1,20 +1,24 @@
 #include <cstdlib>
-#include <new>
-#include <iostream>
-#include <unistd.h>
-#include <MDD/DAG.hh>
+#include <vector>
 
-using namespace std;
+#include <MDD/MDD.hh>
+#include <Problem/Variable.hh>
+
 
 int main()
 {
-    int maxWidth = 500000;
-    int varsCount = 500000;
 
-    DAG* dag = static_cast<DAG*>(malloc(DAG::getMemSize(maxWidth,varsCount)));
-    new (dag) DAG(maxWidth,varsCount);
+    // Variables
+    unsigned int varsCount = 10;
+    Variable v({0,10});
+    std::vector<Variable> vars(varsCount, v);
 
-    sleep(3);
+    // MDD
+    unsigned int maxWidth = 10;
+    MDD* dag = static_cast<MDD*>(malloc(MDD::getMemSize(vars)));
+    new (dag) MDD(maxWidth, vars);
+
+    dag->toGraphViz();
 
     return EXIT_SUCCESS;
 }

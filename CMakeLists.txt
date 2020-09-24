@@ -16,18 +16,26 @@ set(CUDA_MINIMUM_REQUIRED_VERSION 10.1)
 
 # Add headers
 set(HEADERS
-        include/MDD/DAG.hh
-        include/MDD/Layer.hh
-        include/MDD/Node.hh
-        include/MDD/Edge.hh
-)
+    include/CustomTemplateLibrary/CTL.hh
+    include/CustomTemplateLibrary/Vector.hh
+    include/CustomTemplateLibrary/Types.hh
+    include/DP/AllDifferent.hh
+    include/MDD/MDD.hh
+    include/MDD/Edge.hh
+    include/MDD/Layer.hh
+    include/MDD/Node.hh
+    include/Problem/Variable.hh
+    )
 
 #Add sources
 set(SOURCES
         src/Main.cc
-        src/mdd/DAG.cc
-        src/mdd/Layer.cc
-)
+        src/MDD/MDD.cc
+        src/MDD/Edge.cc
+        src/MDD/Layer.cc
+        src/MDD/Node.cc
+        src/Problem/Variable.cc
+        src/DP/AllDifferent.cc)
 
 #Add include directory
 include_directories("include")

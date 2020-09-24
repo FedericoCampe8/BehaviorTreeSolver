@@ -1,6 +1,16 @@
 #pragma once
 
+#include <CustomTemplateLibrary/CTL.hh>
+
 class Node
 {
-     int i;
+
+    public:
+        uint ID;
+
+    private:
+        static int nextID;
+
+    public:
+        Node();
 };
