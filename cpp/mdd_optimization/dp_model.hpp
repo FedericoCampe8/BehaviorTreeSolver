@@ -8,6 +8,7 @@
 
 #include <cstdint>  // for uint32_t
 #include <memory>   // for std::shared_ptr
+#include <string>
 
 #include "system/system_export_defs.hpp"
 

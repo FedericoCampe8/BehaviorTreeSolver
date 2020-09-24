@@ -57,7 +57,7 @@ class SYS_EXPORT_CLASS AllDifferent : public BTConstraint {
    AllDifferent(BehaviorTreeArena* arena, const std::string& name="AllDifferent");
 
    /// Returns the initial DP state
-   DPState::SPtr getInitialDPState() const noexcept;
+   DPState::SPtr getInitialDPState() const noexcept override;
 
    bool isFeasible() const noexcept override { return true; }
 
