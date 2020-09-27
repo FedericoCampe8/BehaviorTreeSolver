@@ -110,7 +110,7 @@ class SYS_EXPORT_CLASS Node {
   }
 
   /// Return the path to node
-  const std::unordered_map< Edge*, std::vector< EdgeList > > getIncomingPaths() const noexcept { return pIncomingPathsForEdge; }
+  const std::unordered_map< uint32_t, std::vector< EdgeList > > getIncomingPaths() const noexcept { return pIncomingPathsForEdge; }
 
   /// Returns the (raw) pointer to the variable paired with this node
   Variable* getVariable() const noexcept { return pVariable; }
@@ -150,8 +150,8 @@ class SYS_EXPORT_CLASS Node {
   /// List of outgoing edges
   EdgeList pOutEdges;
 
-  /// Path from root to node
-  std::unordered_map< Edge*, std::vector< EdgeList > > pIncomingPathsForEdge;
+  /// Path from root to node. Keys are edge ids.
+  std::unordered_map< uint32_t, std::vector< EdgeList > > pIncomingPathsForEdge;
 
   /// Sets storing incoming/outgoing edges for quick lookup
   spp::sparse_hash_set<uint32_t> pInEdgeSet;

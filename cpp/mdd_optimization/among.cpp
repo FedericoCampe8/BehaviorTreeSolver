@@ -201,10 +201,10 @@ Node* Among::mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const
 //   return pInitialDPState;
 // }
 
-int Among::getConstraintCountForPath( std::vector<Edge*> path )
+int Among::getConstraintCountForPath( Node::EdgeList path  ) const
 {
     int count = 0;
-    for (int edgeIdx = 0; edgeIdx < path.size(), edgeIdx++ ) {
+    for (int edgeIdx = 0; edgeIdx < path.size(); edgeIdx++ ) {
         Edge* edgeInPath = path[edgeIdx];
 
         if (std::count( getScope().begin(), getScope().end(), edgeInPath->getTail()->getVariable()) ) {
@@ -214,31 +214,31 @@ int Among::getConstraintCountForPath( std::vector<Edge*> path )
     return count;
 }
 
-void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) 
+void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
 {
   for (int layer = 0; layer < mddRepresentation.size(); layer++) {
       bool layerInConstraint = false;
       for (auto var : getScope()) {
           if (mddRepresentation[layer][0]->getVariable()->getId() == var->getId()) {
             layerInConstraint = true;
-            break
+            break;
           }
       }
 
       if (layerInConstraint) {
           std::unordered_map< int, Node* > nodeByConstraintCount;
 
-          for (int nodeIdx = 0; nodeIdx < mddRepresentation[layer].size(); nodeIxd++) {
+          for (int nodeIdx = 0; nodeIdx < mddRepresentation[layer].size(); nodeIdx++) {
               Node* node = mddRepresentation[layer][nodeIdx];
+              std::unordered_map<uint32_t, std::vector<Node::EdgeList>> nodeInPaths = node->getIncomingPaths();
 
               // First split and merge nodes according to their paths (state of constraint)
-              for (auto x: node->getIncomingPaths()) {
-                  Edge* inEdge = x.first;
-                  std::vector<Edge*> path = node->getIncomingPaths()[inEdge][0];
+              for (auto inEdge: node->getInEdges()) {
+                  Node::EdgeList path = nodeInPaths[inEdge->getUniqueId()][0];
 
                   // Count how many occurrences in a given path
                   // If different paths leads to same number of occurrences, then paths lead to same nodes and should be merged
-                  // All pathto same node should lead to the same count, so use the first one.
+                  // All path to same node should lead to the same count, so use the first one.
                   int count = getConstraintCountForPath(path);
 
 
@@ -250,7 +250,7 @@ void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*
                     // Create new node for incoming edge
                     Node* newNode = arena->buildNode(node->getLayer(), node->getVariable());
                     nodeByConstraintCount[count] = newNode;
-                    edge->setHead( newNode );
+                    inEdge->setHead( newNode );
 
                     // Remove invalid values from new node
                     auto nodeDomain = *(node->getValuesMutable());
@@ -261,7 +261,7 @@ void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*
                       
                       if ( iter == nodeDomain.end()) {
                           auto newIter = std::find(newNodeDomain.begin(), newNodeDomain.end(), newNodeVal);
-                          newNodeDomain->erase(newIter);
+                          newNodeDomain.erase(newIter);
                       }
                     }
 
@@ -278,19 +278,22 @@ void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*
           // Splitting and merging nodes for current layer should be consistent at this point.
           //---------------------------------------------------------------------------------//
 
-          for (int nodeIdx = 0; nodeIdx < mddRepresentation[layer].size(); nodeIxd++) {
+          for (int nodeIdx = 0; nodeIdx < mddRepresentation[layer].size(); nodeIdx++) {
               Node* node = mddRepresentation[layer][nodeIdx];
               for (auto outEdge : node->getOutEdges()) {
                   // If edge could create conflict, split into separate node
                   if ( std::count(pConstraintDomain.begin(), pConstraintDomain.end(), outEdge->getValue()) ) {
-                    Node* head = edge->getHead();
+                    Node* head = outEdge->getHead();
+                    std::unordered_map<uint32_t, std::vector<Node::EdgeList>> headInPaths = head->getIncomingPaths();
 
-                    int count = getConstraintCountForPath( head->getIncomingPaths()[0] );
+                    Node::EdgeList path = headInPaths[ head->getInEdges()[0]->getUniqueId() ][0];
+                    int count = getConstraintCountForPath( path );
 
                     // If reached upper bound of constraint, this edge is no longer valid.
                     if (count >= pUpperBound) {
-                        edge->removeEdgeFromNodes();
-                        auto iter = std::find(nodeDomain.begin(), nodeDomain.end(), newNodeVal);
+                        outEdge->removeEdgeFromNodes();
+                        auto nodeDomain = *(node->getValuesMutable());
+                        auto iter = std::find(nodeDomain.begin(), nodeDomain.end(), outEdge->getValue());
                         if ( iter != nodeDomain.end()) {
                             nodeDomain.erase(iter);
                         }
@@ -302,7 +305,7 @@ void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*
                     } else {
 
                         Node* newNode = arena->buildNode(head->getLayer(), head->getVariable());
-                        edge->setHead( newNode );
+                        outEdge->setHead( newNode );
 
                         // Remove invalid values from new node
                         auto nodeDomain = *(head->getValuesMutable());
@@ -313,7 +316,7 @@ void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*
                           
                           if ( iter == nodeDomain.end()) {
                               auto newIter = std::find(newNodeDomain.begin(), newNodeDomain.end(), newNodeVal);
-                              newNodeDomain->erase(newIter);
+                              newNodeDomain.erase(newIter);
                           }
                         }
 
@@ -323,7 +326,7 @@ void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*
                         }
 
                         // Add new node to the mdd representation
-                        mddRepresentation[nextNode->getLayer()].push_back(newNode);
+                        mddRepresentation[newNode->getLayer()].push_back(newNode);
                     }
 
                   }
@@ -335,7 +338,7 @@ void Among::enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*
 
 
 
-void Among::enforceConstraintBottomUp(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation)
+void Among::enforceConstraintBottomUp(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
 {
   int lastNodeLayer =  mddRepresentation.size()-1;
 
@@ -343,7 +346,7 @@ void Among::enforceConstraintBottomUp(Arena* arena, std::vector<std::vector<Node
 
   // Go through each node in the last layer
   for ( int nodeIdx = 0; nodeIdx < mddRepresentation[lastNodeLayer].size(); nodeIdx++ ) {
-      Node* node = mddRepresentation[lastNodeLayer];
+      Node* node = mddRepresentation[lastNodeLayer][nodeIdx];
 
       std::unordered_map<int,int> countByValue;
       Edge* inEdge = node->getInEdges()[0];
@@ -351,24 +354,21 @@ void Among::enforceConstraintBottomUp(Arena* arena, std::vector<std::vector<Node
       // Check count in path
       // After top-down all paths to a node should lead to the same count. 
       // So I can use any path to count.
-      std::vector<Edge*> path = node->getIncomingPaths[inEdge][0];
-      for (int i = 0; i < path.size(); i++) {
-          Variable* var = path[i]->getHead()->getVariable();
-          int count = 0
-          if ( std::count( getScope().begin(), getScope().end(), var ) ) {
-              int value = path[i]->getValue();
-              if ( std::count( pConstraintDomain.begin(), pConstraintDomain.end(), value ) ) {
-                  count += 1;
-              } 
-          }
-      }
+      std::unordered_map<uint32_t, std::vector<Node::EdgeList>> inPaths = node->getIncomingPaths();
+      Node::EdgeList path = inPaths[inEdge->getUniqueId()][0];
+      int count = getConstraintCountForPath( path );
 
       // If count less than lower bound at last layer, only edges in constraint domain are possible
       // Assume that there is at least a feasible solution, otherwise leaf node will be disconnected from the rest of the graph.
       if (count < pLowerBound) {
         for (auto x : node->getOutEdges()) {
             if (std::count( pConstraintDomain.begin(), pConstraintDomain.end(), x->getValue()) == 0) {
-              x->removeEdgeFromNodes()
+              x->removeEdgeFromNodes();
+              auto nodeDomain = *(node->getValuesMutable());
+              auto iter = std::find(nodeDomain.begin(), nodeDomain.end(), x->getValue());
+              if ( iter != nodeDomain.end()) {
+                  nodeDomain.erase(iter);
+              }
           }
         }
         queue.push( node );

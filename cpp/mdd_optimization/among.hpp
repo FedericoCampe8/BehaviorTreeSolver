@@ -70,14 +70,14 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
 
    /// Enforces this constraint on the given MDD node
    void enforceConstraint(Node* node, Arena* arena,
-                          std::vector<std::vector<Node*>>& mddRepresentation,
+                          std::vector<std::vector<Node*>>& mddRepresentation, 
                           std::vector<Node*>& newNodesList) const override;
 
 
     // This constraint cannot be enforced only by looking at neighbors. We need a top-down and bottom-up pass
     //TODO Hacky way to use the common enforceConstraint method. Needs refactoring.
-    void enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation);
-    void enforceConstraintBottomUp(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation);
+    void enforceConstraintTopDown(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const ;
+    void enforceConstraintBottomUp(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const ;
     
 
    /// Applies some heuristics to select a subset of nodes in the given layer to merge
@@ -87,6 +87,9 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
 
    /// Merges the given list of nodes and returns the representative merged node
    Node* mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const noexcept override;
+
+   // Counts the number of occurrences of constraint values in path
+   int getConstraintCountForPath( std::vector<Edge*> path ) const;
 
 //    /// Returns the initial DP state
 //    DPState::SPtr getInitialDPState() const noexcept override;

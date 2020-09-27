@@ -80,7 +80,7 @@ void Node::addInEdge(Edge* edge)
     }
   }
 
-  pIncomingPathsForEdge[edge] = newIncomingPaths;
+  pIncomingPathsForEdge[edge->getUniqueId()] = newIncomingPaths;
 
 }
 
@@ -132,7 +132,7 @@ void Node::removeInEdgeGivenPtr(Edge* edge)
   edge->removeHead();
 
   // Remove paths from this edge
-  pIncomingPathsForEdge.erase( edge );
+  pIncomingPathsForEdge.erase( edge->getUniqueId() );
 }
 
 void Node::removeOutEdgeGivenPtr(Edge* edge)
