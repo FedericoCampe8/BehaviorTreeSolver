@@ -38,10 +38,11 @@ void runMDDOpt()
   allDiff->setScope(problem->getVariables());
   problem->addConstraint(allDiff);
 
-  Among* among = new Among();
+  auto among = std::make_shared<Among>();
   among->setScope(problem->getVariables());
   std::vector<int> amongDomain = {2,3,4,5};
   among->setParameters(amongDomain, 2, 4);
+  problem->addConstraint(among);
 
   // Create the MDD
   int32_t width{std::numeric_limits<int32_t>::max()};
