@@ -68,6 +68,20 @@ void Node::addInEdge(Edge* edge)
 
   // Set this node as the tail of the given edge
   edge->setHead(this);
+
+
+  // Keep track of all incoming paths
+  std::vector< EdgeList > newIncomingPaths;  
+  for (auto x : edge->getTail()->getIncomingPaths()) {
+    for (int i = 0; i < x.second.size(); i++) {
+      EdgeList* newPath = new EdgeList( x.second[i] );
+      newPath->push_back( edge );
+      newIncomingPaths.push_back( *newPath );
+    }
+  }
+
+  pIncomingPathsForEdge[edge] = newIncomingPaths;
+
 }
 
 void Node::addOutEdge(Edge* edge)
@@ -116,6 +130,9 @@ void Node::removeInEdgeGivenPtr(Edge* edge)
 
   // Update the edge
   edge->removeHead();
+
+  // Remove paths from this edge
+  pIncomingPathsForEdge.erase( edge );
 }
 
 void Node::removeOutEdgeGivenPtr(Edge* edge)

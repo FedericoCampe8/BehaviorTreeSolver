@@ -10,6 +10,7 @@
 #include <limits>   // for std::numeric_limits
 #include <memory>   // for std::unique_ptr
 #include <vector>
+#include <unordered_map>
 
 #include <sparsepp/spp.h>
 
@@ -108,6 +109,9 @@ class SYS_EXPORT_CLASS Node {
     return pOutEdges;
   }
 
+  /// Return the path to node
+  const std::unordered_map< Edge*, std::vector< EdgeList > > getIncomingPaths() const noexcept { return pIncomingPathsForEdge; }
+
   /// Returns the (raw) pointer to the variable paired with this node
   Variable* getVariable() const noexcept { return pVariable; }
 
@@ -145,6 +149,9 @@ class SYS_EXPORT_CLASS Node {
 
   /// List of outgoing edges
   EdgeList pOutEdges;
+
+  /// Path from root to node
+  std::unordered_map< Edge*, std::vector< EdgeList > > pIncomingPathsForEdge;
 
   /// Sets storing incoming/outgoing edges for quick lookup
   spp::sparse_hash_set<uint32_t> pInEdgeSet;
