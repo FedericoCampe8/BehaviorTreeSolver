@@ -207,9 +207,13 @@ int Among::getConstraintCountForPath( Node::EdgeList path  ) const
     for (int edgeIdx = 0; edgeIdx < path.size(); edgeIdx++ ) {
         Edge* edgeInPath = path[edgeIdx];
 
-        if (std::count( getScope().begin(), getScope().end(), edgeInPath->getTail()->getVariable()) ) {
-            count += 1; 
+        for (auto var : getScope()) {
+          if (var->getId() == edgeInPath->getTail()->getVariable()->getId()) {
+             count += 1;
+             break;
+          }
         }
+
     }
     return count;
 }
