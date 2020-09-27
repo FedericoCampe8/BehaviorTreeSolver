@@ -196,10 +196,10 @@ Node* Among::mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const
   return mergedNode;
 }
 
-// DPState::SPtr Among::getInitialDPState() const noexcept
-// {
-//   return pInitialDPState;
-// }
+DPState::SPtr Among::getInitialDPState() const noexcept
+{
+  return pInitialDPState;
+}
 
 int Among::getConstraintCountForPath( Node::EdgeList path  ) const
 {

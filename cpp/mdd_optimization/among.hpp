@@ -92,7 +92,7 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
    int getConstraintCountForPath( std::vector<Edge*> path ) const;
 
 //    /// Returns the initial DP state
-//    DPState::SPtr getInitialDPState() const noexcept override;
+   DPState::SPtr getInitialDPState() const noexcept override;
 
    /// Check feasibility of AllDifferent over the variables in its scope
    bool isFeasible() const noexcept override { return true; }
@@ -110,7 +110,7 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
       int pLowerBound;
       int pUpperBound;
 //    /// Initial state for the DP model for the AllDifferent constraint
-//    AmongState::SPtr pInitialDPState{nullptr};
+   AmongState::SPtr pInitialDPState{nullptr};
 
 };
 
