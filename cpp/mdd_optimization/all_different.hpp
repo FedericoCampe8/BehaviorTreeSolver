@@ -6,7 +6,7 @@
 
 #pragma once
 
-
+#include <cstdint>  // for int64_t
 #include <string>
 
 #include <sparsepp/spp.h>

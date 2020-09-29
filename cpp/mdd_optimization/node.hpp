@@ -24,6 +24,7 @@ namespace mdd {
 class SYS_EXPORT_CLASS Node {
  public:
   using EdgeList = std::vector<Edge*>;
+  using IncomingPathList = spp::sparse_hash_map<uint32_t, std::vector<EdgeList>>;
   using UPtr = std::unique_ptr<Node>;
   using SPtr = std::shared_ptr<Node>;
 
@@ -125,6 +126,9 @@ class SYS_EXPORT_CLASS Node {
   /// Returns the selected solution edge for this node
   Edge* getSelectedEdge() const noexcept { return pSelectedEdge; }
 
+  /// Return the path to node
+  const IncomingPathList& getIncomingPaths() const noexcept { return pIncomingPathsForEdge; }
+
  private:
    static uint32_t kNextID;
 
@@ -149,6 +153,9 @@ class SYS_EXPORT_CLASS Node {
   /// Sets storing incoming/outgoing edges for quick lookup
   spp::sparse_hash_set<uint32_t> pInEdgeSet;
   spp::sparse_hash_set<uint32_t> pOutEdgeSet;
+
+  /// Map of all paths from root to each incoming edge on this node
+  IncomingPathList pIncomingPathsForEdge;
 
   /// Domain/state paired with this node.
   /// This is used on filtering compilation

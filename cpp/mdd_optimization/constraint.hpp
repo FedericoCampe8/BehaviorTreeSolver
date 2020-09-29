@@ -25,6 +25,10 @@ enum class ConstraintType {
   kLessThan,
   /// Models AllDifferent(x_i, x_i+1, ..., x_j)
   kAllDifferent,
+  /// Models Among(X, S, l, u):
+  /// only l <= X <= u variables in X can take values in S
+  kAmong,
+  /// Unspecified constraint
   kUnspecified
 };
 
