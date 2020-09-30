@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
 #include <CustomTemplateLibrary/CTL.hh>
 #include <DP/State.hh>
@@ -20,7 +21,9 @@ class MDD
 
         uint getLayersCount() const;
 
-        void toGraphViz() const;
+        void toGraphViz(std::string const & nameFileGv) const;
+
+        void DFS(uint indexLayer, uint indexNode, ctl::StaticVector<int> & labels, bool print) const;
 
         template<typename C>
         void separate();
@@ -68,7 +71,7 @@ void MDD::separate()
                 Edge & edge = nodeEdges[edgeIndex];
                 State & childState = nextStates->at(edge.to);
 
-                parentState.transitionFunction(edge.value, workingState);
+                parentState.next(edge.value, workingState);
 
                 if(workingState->type == State::Type::Impossible)
                 {

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <new>
+#include <cmath>
 
 #include <DP/AllDifferent.hh>
 #include <MDD/MDD.hh>
@@ -42,7 +43,7 @@ void AllDifferent::State::addToSelectedValues(int value)
     std::sort(selectedValues.begin(),selectedValues.end());
 }
 
-void AllDifferent::State::transitionFunction(int value, State * const child) const
+void AllDifferent::State::next(int value, State * const child) const
 {
     if (this->isValueSelected(value))
     {
@@ -53,4 +54,15 @@ void AllDifferent::State::transitionFunction(int value, State * const child) con
         *child = *this;
         child->addToSelectedValues(value);
     }
+}
+uint AllDifferent::getOptimalLayerWidth(uint variablesCount)
+{
+    //https://en.wikipedia.org/wiki/Combination
+    //https://en.wikipedia.org/wiki/Gamma_function
+    uint n = variablesCount;
+    uint k = variablesCount / 2;
+    double nFact = std::tgamma(n + 1);
+    double kFact = std::tgamma(k + 1);
+    double diffFact = std::tgamma(n - k + 1);
+    return static_cast<uint>(std::ceil(nFact / (kFact * diffFact)));
 }

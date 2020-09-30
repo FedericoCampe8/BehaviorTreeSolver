@@ -38,6 +38,7 @@ namespace ctl
 
             template<typename ... Args>
             void emplaceBack(Args ... args);
+            void popBack();
             void clear();
     };
 
@@ -133,6 +134,13 @@ namespace ctl
     void StaticVector<T>::clear()
     {
         size = 0;
+    }
+
+    template<typename T>
+    void StaticVector<T>::popBack()
+    {
+        assert(size > 0);
+        size -= 1;
     }
 };
 

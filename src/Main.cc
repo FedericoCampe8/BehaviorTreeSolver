@@ -13,12 +13,13 @@ int main()
 {
 
     // Variables
-    unsigned int varsCount = 10;
+    unsigned int varsCount = 4;
     Variable v({0,static_cast<int>(varsCount) - 1});
     std::vector<Variable> vars(varsCount, v);
 
     // MDD
-    unsigned int width = 300;
+    unsigned int width = AllDifferent::getOptimalLayerWidth(varsCount);
+    std::cout << "[INFO] MDD with " << width << std::endl;
 
     auto start = high_resolution_clock::now();
     MDD * const mdd = new MDD(width, vars);
@@ -26,9 +27,20 @@ int main()
     mdd->separate<AllDifferent>();
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<milliseconds>(stop - start);
-    std::cout << "MDD created in " << duration.count() << " ms" << std::endl;
+    std::cout << "[INFO] MDD created in " << duration.count() << " ms" << std::endl;
 
-    //mdd->toGraphViz();
+    // DFS
+    start = high_resolution_clock::now();
+    ctl::StaticVector<int> labels(mdd->getLayersCount());
+    mdd->DFS(0, 0,labels, true);
+    stop = high_resolution_clock::now();
+    duration = duration_cast<milliseconds>(stop - start);
+    std::cout << "[INFO] DFS performed in " << duration.count() << " ms" << std::endl;
+
+    // GraphViz
+    std::string nameFileGv = "mdd.gv";
+    mdd->toGraphViz(nameFileGv);
+    std::cout << "[INFO] GraphViz saved in " << nameFileGv << std::endl;
 
     return EXIT_SUCCESS;
 }
