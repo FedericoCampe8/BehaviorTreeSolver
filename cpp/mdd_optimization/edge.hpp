@@ -114,7 +114,7 @@ class SYS_EXPORT_CLASS Edge {
    int64_t pDomainUpperBound{std::numeric_limits<int64_t>::max()};
 
    /// Sets of elements in [lb, ub] that are not part of the domain
-   spp::sparse_hash_set<int32_t> pInvalidDomainElements;
+   spp::sparse_hash_set<int64_t> pInvalidDomainElements;
 };
 
 }  // namespace mdd

@@ -13,7 +13,6 @@
 #include <sparsepp/spp.h>
 
 #include "mdd_optimization/variable.hpp"
-
 #include "system/system_export_defs.hpp"
 
 namespace mdd {

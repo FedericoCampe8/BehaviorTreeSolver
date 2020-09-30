@@ -52,7 +52,7 @@ include(BasicSetup)
 
 # Show all warnings when compiling
 #AddCXXFlag("-Wall")
-#AddCXXFlag("-Wunused-function")
+AddCXXFlag("-Wunused-function")
 AddCXXFlag("-Wno-deprecated")
 AddCXXFlag("-Wno-deprecated-declarations")
 
@@ -185,12 +185,12 @@ endif()
 
 # Set target directory for the executable
 # set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-add_executable(bt_solver cpp/bt_client/bt_client.cpp)
-target_link_libraries(bt_solver LINK_PUBLIC BTSolver)
+#add_executable(bt_solver cpp/bt_client/bt_client.cpp)
+#target_link_libraries(bt_solver LINK_PUBLIC BTSolver)
 
 add_executable(mdd_solver cpp/mdd_client/mdd_client.cpp)
 target_link_libraries(mdd_solver LINK_PUBLIC BTSolver)
 
 # Install the target executable into the specified folder
-install(TARGETS bt_solver RUNTIME DESTINATION "${INSTALL_BINDIR}")
+# install(TARGETS bt_solver RUNTIME DESTINATION "${INSTALL_BINDIR}")
 install(TARGETS mdd_solver RUNTIME DESTINATION "${INSTALL_BINDIR}")

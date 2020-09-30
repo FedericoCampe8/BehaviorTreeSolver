@@ -8,6 +8,7 @@
 
 #include <cstdint>  // for int64_t
 #include <limits>   // for std::numeric_limits
+#include <memory>
 #include <string>
 #include <vector>
 

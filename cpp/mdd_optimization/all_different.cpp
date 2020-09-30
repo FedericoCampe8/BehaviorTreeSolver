@@ -138,7 +138,7 @@ std::string AllDifferentState::toString() const noexcept
     return out;
   }
 
-  for (auto sublist : pStatesList)
+  for (const auto& sublist : pStatesList)
   {
     out += "{";
     for (auto val : sublist)

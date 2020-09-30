@@ -214,7 +214,7 @@ void Among::enforceConstraintTopDown(Arena* arena,
     for (auto var : getScope())
     {
       // Check the first node: all nodes of the same layer share the same variable
-      if (mddRepresentation[layer][0]->getVariable()->getId() == var->getId())
+      if (mddRepresentation.at(layer).at(0)->getVariable()->getId() == var->getId())
       {
         layerInConstraint = true;
         break;
@@ -381,7 +381,8 @@ void Among::enforceConstraintBottomUp(
   std::queue<Node*> queue;
 
   // Go through each node in the last layer
-  for (int nodeIdx = 0; nodeIdx < mddRepresentation.at(lastNodeLayer).size(); ++nodeIdx)
+  for (int nodeIdx = 0; nodeIdx < static_cast<int>(mddRepresentation.at(lastNodeLayer).size());
+          ++nodeIdx)
   {
     auto node = mddRepresentation.at(lastNodeLayer).at(nodeIdx);
 
