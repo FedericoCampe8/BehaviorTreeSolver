@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "mdd_optimization/all_different.hpp"
+#include "mdd_optimization/among.hpp"
 #include "mdd_optimization/mdd.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
 #include "mdd_optimization/variable.hpp"
@@ -29,13 +30,18 @@ void runMDDOpt()
   int32_t maxVars{3};
   for (int idx{0}; idx < maxVars; ++idx)
   {
-    problem->addVariable(std::make_shared<Variable>(idx, idx, 1, maxVars));
+    problem->addVariable(std::make_shared<Variable>(idx, idx, 0, 1));
   }
 
   // Create the constraint
   auto allDiff = std::make_shared<AllDifferent>();
   allDiff->setScope(problem->getVariables());
-  problem->addConstraint(allDiff);
+  // problem->addConstraint(allDiff);
+
+  auto among = std::make_shared<Among>();
+  among->setScope(problem->getVariables());
+  among->setParameters({1}, 0, 1);
+  problem->addConstraint(among);
 
   // Create the MDD
   int32_t width{std::numeric_limits<int32_t>::max()};
