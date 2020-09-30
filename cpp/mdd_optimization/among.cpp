@@ -233,7 +233,7 @@ void Among::enforceConstraintTopDown(Arena* arena,
         for (auto inEdge : node->getInEdges())
         {
           // All path to same node should lead to the same count, so use the first one
-          const std::vector<Edge*>& path = nodeInPaths.at(inEdge->getUniqueId()).at(0);
+          const auto& path = nodeInPaths.at(inEdge->getUniqueId()).at(0);
 
           // Count how many occurrences in a given path.
           // If different paths leads to same number of occurrences,

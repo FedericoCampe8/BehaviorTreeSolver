@@ -4,6 +4,7 @@
 
 #include <algorithm>  // for std::find
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include <stack>
 #include <stdexcept>  // for std::invalid_argument
@@ -837,6 +838,34 @@ std::vector<Edge*> MDD::maximize()
   }
 
   return solution;
+}
+
+void MDD::printMDD(const std::string& outFileName)
+{
+  std::string ppMDD = "digraph D {\n";
+  for (int lidx{0}; lidx < static_cast<int>(pNodesPerLayer.size()); ++lidx)
+  {
+    for (auto node : pNodesPerLayer[lidx])
+    {
+      for (auto outEdge : node->getOutEdges())
+      {
+        std::string toNodeId = outEdge->getHead()->getNodeStringId();
+        if (lidx == static_cast<int>(pNodesPerLayer.size()) - 2)
+        {
+          toNodeId = "t";
+        }
+        std::string newEdge = node->getNodeStringId() + " -> " + toNodeId;
+        newEdge += std::string("[label=") + "\"" + std::to_string(outEdge->getValue())  +  "\"]\n";
+        ppMDD += "\t" + newEdge;
+      }
+    }
+  }
+  ppMDD += "}";
+
+ std::ofstream outFile;
+ outFile.open(outFileName + ".dot");
+ outFile << ppMDD;
+ outFile.close();
 }
 
 }  // namespace mdd

@@ -160,4 +160,13 @@ void Node::setSelectedEdge(Edge* edge)
   pSelectedEdge = edge;
 }
 
+std::string Node::getNodeStringId() const noexcept
+{
+  if (pLayer == 0)
+  {
+    return "r";
+  }
+  return "u" + std::to_string(pNodeId);
+}
+
 }  // namespace mdd

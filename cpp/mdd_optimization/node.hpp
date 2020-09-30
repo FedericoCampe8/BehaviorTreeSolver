@@ -129,6 +129,9 @@ class SYS_EXPORT_CLASS Node {
   /// Return the path to node
   const IncomingPathList& getIncomingPaths() const noexcept { return pIncomingPathsForEdge; }
 
+  /// Returns a string identifier for this node
+  std::string getNodeStringId() const noexcept;
+
  private:
    static uint32_t kNextID;
 

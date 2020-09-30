@@ -65,6 +65,11 @@ class SYS_EXPORT_CLASS MDD {
   /// Returns the path with maximum value from root to terminal node
   std::vector<Edge*> maximize();
 
+  /// Prints a JPEG representation of this MDD to the given file name.dot.
+  /// The file can be read by graphviz.
+  /// For more information, visit https://graphviz.org/about/
+  void printMDD(const std::string& outFileName);
+
 private:
   /// Max width of the MDD
   int32_t pMaxWidth{-1};
