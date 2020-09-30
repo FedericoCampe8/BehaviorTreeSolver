@@ -46,7 +46,7 @@ void runMDDOpt()
 
   // Create the MDD
   int32_t width{std::numeric_limits<int32_t>::max()};
-  width = 3;
+  width = 10;
   MDD mdd(problem, width);
 
   tools::Timer timer;

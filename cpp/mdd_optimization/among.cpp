@@ -406,8 +406,14 @@ void Among::enforceConstraint(Node* node, Arena* arena,
   // Hackish way of running this only once
   // Current design calls enforce constraint for every node, but this constrain needs a global approach.
   if (node == mddRepresentation[0][0]) {
+    std::cout << "Calling top down" << std::endl;
+
     enforceConstraintTopDown( arena, mddRepresentation);
+    std::cout << "Donw with top down...Calling bottom up" << std::endl;
+
     enforceConstraintBottomUp( arena, mddRepresentation);
+    std::cout << "Done with bottom up" << std::endl;
+
   }
 
 }
