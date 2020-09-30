@@ -81,6 +81,16 @@ void Node::addInEdge(Edge* edge)
     }
   }
 
+  // Consider the case where the tail is the root node
+  // and there are no incoming paths.
+  // The in-edge should still be added to the list of paths
+  // arriving at this current node
+  if (newIncomingPaths.empty())
+  {
+    newIncomingPaths.resize(1);
+    newIncomingPaths.back().push_back(edge);
+  }
+
   pIncomingPathsForEdge[edge->getUniqueId()] = newIncomingPaths;
 }
 

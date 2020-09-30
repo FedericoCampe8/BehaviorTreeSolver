@@ -298,6 +298,22 @@ void Among::enforceConstraintTopDown(Arena* arena,
         // If edge could create conflict, split into separate node
         if (std::count(pConstraintDomain.begin(), pConstraintDomain.end(), outEdge->getValue()) > 0)
         {
+          /*
+           * Some notes:
+           * 1 - I modified the node.cpp code "addInEdge" since, I believe, you need
+           *     to store also the current edge into the list (previous path can be empty
+           *     if the tail node is the root);
+           * 2 - The method "getConstraintCountForPath" is still not 100% clear to me.
+           *     It counts how many variables in the scope of this constraint are on a given path
+           *     where the path but the path has multiple/different values on it...not sure
+           *     how this is used;
+           * 3 - below in "auto inEdge = head->getInEdges().at(0);" why do you consider only
+           *     the first edge?
+           * 4 - below in "const auto& path = headInPaths.at(inEdge->getUniqueId()).at(0);" why do
+           *     you consider only the first path?
+           * 5 - below in "if (count >= pUpperBound) {...}" shouldn't this be
+           *     "if (count > pUpperBound) {...}" instead?
+           */
           auto head = outEdge->getHead();
           const auto& headInPaths = head->getIncomingPaths();
 

@@ -36,7 +36,7 @@ void runMDDOpt()
   // Create the constraint
   auto allDiff = std::make_shared<AllDifferent>();
   allDiff->setScope(problem->getVariables());
-  // problem->addConstraint(allDiff);
+  //problem->addConstraint(allDiff);
 
   auto among = std::make_shared<Among>();
   among->setScope(problem->getVariables());
@@ -45,7 +45,7 @@ void runMDDOpt()
 
   // Create the MDD
   int32_t width{std::numeric_limits<int32_t>::max()};
-  width = 3;
+  width = 10;
   MDD mdd(problem, width);
 
   tools::Timer timer;
