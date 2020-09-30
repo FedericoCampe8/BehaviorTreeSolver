@@ -1,94 +1,90 @@
 #include <new>
-#include <vector>
 #include <iostream>
 
 #include <MDD/MDD.hh>
 
-size_t MDD::getMemSize(std::vector<Variable> const & vars)
-{
-    return ctl::Vector<Layer>::getMemSize(vars.size() + 1);
-}
-
-MDD::MDD(uint maxWidth, std::vector<Variable> const & vars) :
+MDD::MDD(uint width, std::vector<Variable> const & vars) :
+    width(width),
     layers(vars.size() + 1)
 {
-    for(uint i = 0; i < vars.size(); i += 1)
+    for(uint i = 0; i < vars.size() + 1; i += 1)
     {
-        layers.emplaceBack(maxWidth, vars[i]);
+        new (&layers[i]) Layer(width, vars[i]);
     }
-
-    initialize();
 }
 
 void MDD::initialize()
 {
-    for (uint i = 0; i < layers.size() - 1; i += 1)
+    for(uint indexLayer = 0; indexLayer < layers.size - 1; indexLayer += 1)
     {
-        Layer & layer = layers.at(i);
+        Layer & layer = layers[indexLayer];
 
-        // Add a Node
-        layer.nodes->emplaceBack();
+        // Add one node
+        layer.nodes.emplaceBack();
 
-        // Add all edges
-        ctl::Vector<Edge> *edges = layer.getEdges(0);
+        // Add all outgoing edges
         for (int value = layer.minValue; value <= layer.maxValue; value += 1)
         {
-            edges->emplaceBack(0, value);
+            layer.edges[0].emplaceBack(0, value);
         }
-    }
+    };
 
     // Last layer
-    layers.back().nodes->emplaceBack();
+    layers.back().nodes.emplaceBack();
 }
 void MDD::toGraphViz() const
 {
     std::cout << "digraph G" << std::endl;
     std::cout << "{" << std::endl;
-
     std::cout << std::endl;
     std::cout << "  node [shape=circle];" << std::endl;
 
     // Nodes
-    for (uint i = 0; i < layers.size(); i += 1)
+    for (uint indexLayer = 0; indexLayer < layers.size; indexLayer += 1)
     {
-        Layer const &layer = layers.at(i);
         std::cout << std::endl;
         std::cout << "  {" << std::endl;
         std::cout << "      rank = same;" << std::endl;
 
-        ctl::Vector<Node> const *const nodes = layer.nodes;
-        for (uint i = 0; i < nodes->size(); i += 1)
+        auto const & nodes = layers[indexLayer].nodes;
+        for (Node const * node = nodes.begin(); node != nodes.end(); node += 1)
         {
-            std::cout << "      " << nodes->at(i).ID << ";" << std::endl;
+            std::cout << "      " << node->ID << ";" << std::endl;
         }
 
         std::cout << "  }" << std::endl;
     }
 
     // Edges
-    for (uint i = 0; i < layers.size() - 1; i += 1)
+    for (uint indexLayer = 0; indexLayer < layers.size - 1; indexLayer += 1)
     {
-        Layer const &layer = layers.at(i);
-        Layer const &nextlayer = layers.at(i + 1);
-
         std::cout << std::endl;
 
-        ctl::Vector<Node> const * const nodes = layer.nodes;
-        ctl::Vector<Node> const * const nodesNextlater = nextlayer.nodes;
+        Layer const & layer = layers[indexLayer];
+        Layer const & nextLayer = layers[indexLayer + 1];
+        auto const & nodes = layer.nodes;
+        auto const & nextNodes = nextLayer.nodes;
 
-        for (uint i = 0; i < nodes->size(); i += 1)
+        for (uint indexNode = 0; indexNode < nodes.getSize(); indexNode += 1)
         {
-            uint nodeID = nodes->at(i).ID;
+            uint idParentNode = nodes[indexNode].ID;
 
-            ctl::Vector<Edge> const * const edges = layer.getEdges(i);
-            for(uint i = 0; i < edges->size(); i += 1)
+            auto const & edges = layer.edges[indexNode];
+            for(uint indexEdge = 0; indexEdge < edges.getSize(); indexEdge += 1)
             {
-                Edge const edge = edges->at(i);
-                std::cout << "  " << nodeID << " -> " << nodesNextlater->at(edge.to).ID << " [label=\"" << edge.value << "\"];" << std::endl;
+                Edge & edge = edges[indexEdge];
+                uint idChildNode = nextNodes.at(edge.to).ID;
+
+                std::cout << "  " << idParentNode << " -> " << idChildNode << " [label=\"" << edge.value << "\"];" << std::endl;
             }
         }
     }
 
     std::cout << std::endl;
     std::cout << "}" << std::endl;
+}
+
+uint MDD::getLayersCount() const
+{
+    return layers.size;
 }

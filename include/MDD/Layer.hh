@@ -7,22 +7,15 @@
 
 class Layer
 {
-
     private:
+        uint const size;
         int const minValue;
         int const maxValue;
-        size_t const edgesMemSize;
-        ctl::Vector<Node> * const nodes;
-        ctl::Vector<Edge> * const edges;
+        ctl::StaticVector<Node> nodes;
+        ctl::RuntimeArray<ctl::StaticVector<Edge>> edges;
 
     public:
-        Layer(uint maxSize, Variable const & var);
-
-        ctl::Vector<Edge> * getEdges(uint index) const;
-
-    private:
-        ctl::Vector<Node> * const mallocNodes(uint maxSize);
-        ctl::Vector<Edge> * const mallocEdges(uint maxSize);
+        Layer(uint size, Variable const & var);
 
     friend class MDD;
 };

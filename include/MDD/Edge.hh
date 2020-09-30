@@ -5,9 +5,14 @@
 class Edge
 {
     public:
-        uint const to;
-        int const value;
+        enum Status {Valid, Invalid};
+
+        Status status;
+        uint to;
+        int  value;
 
     public:
         Edge(uint to, int value);
+
+        static bool isNotValid(Edge const & edge);
 };

@@ -2,62 +2,55 @@
 #include <new>
 
 #include <DP/AllDifferent.hh>
+#include <MDD/MDD.hh>
 
-size_t AllDifferent::State::getMemSize(uint varsCount)
+size_t AllDifferent::State::getSizeStorage(const MDD *const mdd)
 {
-    return sizeof(State) + ctl::Vector<int>::getMemSize(varsCount);
+    return sizeof(int) * mdd->getLayersCount();
 }
 
-AllDifferent::State::State() :
-    valid(false),
-    selectedValues(0u)
+AllDifferent::State::State(State::Type type, std::size_t sizeStorage, std::byte * const storage) :
+    DP::State(type, sizeStorage, storage),
+    selectedValues(sizeStorage / sizeof(int), storage)
+{}
+
+AllDifferent::State & AllDifferent::State::operator=(AllDifferent::State const & other)
 {
+    assert(sizeStorage == other.sizeStorage);
+
+    type = other.type;
+    selectedValues = other.selectedValues;
+
+    return *this;
 }
 
-AllDifferent::State::State(uint varsCount) :
-    valid(true),
-    selectedValues(varsCount)
+bool AllDifferent::State::operator==(const AllDifferent::State &other)
 {
+    assert(type == other.type);
+
+    return selectedValues == other.selectedValues;
 }
 
-AllDifferent::State::State(State const * other) :
-    valid(true),
-    selectedValues(&other->selectedValues)
-{
-}
-
-size_t AllDifferent::State::getMemSize() const
-{
-    return sizeof(State) + selectedValues.getMemSize();
-}
-
-void AllDifferent::State::addValue(int value)
-{
-    assert(!containsValue(value));
-
-    selectedValues.pushBack(value);
-    std::sort(selectedValues.begin(),selectedValues.end());
-
-}
-
-bool AllDifferent::State::containsValue(int value) const
+bool AllDifferent::State::isValueSelected(int value) const
 {
     return std::binary_search(selectedValues.begin(), selectedValues.end(), value);
 }
 
-AllDifferent::State const * AllDifferent::transitionFunction(AllDifferent::State const * parent, int value)
+void AllDifferent::State::addToSelectedValues(int value)
 {
-    AllDifferent::State* child = static_cast<AllDifferent::State*>(malloc(parent->getMemSize()));
+    selectedValues.emplaceBack(value);
+    std::sort(selectedValues.begin(),selectedValues.end());
+}
 
-    if (parent->containsValue(value))
+void AllDifferent::State::transitionFunction(int value, State * const child) const
+{
+    if (this->isValueSelected(value))
     {
-        new (child) State();
+        new (child) State(DP::State::Type::Impossible, child->sizeStorage, child->storage);
     }
     else
     {
-        new (child) State(parent);
-        child->addValue(value);
+        *child = *this;
+        child->addToSelectedValues(value);
     }
-
-    return child;
 }

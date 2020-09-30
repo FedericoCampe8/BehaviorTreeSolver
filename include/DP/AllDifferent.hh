@@ -3,28 +3,29 @@
 #include <cstddef>
 
 #include <CustomTemplateLibrary/CTL.hh>
+#include <DP/State.hh>
 
-class AllDifferent
+class MDD;
+
+struct AllDifferent
 {
-    class State
+    class State : public DP::State
     {
         private:
-            bool valid;
-            ctl::Vector<int> selectedValues;
+            ctl::StaticVector<int> selectedValues;
 
         public:
-            static size_t getMemSize(uint varsCount);
+            static size_t getSizeStorage(MDD const * const mdd);
+            State(Type type, std::size_t sizeStorage, std::byte * const storage);
 
-            State();
-            State(uint varsCount);
-            State(State const * other);
+            State & operator=(State const & other);
+            bool operator==(State const & other);
 
-            size_t getMemSize() const;
+            void transitionFunction(int value, State * const child) const;
 
-            void addValue(int value);
-            bool containsValue(int value) const;
+        private:
+            bool isValueSelected(int value) const;
+            void addToSelectedValues(int value);
     };
-
-    static State const * transitionFunction (State const * parent, int value);
 };
 

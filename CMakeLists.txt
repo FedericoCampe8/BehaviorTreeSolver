@@ -17,15 +17,15 @@ set(CUDA_MINIMUM_REQUIRED_VERSION 10.1)
 # Add headers
 set(HEADERS
     include/CustomTemplateLibrary/CTL.hh
-    include/CustomTemplateLibrary/Vector.hh
+        include/CustomTemplateLibrary/StaticVector.hh
     include/CustomTemplateLibrary/Types.hh
-    include/DP/AllDifferent.hh
+        include/DP/AllDifferent.hh
     include/MDD/MDD.hh
     include/MDD/Edge.hh
     include/MDD/Layer.hh
     include/MDD/Node.hh
     include/Problem/Variable.hh
-    )
+        include/DP/State.hh)
 
 #Add sources
 set(SOURCES
@@ -35,7 +35,9 @@ set(SOURCES
         src/MDD/Layer.cc
         src/MDD/Node.cc
         src/Problem/Variable.cc
-        src/DP/AllDifferent.cc)
+        src/DP/AllDifferent.cc
+        src/DP/State.cc
+        )
 
 #Add include directory
 include_directories("include")
@@ -47,7 +49,7 @@ message(STATUS "Platform type: ${PLATFORM_TYPE}")
 #Set C++ compilation flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g0 -O3")
-set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} -pg -g3 -O0 -fprofile-arcs -ftest-coverage")
+set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} -g3 -O0")
 
 # CPU
 if(${PLATFORM_TYPE} STREQUAL "CPU")
