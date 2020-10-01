@@ -10,6 +10,8 @@
 #include <stdexcept>  // for std::invalid_argument
 #include <utility>    // for std::pair
 
+#include <sparsepp/spp.h>
+
 // #define DEBUG
 
 namespace {
@@ -89,6 +91,36 @@ Node* MDD::buildRootMDD()
   return pRootNode;
 }
 
+void MDD::revertMDD()
+{
+  // Swap all edges in the arena
+  const auto& edges = pArena->getEdgePool();
+  for (auto& edge : edges)
+  {
+    edge->reverseEdge();
+  }
+
+  // Swap the layers of the mdd top to bottom
+  MDDLayersList reversedMDD = pNodesPerLayer;
+  pNodesPerLayer.clear();
+
+  uint32_t layer{kLayerZero};
+  while(!reversedMDD.empty())
+  {
+    pNodesPerLayer.push_back(reversedMDD.back());
+    std::reverse(std::begin(pNodesPerLayer.back()), std::end(pNodesPerLayer.back()));
+    for (auto node : pNodesPerLayer.back())
+    {
+      assert(pArena->containsNode(node->getUniqueId()));
+      assert(!node->hasDefaultDPState());
+      node->resetLayer(layer);
+    }
+    reversedMDD.pop_back();
+    ++layer;
+  }
+  pRootNode = pNodesPerLayer.at(0).at(0);
+}
+
 Node* MDD::buildRelaxedMDD()
 {
   // Build the root node
@@ -147,29 +179,81 @@ void MDD::runSeparationProcedure(Node* root)
   for (auto& con : pProblem->getConstraints())
   {
     runSeparationProcedureOnConstraint(root, con.get());
+
+    // Set single node as bottom node:
+    // merge all nodes in the bottom layer
+    int lastNodeLayer = static_cast<int>(pNodesPerLayer.size() - 1);
+    int numNodesInLastLayer = static_cast<int>(pNodesPerLayer.at(lastNodeLayer).size());
+    if (numNodesInLastLayer > 1)
+    {
+      auto refNode = pNodesPerLayer.at(lastNodeLayer).at(0);
+      for (int nidx{1}; nidx < numNodesInLastLayer; ++nidx)
+      {
+        // Move all incoming layer to the reference node
+        auto currNode = pNodesPerLayer.at(lastNodeLayer).at(nidx);
+        for (auto edge : currNode->getInEdges())
+        {
+          edge->setHead(refNode);
+        }
+        pArena->deleteNode(currNode->getUniqueId());
+      }
+
+      // Pop back the nodes from the last layer
+      while(pNodesPerLayer.at(lastNodeLayer).size() > 1)
+      {
+        pNodesPerLayer[lastNodeLayer].pop_back();
+      }
+    }
+
+    if (con->runsBottomUp())
+    {
+      const bool bottomUp{true};
+
+      // Revert the MDD
+      revertMDD();
+
+      // Run separation on reverted MDD
+      con->setForBottomUpFiltering();
+      runSeparationProcedureOnConstraint(pRootNode, con.get(), bottomUp);
+
+      // Reset MDD
+      revertMDD();
+
+      // Reset constraint for top-down approach
+      con->setForTopDownFiltering();
+    }
   }
 }
 
-void MDD::runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con)
+void MDD::runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con, bool bottomUp)
 {
   // Step 1: set default state on each node
-  for (auto& layer : pNodesPerLayer)
+  if (!bottomUp)
   {
-    for (auto node : layer)
+    // Note: on bottom-up separation, the nodes' states must be preserved
+    for (auto& layer : pNodesPerLayer)
     {
-      if (!node->hasDefaultDPState())
+      for (auto node : layer)
       {
-        node->setDefaultDPState();
+        if (!node->hasDefaultDPState())
+        {
+          node->setDefaultDPState();
+        }
       }
     }
   }
 
   // Step 2: set the initial constraint DP state on the root
   root->resetDPState(con->getInitialDPState());
+  if (bottomUp)
+  {
+    root->getDPState()->setStateForTopDownFiltering(false);
+  }
 
   // Step 3: for each layer, for each node, for each arc,
   //         compute the next DP state and split nodes accordingly
   auto totLayers = static_cast<uint32_t>(pProblem->getVariables().size());
+  spp::sparse_hash_set<uint32_t> bottomUpNodesStateVisitMap;
   std::vector<std::pair<DPState*, Node*>> newDPStates;
   newDPStates.reserve(pMaxWidth);
   for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)
@@ -212,8 +296,27 @@ void MDD::runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con)
                 " with value " << edge->getValue() << std::endl;
 #endif
         // Calculate the next DP state, i.e., the state reachable from the current one
-        // by applying the given edge/arc value
-        auto newDPState = currDPState->next(edgeValue);
+        // by applying the given edge/arc value.
+        // Note: the bottom up pass needs the information of the next state to go to
+        DPState* inState = bottomUp ? edge->getHead()->getDPState() : nullptr;
+        assert(pArena->containsEdge(edge->getUniqueId()));
+        assert(pArena->containsNode(edge->getHead()->getUniqueId()));
+        if (edge->getHead()->hasDefaultDPState())
+        {
+          inState = nullptr;
+        }
+
+        auto newDPState = currDPState->next(edgeValue, inState);
+        if (bottomUp && (bottomUpNodesStateVisitMap.find(edge->getHead()->getUniqueId()) ==
+                bottomUpNodesStateVisitMap.end()))
+        {
+          // Reset the state for the head since it won't be used but the first time.
+          // Note: this reset is done only the first time this node is touched and
+          // updated. This is why there is a set "bottomUpNodesStateVisitMap"
+          edge->getHead()->setDefaultDPState();
+          bottomUpNodesStateVisitMap.insert(edge->getHead()->getUniqueId());
+        }
+
         if (newDPState->isInfeasible())
         {
           // If the new state is infeasible: remove this arc from tail and head nodes

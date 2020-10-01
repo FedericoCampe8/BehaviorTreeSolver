@@ -31,6 +31,16 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
  public:
    MDDConstraint(ConstraintType type, const std::string& name="");
 
+   /// Returns true if this constraint needs to run a bottom-up pass on the mdd.
+   /// Returns false otherwise
+   virtual bool runsBottomUp() const noexcept { return false; }
+
+   /// Sets this constraint for bottom-up separation
+   virtual void setForBottomUpFiltering() noexcept {}
+
+   /// Sets this constraint for top-down separation
+   virtual void setForTopDownFiltering() noexcept {}
+
    /// Applies some heuristics to select a subset of nodes in the given layer to merge
    virtual std::vector<Node*> mergeNodeSelect(
            int layer, const std::vector<std::vector<Node*>>& mddRepresentation) const noexcept = 0;

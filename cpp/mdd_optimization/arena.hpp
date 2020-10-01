@@ -52,6 +52,18 @@ class SYS_EXPORT_CLASS Arena {
     return pEdgePool.back().get();
   }
 
+  /// Returns true if the arena contains the given node. Returns false otherwise
+  bool containsNode(uint32_t nodeId) const noexcept
+  {
+    return pNodeArena.find(nodeId) != pNodeArena.end();
+  }
+
+  /// Returns true if the arena contains the given edge. Returns false otherwise
+  bool containsEdge(uint32_t edgeId) const noexcept
+  {
+    return pEdgeArena.find(edgeId) != pEdgeArena.end();
+  }
+
   /// Deletes the node with given id
   void deleteNode(uint32_t nodeId)
   {
@@ -65,6 +77,12 @@ class SYS_EXPORT_CLASS Arena {
     pEdgePool[pEdgeArena.at(edgeId)].reset();
     pEdgeArena.erase(edgeId);
   }
+
+  /// Returns the pool of nodes
+  const std::vector<Node::UPtr>& getNodePool() const noexcept { return pNodePool; }
+
+  /// Returns the pool of edges
+  const std::vector<Edge::UPtr>& getEdgePool() const noexcept { return pEdgePool; }
 
  private:
   /// Map from node id to its index in the node list

@@ -82,7 +82,7 @@ bool AllDifferentState::isInfeasible() const noexcept
   return pStatesList.empty();
 }
 
-DPState::SPtr AllDifferentState::next(int64_t domainElement) const noexcept
+DPState::SPtr AllDifferentState::next(int64_t domainElement, DPState*) const noexcept
 {
   auto state = std::make_shared<AllDifferentState>();
   if (pStatesList.empty())

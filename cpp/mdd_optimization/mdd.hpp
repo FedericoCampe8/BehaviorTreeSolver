@@ -117,11 +117,14 @@ private:
   /// Builds, sets and returns the root of the MDD
   Node* buildRootMDD();
 
+  /// Reverts the mdd, by swapping tails and heads on each node
+  void revertMDD();
+
   /// Runs the separation algorithm on the given MDD w.r.t. the constraint in the problem
   void runSeparationProcedure(Node* root);
 
   /// Runs the separation algorithm on the specific constraint
-  void runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con);
+  void runSeparationProcedureOnConstraint(Node* root, MDDConstraint* con, bool bottomUp=false);
 
   /// Runs the separation algorithm on the given MDD w.r.t. the constraint in the problem
   void runSeparationAndRefinementProcedure(Node* root);

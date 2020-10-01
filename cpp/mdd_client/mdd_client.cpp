@@ -30,7 +30,7 @@ void runMDDOpt()
   int32_t maxVars{3};
   for (int idx{0}; idx < maxVars; ++idx)
   {
-    problem->addVariable(std::make_shared<Variable>(idx, idx, 0, 1));
+    problem->addVariable(std::make_shared<Variable>(idx, idx, 4, 5));
   }
 
   // Create the constraint
@@ -40,7 +40,7 @@ void runMDDOpt()
 
   auto among = std::make_shared<Among>();
   among->setScope(problem->getVariables());
-  among->setParameters({1}, 0, 1);
+  among->setParameters({5}, 1, 1);
   problem->addConstraint(among);
 
   // Create the MDD
@@ -51,7 +51,7 @@ void runMDDOpt()
   tools::Timer timer;
 
   // Enforce all the constraints on the MDD
-  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::Filtering);
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::Separation);
   std::cout << "Wallclock time enforce constraints (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
 

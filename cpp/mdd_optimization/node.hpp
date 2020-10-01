@@ -46,6 +46,9 @@ class SYS_EXPORT_CLASS Node {
   /// Returns the pointer to this node's values
   std::vector<int64_t>* getValuesMutable() noexcept { return &pNodeDomain; }
 
+  /// Resets the layer for this node
+  void resetLayer(uint32_t layer) noexcept { pLayer = layer; }
+
   /// Returns this node's layer
   uint32_t getLayer() const noexcept { return pLayer; }
 

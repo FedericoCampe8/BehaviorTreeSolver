@@ -31,6 +31,12 @@ class SYS_EXPORT_STRUCT DPState {
   /// Returns the unique identifier for this DP state
   uint32_t getUniqueId() const noexcept { return pStateId; }
 
+  /// Sets the state for top-down filtering mode
+  void setStateForTopDownFiltering(bool isTopDown) { pTopDownFiltering = isTopDown; }
+
+  /// Returns whether or not this state is used on top-down or bottom-up filtering
+  bool isStateSetForTopDownFiltering() const noexcept { return pTopDownFiltering; }
+
   /// Merges "other" into this DP State
   virtual void mergeState(DPState* other) noexcept;
 
@@ -39,8 +45,11 @@ class SYS_EXPORT_STRUCT DPState {
   virtual bool isMerged() const noexcept { return false; }
 
   /// Returns the next state reachable from this state given "domainElement".
-  /// Returns self by default
-  virtual DPState::SPtr next(int64_t domainElement) const noexcept;
+  /// Returns self by default.
+  /// @note nextDPState is used on some constraints during the bottom-up pass to calculate
+  ///       next state based on the information of the state on the next node calculated
+  ///       during top-down procedure
+  virtual DPState::SPtr next(int64_t domainElement, DPState* nextDPState=nullptr) const noexcept;
 
   /// Returns the cost of going to next state from this state
   /// given "domainElement".
@@ -56,6 +65,10 @@ class SYS_EXPORT_STRUCT DPState {
   /// Returns true if this is equal to "other".
   /// Returns false otherwise
   virtual bool isEqual(const DPState* other) const noexcept;
+
+ protected:
+  /// Flag indicating whether or not this state works on top-down or bottom-up filtering
+  bool pTopDownFiltering{true};
 
  private:
    static uint32_t kNextID;

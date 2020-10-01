@@ -14,19 +14,37 @@ constexpr int32_t kDefaultBitmapSize{32};
 
 namespace mdd {
 
-AmongState::AmongState()
-: DPState()
+AmongState::AmongState(int lower, int upper, const std::vector<int64_t>& domain)
+: DPState(),
+  pLowerBound(lower),
+  pUpperBound(upper)
 {
+  pConstraintDomain = domain;
 }
 
 AmongState::AmongState(const AmongState& other)
 {
-  pStatesList = other.pStatesList;
+  pLowerBound = other.pLowerBound;
+  pUpperBound = other.pUpperBound;
+  pConstraintDomain = other.pConstraintDomain;
+  pIsMerged = other.pIsMerged;
+  pValueCounter = other.pValueCounter;
+  this->setStateForTopDownFiltering(other.isStateSetForTopDownFiltering());
 }
 
 AmongState::AmongState(AmongState&& other)
 {
-  pStatesList = std::move(other.pStatesList);
+  pLowerBound = other.pLowerBound;
+  pUpperBound = other.pUpperBound;
+  pConstraintDomain = std::move(other.pConstraintDomain);
+  pIsMerged = other.pIsMerged;
+  pValueCounter = other.pValueCounter;
+  this->setStateForTopDownFiltering(other.isStateSetForTopDownFiltering());
+
+  other.pLowerBound = 1;
+  other.pUpperBound = 0;
+  other.pIsMerged = false;
+  other.pValueCounter = -1;
 }
 
 AmongState& AmongState::operator=(const AmongState& other)
@@ -36,7 +54,13 @@ AmongState& AmongState::operator=(const AmongState& other)
     return *this;
   }
 
-  pStatesList = other.pStatesList;
+  pLowerBound = other.pLowerBound;
+  pUpperBound = other.pUpperBound;
+  pConstraintDomain = other.pConstraintDomain;
+  pIsMerged = other.pIsMerged;
+  pValueCounter = other.pValueCounter;
+  this->setStateForTopDownFiltering(other.isStateSetForTopDownFiltering());
+
   return *this;
 }
 
@@ -47,61 +71,59 @@ AmongState& AmongState::operator=(AmongState&& other)
     return *this;
   }
 
-  pStatesList = std::move(other.pStatesList);
+  pLowerBound = other.pLowerBound;
+  pUpperBound = other.pUpperBound;
+  pConstraintDomain = std::move(other.pConstraintDomain);
+  pIsMerged = other.pIsMerged;
+  pValueCounter = other.pValueCounter;
+  this->setStateForTopDownFiltering(other.isStateSetForTopDownFiltering());
+
+  other.pLowerBound = 1;
+  other.pUpperBound = 0;
+  other.pIsMerged = false;
+  other.pValueCounter = -1;
   return *this;
 }
 
 bool AmongState::isEqual(const DPState* other) const noexcept
 {
   auto otherDPState = reinterpret_cast<const AmongState*>(other);
-
-  // Check if "other" is contained in this states
-  if (pStatesList.size() < otherDPState->pStatesList.size())
-  {
-    // Return, there is at least one state in "other" that this DP doesn't have
-    return false;
-  }
-
-  // Check that all states in "other" are contained in this state
-  const auto& otherList = otherDPState->pStatesList;
-  for (const auto& otherSubList : otherList)
-  {
-    // Check if this subSet is contained in the other state subset list
-    if (std::find(pStatesList.begin(), pStatesList.end(), otherSubList) == pStatesList.end())
-    {
-      // State not found
-      return false;
-    }
-  }
-
-  // All states are present
-  return true;
+  return pValueCounter == otherDPState->pValueCounter;
 }
 
 bool AmongState::isInfeasible() const noexcept
 {
-  return pStatesList.empty();
-}
-
-DPState::SPtr AmongState::next(int64_t domainElement) const noexcept
-{
-  auto state = std::make_shared<AmongState>();
-  if (pStatesList.empty())
+  if (isStateSetForTopDownFiltering())
   {
-    state->pStatesList.resize(1);
-    state->pStatesList.back().insert(domainElement);
+    return (pValueCounter > pUpperBound) || pConstraintDomain.empty();
   }
   else
   {
-    for (const auto& subSet : pStatesList)
-    {
-      // Add the new element to all the subset compatible with it
-      if (std::find(subSet.begin(), subSet.end(), domainElement) == subSet.end())
-      {
-        state->pStatesList.push_back(subSet);
-        state->pStatesList.back().insert(domainElement);
-      }
-    }
+    return pValueCounter < pLowerBound;
+  }
+}
+
+DPState::SPtr AmongState::next(int64_t domainElement, DPState* nextDPState) const noexcept
+{
+  auto state = std::make_shared<AmongState>(pLowerBound, pUpperBound, pConstraintDomain);
+  state->setStateForTopDownFiltering(isStateSetForTopDownFiltering());
+
+  int defaultCounterOffset{0};
+  if (nextDPState != nullptr)
+  {
+    auto otherState = reinterpret_cast<AmongState*>(nextDPState);
+    defaultCounterOffset = otherState->pValueCounter;
+  }
+  if (std::find(pConstraintDomain.begin(), pConstraintDomain.end(),
+                domainElement) == pConstraintDomain.end())
+  {
+    // Domain element not taken
+    state->pValueCounter = pValueCounter + defaultCounterOffset;
+  }
+  else
+  {
+    // Taking the domain element
+    state->pValueCounter = pValueCounter + defaultCounterOffset + 1;
   }
   return state;
 }
@@ -118,47 +140,19 @@ void AmongState::mergeState(DPState* other) noexcept
     return;
   }
 
-  auto otherDP = reinterpret_cast<const AmongState*>(other);
-  for (const auto& otherSubList : otherDP->pStatesList)
-  {
-    // Check if the other sublist is already present in the current list
-    // and, if not, add it
-    if (std::find(pStatesList.begin(), pStatesList.end(), otherSubList) == pStatesList.end())
-    {
-      pStatesList.push_back(otherSubList);
-    }
-  }
+  pIsMerged = true;
 }
 
 std::string AmongState::toString() const noexcept
 {
   std::string out{"{"};
-  if (pStatesList.empty())
-  {
-    out += "}";
-    return out;
-  }
-
-  for (auto sublist : pStatesList)
-  {
-    out += "{";
-    for (auto val : sublist)
-    {
-      out += std::to_string(val) + ", ";
-    }
-    out.pop_back();
-    out.pop_back();
-    out += "}, ";
-  }
-  out.pop_back();
-  out.pop_back();
+  out += std::to_string(pValueCounter);
   out += "}";
   return out;
 }
 
 Among::Among(const std::string& name)
-: MDDConstraint(mdd::ConstraintType::kAmong, name),
-  pInitialDPState(std::make_shared<AmongState>())
+: MDDConstraint(mdd::ConstraintType::kAmong, name)
 {
 }
 
@@ -166,10 +160,10 @@ Among::Among(const std::vector<int64_t>& domain,
              int lower,
              int upper,
              const std::string& name)
-: MDDConstraint(mdd::ConstraintType::kAmong, name),
-  pInitialDPState(std::make_shared<AmongState>())
+: MDDConstraint(mdd::ConstraintType::kAmong, name)
 {
   setParameters(domain, lower, upper);
+  pInitialDPState = std::make_shared<AmongState>(pLowerBound, pUpperBound, pConstraintDomain);
 }
 
 void Among::setParameters(const std::vector<int64_t>& domain, int lower, int upper)
@@ -182,6 +176,8 @@ void Among::setParameters(const std::vector<int64_t>& domain, int lower, int upp
   pConstraintDomain = domain;
   pLowerBound = lower;
   pUpperBound = upper;
+
+  pInitialDPState = std::make_shared<AmongState>(pLowerBound, pUpperBound, pConstraintDomain);
 }
 
 int Among::getConstraintCountForPath(const std::vector<Edge*>& path) const

@@ -51,6 +51,9 @@ class SYS_EXPORT_CLASS Edge {
   /// Returns the value on this edge
   int64_t getValue() const noexcept { return pDomainLowerBound; }
 
+  /// Swaps head with tail
+  void reverseEdge();
+
   /// Sets the head of this edge
   void setHead(Node *node);
 

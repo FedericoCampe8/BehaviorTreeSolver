@@ -58,9 +58,16 @@ void Edge::removeTail() noexcept
   pTail = nullptr;
 }
 
+void Edge::reverseEdge()
+{
+  auto oldHead = pHead;
+  this->setHead(pTail);
+  this->setTail(oldHead);
+}
+
 void Edge::setHead(Node* node)
 {
-  if (node == nullptr || node == pHead || node == pTail)
+  if (node == nullptr || node == pHead)
   {
     return;
   }
@@ -75,7 +82,7 @@ void Edge::setHead(Node* node)
 
 void Edge::setTail(Node* node) noexcept
 {
-  if (node == nullptr || node == pTail || node == pHead)
+  if (node == nullptr || node == pTail)
   {
     return;
   }

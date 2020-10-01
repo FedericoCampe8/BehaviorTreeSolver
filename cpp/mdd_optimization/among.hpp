@@ -6,8 +6,9 @@
 
 #pragma once
 
-#include <cstdint>  // for int64_t
-#include <limits>   // for std::numeric_limits
+#include <algorithm>  // for std::swap
+#include <cstdint>    // for int64_t
+#include <limits>     // for std::numeric_limits
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,7 +27,7 @@ namespace mdd {
  */
 class SYS_EXPORT_STRUCT AmongState : public DPState {
  public:
-  AmongState();
+  AmongState(int lower, int upper, const std::vector<int64_t>& domain);
   ~AmongState() = default;
 
   AmongState(const AmongState& other);
@@ -37,7 +38,7 @@ class SYS_EXPORT_STRUCT AmongState : public DPState {
 
   void mergeState(DPState* other) noexcept override;
 
-  DPState::SPtr next(int64_t domainElement) const noexcept override;
+  DPState::SPtr next(int64_t domainElement, DPState* nextDPState=nullptr) const noexcept override;
 
   double cost(int64_t domainElement) const noexcept override;
 
@@ -47,19 +48,30 @@ class SYS_EXPORT_STRUCT AmongState : public DPState {
 
   bool isEqual(const DPState* other) const noexcept override;
 
-  bool isMerged() const noexcept override { return pStatesList.size() > 1; }
+  bool isMerged() const noexcept override { return pIsMerged; }
+
+  int getValueCounter() const noexcept { return pValueCounter; }
 
  private:
   using ValuesSet = spp::sparse_hash_set<int64_t>;
 
  private:
-  // Actual state representation
-  //spp::sparse_hash_set<int64_t> pElementList;
+  /// Lower bound on the domain values as per Among constraint
+  int pLowerBound{std::numeric_limits<int>::min()};
 
-  /// List of DP states.
-  /// If the MDD is exact, there will always be one value set per DP.
-  /// If the MDD is relaxed, there could be more sets, one per merged state
-  std::vector<ValuesSet> pStatesList;
+  /// Upper bound on the domain values as per Among constraint
+  int pUpperBound{std::numeric_limits<int>::max()};
+
+  /// Domain specifying the semantics of the Among constraint
+  std::vector<int64_t> pConstraintDomain;
+
+  /// Flag indicating whether a state has been merged or not
+  bool pIsMerged{false};
+
+  /// The state of the among constraint is represented by
+  /// the shortest path from root to the current node given an edge.
+  /// This is used for the upper bound of the constraint
+  int pValueCounter{0};
 };
 
 class SYS_EXPORT_CLASS Among : public MDDConstraint {
@@ -83,6 +95,31 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
    /// Sets the Among constraint parameters
    void setParameters(const std::vector<int64_t>& domain, int lower, int upper);
 
+   /// Returns true if this constraint needs to run a bottom-up pass on the mdd.
+   /// Returns false otherwise
+   bool runsBottomUp() const noexcept override { return true; }
+
+   /// Sets this constraint for bottom-up separation
+   void setForBottomUpFiltering() noexcept override
+   {
+     // Simply swap lower-upper bounds
+     if (pIsTopDownFilteringEnabled)
+     {
+       pIsTopDownFilteringEnabled = false;
+       std::swap(pLowerBound, pUpperBound);
+     }
+   }
+
+   /// Sets this constraint for top-down separation
+   void setForTopDownFiltering() noexcept override
+   {
+     if (!pIsTopDownFilteringEnabled)
+     {
+       pIsTopDownFilteringEnabled = true;
+       std::swap(pLowerBound, pUpperBound);
+     }
+   }
+
    /// Enforces this constraint on the given MDD node
    void enforceConstraint(Node* node, Arena* arena,
                           std::vector<std::vector<Node*>>& mddRepresentation,
@@ -103,11 +140,14 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
    bool isFeasible() const noexcept override { return true; }
 
  private:
+   /// Flag indicating whether or not top-down filtering is enabled
+   bool pIsTopDownFilteringEnabled{true};
+
    /// Lower bound on the domain values as per Among constraint
-   int64_t pLowerBound{std::numeric_limits<int64_t>::min()};
+   int pLowerBound{std::numeric_limits<int>::min()};
 
    /// Upper bound on the domain values as per Among constraint
-   int64_t pUpperBound{std::numeric_limits<int64_t>::max()};
+   int pUpperBound{std::numeric_limits<int>::max()};
 
    /// Domain specifying the semantics of the Among constraint
    std::vector<int64_t> pConstraintDomain;

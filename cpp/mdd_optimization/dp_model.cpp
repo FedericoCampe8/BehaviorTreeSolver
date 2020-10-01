@@ -9,6 +9,8 @@ uint32_t DPState::kNextID = 0;
 DPState::DPState()
 : pStateId(DPState::kNextID++)
 {
+  // Default state is top-down
+  setStateForTopDownFiltering(true);
 }
 
 bool DPState::operator==(const DPState& other)
@@ -21,7 +23,7 @@ void DPState::mergeState(DPState*) noexcept
   // No-op
 }
 
-DPState::SPtr DPState::next(int64_t) const noexcept
+DPState::SPtr DPState::next(int64_t, DPState*) const noexcept
 {
   return std::make_shared<DPState>();
 }

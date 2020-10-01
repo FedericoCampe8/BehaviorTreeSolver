@@ -34,7 +34,7 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
 
   void mergeState(DPState* other) noexcept override;
 
-  DPState::SPtr next(int64_t domainElement) const noexcept override;
+  DPState::SPtr next(int64_t domainElement, DPState* nextDPState=nullptr) const noexcept override;
 
   double cost(int64_t domainElement) const noexcept override;
 
