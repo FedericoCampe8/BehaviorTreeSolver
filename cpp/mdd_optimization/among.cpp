@@ -128,7 +128,7 @@ DPState::SPtr AmongState::next(int64_t domainElement, DPState* nextDPState) cons
   return state;
 }
 
-double AmongState::cost(int64_t domainElement) const noexcept
+double AmongState::cost(int64_t domainElement, DPState* fromState) const noexcept
 {
   return static_cast<double>(domainElement);
 }

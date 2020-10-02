@@ -3,9 +3,10 @@
 //
 // Entry point for the BTSolver client.
 //
+#include <cstdint>    // for int64_t
 #include <exception>
 #include <iostream>
-#include <limits>  // for std::numeric_limits
+#include <limits>     // for std::numeric_limits
 #include <memory>
 #include <string>
 #include <vector>
@@ -14,11 +15,80 @@
 #include "mdd_optimization/among.hpp"
 #include "mdd_optimization/mdd.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
+#include "mdd_optimization/tsppd.hpp"
 #include "mdd_optimization/variable.hpp"
 #include "tools/timer.hpp"
 
 namespace {
 
+void runTSPPD()
+{
+  using namespace mdd;
+
+  // Create the MDD problem
+  auto problem = std::make_shared<MDDProblem>();
+  problem->setMinimization();
+
+  // Add the list of variables
+  problem->addVariable(std::make_shared<Variable>(0, 0, 0, 0));
+  problem->addVariable(std::make_shared<Variable>(1, 1, 2, 5));
+  problem->addVariable(std::make_shared<Variable>(2, 2, 2, 5));
+  problem->addVariable(std::make_shared<Variable>(3, 3, 2, 5));
+  problem->addVariable(std::make_shared<Variable>(4, 4, 2, 5));
+  problem->addVariable(std::make_shared<Variable>(5, 5, 1, 1));
+  std::vector<int64_t> pickupNode{2, 4};
+  std::vector<int64_t> deliveryNode{3, 5};
+  std::vector<std::vector<int64_t>> costMatrix{
+    {0,    0,  389,  792, 1357,  961},
+    {0,    0,    0,    0,    0,    0},
+    {389,    0,    0,  641, 1226, 1168},
+    {792,    0,  641,    0, 1443, 1490},
+    {1357,    0, 1226, 1443,    0,  741},
+    {961,    0, 1168, 1490,  741,    0},
+  };
+
+  // Create the constraint
+  auto tsppd = std::make_shared<TSPPD>(pickupNode, deliveryNode, costMatrix);
+  tsppd->setScope(problem->getVariables());
+  problem->addConstraint(tsppd);
+
+  // Create the MDD
+  int32_t width{std::numeric_limits<int32_t>::max()};
+  width = 10;
+  MDD mdd(problem, width);
+
+  tools::Timer timer;
+
+  // Enforce all the constraints on the MDD
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::Separation);
+  std::cout << "Wallclock time enforce constraints (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
+
+  timer.reset();
+  timer.start();
+
+  std::vector<Edge*> solution;
+  if (problem->isMaximization())
+  {
+    solution = mdd.maximize();
+  }
+  else
+  {
+    solution = mdd.minimize();
+  }
+
+  for (int idx = 0; idx < solution.size(); idx++)
+  {
+      auto edge = solution[idx];
+      std::cout << edge->getTail()->getLayer() << " - " << edge->getHead()->getLayer() << ": " <<
+              edge->getValue() << std::endl;
+  }
+  std::cout << "Wallclock time solution (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
+  mdd.printMDD("mdd");
+}
+
+/*
 void runMDDOpt()
 {
   using namespace mdd;
@@ -68,7 +138,7 @@ void runMDDOpt()
           timer.getWallClockTimeMsec() << std::endl;
   mdd.printMDD("mdd");
 }
-
+*/
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -77,7 +147,8 @@ int main(int argc, char* argv[]) {
   try
   {
     // TODO Add entry point code here
-    runMDDOpt();
+    //runMDDOpt();
+    runTSPPD();
   }
   catch (const std::exception& e)
   {

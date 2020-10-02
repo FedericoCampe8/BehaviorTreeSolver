@@ -7,6 +7,7 @@
 #pragma once
 
 #include <cstdint>  // for int64_t
+#include <memory>
 #include <string>
 
 #include <sparsepp/spp.h>
@@ -36,7 +37,7 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
 
   DPState::SPtr next(int64_t domainElement, DPState* nextDPState=nullptr) const noexcept override;
 
-  double cost(int64_t domainElement) const noexcept override;
+  double cost(int64_t domainElement, DPState* fromState=nullptr) const noexcept override;
 
   bool isInfeasible() const noexcept override;
 

@@ -53,8 +53,10 @@ class SYS_EXPORT_STRUCT DPState {
 
   /// Returns the cost of going to next state from this state
   /// given "domainElement".
-  /// Returns the value of the element by default
-  virtual double cost(int64_t domainElement) const noexcept;
+  /// Returns the value of the element by default.
+  /// @note some costs on the current state can be calculated only if
+  /// the previous state arriving to the current state is known
+  virtual double cost(int64_t domainElement, DPState* fromState=nullptr) const noexcept;
 
   /// Returns whether or not this
   virtual bool isInfeasible() const noexcept;

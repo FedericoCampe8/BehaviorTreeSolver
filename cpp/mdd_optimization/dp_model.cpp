@@ -28,7 +28,7 @@ DPState::SPtr DPState::next(int64_t, DPState*) const noexcept
   return std::make_shared<DPState>();
 }
 
-double DPState::cost(int64_t domainElement) const noexcept
+double DPState::cost(int64_t domainElement, DPState*) const noexcept
 {
   return static_cast<double>(domainElement);
 }

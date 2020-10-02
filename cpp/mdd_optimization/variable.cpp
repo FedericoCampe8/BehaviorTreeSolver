@@ -6,9 +6,11 @@
 
 namespace mdd {
 
-Variable::Variable(uint32_t id, uint32_t layer, int64_t lowerBound, int64_t upperBound)
+Variable::Variable(uint32_t id, uint32_t layer, int64_t lowerBound, int64_t upperBound,
+                   const std::string& name)
 : pId(id),
   pLayerIndex(layer),
+  pName(name),
   pLowerBound(lowerBound),
   pUpperBound(upperBound)
 {
@@ -20,9 +22,11 @@ Variable::Variable(uint32_t id, uint32_t layer, int64_t lowerBound, int64_t uppe
   std::iota(std::begin(pAvailableValues), std::end(pAvailableValues), lowerBound);
 }
 
-Variable::Variable(uint32_t id, uint32_t layer, const std::vector<int64_t>& availableValues)
+Variable::Variable(uint32_t id, uint32_t layer, const std::vector<int64_t>& availableValues,
+                   const std::string& name)
 : pId(id),
   pLayerIndex(layer),
+  pName(name),
   pAvailableValues(availableValues)
 {
   if (pAvailableValues.empty())

@@ -176,6 +176,10 @@ std::string Node::getNodeStringId() const noexcept
   {
     return "r";
   }
+  if (pVariable && !pVariable->getName().empty())
+  {
+    return pVariable->getName() + "_" + std::to_string(pNodeId);
+  }
   return "u" + std::to_string(pNodeId);
 }
 

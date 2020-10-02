@@ -16,6 +16,27 @@
 
 namespace {
 constexpr uint32_t kLayerZero{0};
+
+void topologicalSortVisitUtility(mdd::Node* node,
+                                 spp::sparse_hash_set<uint32_t>& visited,
+                                 std::stack<mdd::Node*>& nodesToExpand)
+{
+  // Mark the current node as visited
+  visited.insert(node->getUniqueId());
+
+  // Recur for all the vertices adjacent to this node
+  for (auto outEdge : node->getOutEdges())
+  {
+    if (visited.find(outEdge->getHead()->getUniqueId()) == visited.end())
+    {
+      topologicalSortVisitUtility(outEdge->getHead(), visited, nodesToExpand);
+    }
+  }
+
+  // Push current vertex to stack which stores topological sort
+  nodesToExpand.push(node);
+}
+
 }  // namespace
 
 namespace mdd {
@@ -912,7 +933,7 @@ std::vector<Edge*> MDD::maximize()
         nodesToExpand.push(nextNode);
         nextNode->setOptimizationValue(
                 currentNode->getOptimizationValue() +
-                currentNode->getDPState()->cost(edge->getValue()));
+                currentNode->getDPState()->cost(edge->getValue(), edge->getTail()->getDPState()));
         nextNode->setSelectedEdge(edge);
       }
       else
@@ -920,7 +941,7 @@ std::vector<Edge*> MDD::maximize()
         // If it does, the node has been visited already,
         // update its partial solution choosing the maximum value
         double candidateValue = currentNode->getOptimizationValue() +
-                currentNode->getDPState()->cost(edge->getValue());
+                currentNode->getDPState()->cost(edge->getValue(), edge->getTail()->getDPState());
         if (candidateValue > nextNode->getOptimizationValue())
         {
           nextNode->setOptimizationValue(candidateValue);
@@ -940,6 +961,62 @@ std::vector<Edge*> MDD::maximize()
       node = node->getSelectedEdge()->getTail();
   }
 
+  return solution;
+}
+
+std::vector<Edge*> MDD::minimize()
+{
+  constexpr int64_t posInf{std::numeric_limits<int64_t>::max()};
+  std::stack<Node*> nodesToExpand;
+  spp::sparse_hash_set<uint32_t> visited;
+  spp::sparse_hash_map<uint32_t, int64_t> objectiveMap;
+
+  for (const auto& layer : pNodesPerLayer)
+  {
+    for (auto node : layer)
+    {
+      objectiveMap[node->getUniqueId()] = posInf;
+    }
+  }
+
+  // Initialize distances to all vertices as infinite and distance
+  // to source as 0
+  objectiveMap[pRootNode->getUniqueId()] = 0;
+  for (const auto& layer : pNodesPerLayer)
+  {
+    for (auto node : layer)
+    {
+      // Update distances of all adjacent vertices
+      auto currentNodeCost = objectiveMap[node->getUniqueId()];
+      if (currentNodeCost < posInf)
+      {
+        for (auto edge : node->getOutEdges())
+        {
+          auto fromState = edge->getTail()->getDPState();
+          auto costNextNode = edge->getHead()->getDPState()->cost(edge->getValue(), fromState);
+          if (objectiveMap[edge->getHead()->getUniqueId()] > currentNodeCost + costNextNode)
+          {
+            objectiveMap[edge->getHead()->getUniqueId()] = currentNodeCost + costNextNode;
+            edge->getHead()->setSelectedEdge(edge);
+          }
+        }
+      }
+    }
+  }
+
+  std::vector<Edge*> solution;
+
+  // Start with leaf and trace backwards
+  int64_t totCost{0};
+  auto node = pNodesPerLayer.at(pNodesPerLayer.size()- 1).at(0);
+  while (node->getSelectedEdge() != nullptr)
+  {
+      totCost += objectiveMap[node->getUniqueId()];
+      solution.push_back(node->getSelectedEdge());
+      node = node->getSelectedEdge()->getTail();
+  }
+
+  std::cout << "Cost: " << totCost << std::endl;
   return solution;
 }
 
