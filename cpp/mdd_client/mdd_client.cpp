@@ -5,11 +5,14 @@
 //
 #include <cstdint>    // for int64_t
 #include <exception>
+#include <fstream>
 #include <iostream>
 #include <limits>     // for std::numeric_limits
 #include <memory>
 #include <string>
 #include <vector>
+
+#include <rapidjson/document.h>
 
 #include "mdd_optimization/all_different.hpp"
 #include "mdd_optimization/among.hpp"
@@ -25,8 +28,87 @@ void runTSPPD()
 {
   using namespace mdd;
 
+  std::string instancePath{"../cpp/mdd_client/data/grubhub-02-0.json"};
+  std::ifstream datafile(instancePath);
+  std::string dataString((std::istreambuf_iterator<char>(datafile)),
+                         (std::istreambuf_iterator<char>()));
+
+  // Parse the inputs into Json
+  rapidjson::Document dataDoc;
+  dataDoc.Parse(dataString.c_str());
+
+  // Parse the nodes
+  const auto& nodesJson = dataDoc["nodes"];
+  int numVars = static_cast<int>(nodesJson.Size());
+
+  // Parse the distance matrix
+  const auto& edgesJson = dataDoc["edges"];
+  std::vector<std::vector<int64_t>> costMatrix;
+  costMatrix.resize(edgesJson.Size());
+  for (rapidjson::SizeType idx{0}; idx < edgesJson.Size(); ++idx)
+  {
+    const auto& resObj = edgesJson[idx].GetArray();
+    auto& row = costMatrix[idx];
+    row.resize(resObj.Size());
+    for (rapidjson::SizeType idx2{0}; idx2 < resObj.Size(); ++idx2)
+    {
+      row[idx2] = resObj[idx2].GetInt64();
+    }
+  }
+
   // Create the MDD problem
   auto problem = std::make_shared<MDDProblem>();
+  problem->setMinimization();
+
+  // First variable is always the node "+0"
+  problem->addVariable(std::make_shared<Variable>(0, 0, 0, 0));
+
+  std::vector<int64_t> pickupNode;
+  std::vector<int64_t> deliveryNode;
+  for (int idx{1}; idx < numVars-1; ++idx)
+  {
+    if (((idx+1) % 2) == 0)
+    {
+      pickupNode.push_back(idx + 1);
+    }
+
+    if (((idx+2) % 2) == 1)
+    {
+      deliveryNode.push_back(idx + 2);
+    }
+    problem->addVariable(std::make_shared<Variable>(idx, idx, 2, numVars-1));
+  }
+
+  // Last variable is always the node "-0"
+  problem->addVariable(std::make_shared<Variable>(numVars-1, numVars-1, 1, 1));
+
+  // Create the constraint
+  auto tsppd = std::make_shared<TSPPD>(pickupNode, deliveryNode, costMatrix);
+  tsppd->setScope(problem->getVariables());
+  problem->addConstraint(tsppd);
+
+  tools::Timer timer;
+
+  // Create the MDD
+  int32_t width{std::numeric_limits<int32_t>::max()};
+  width = 10;
+  MDD mdd(problem, width);
+
+  // Enforce all the constraints on the MDD
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::Separation);
+  std::cout << "Wallclock time enforce constraints (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
+
+  timer.reset();
+  timer.start();
+
+  double bestCost{std::numeric_limits<double>::max()};
+  mdd.dfsRec(mdd.getMDD(), bestCost, 0.0, mdd.getMDD());
+  std::cout << "Best solution: " << bestCost << std::endl;
+  mdd.printMDD("mdd");
+/*
+  // Create the MDD problem
+  //auto problem = std::make_shared<MDDProblem>();
   problem->setMinimization();
 
   // Add the list of variables
@@ -74,7 +156,11 @@ void runTSPPD()
   }
   else
   {
-    solution = mdd.minimize();
+    //solution = mdd.minimize();
+    //mdd.dfs();
+    double bestCost{std::numeric_limits<double>::max()};
+    mdd.dfsRec(mdd.getMDD(), bestCost, 0.0, mdd.getMDD());
+    std::cout << "Best solution: " << bestCost << std::endl;
   }
 
   for (int idx = 0; idx < solution.size(); idx++)
@@ -86,6 +172,7 @@ void runTSPPD()
   std::cout << "Wallclock time solution (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
   mdd.printMDD("mdd");
+  */
 }
 
 /*

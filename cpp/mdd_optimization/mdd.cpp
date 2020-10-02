@@ -1020,6 +1020,56 @@ std::vector<Edge*> MDD::minimize()
   return solution;
 }
 
+void MDD::dfs()
+{
+  std::stack<Node*> nodesToExpand;
+  nodesToExpand.push(pRootNode);
+  while(!nodesToExpand.empty())
+  {
+    auto currNode = nodesToExpand.top();
+    nodesToExpand.pop();
+
+    const auto& edges = currNode->getOutEdges();
+    if (edges.empty())
+    {
+      std::cout << "VISIT " << "t" << std::endl;
+    }
+    else
+    {
+      std::cout << "VISIT " << currNode->getNodeStringId() << std::endl;
+    }
+    for (auto it = edges.rbegin(); it != edges.rend(); ++it)
+    {
+      nodesToExpand.push((*it)->getHead());
+    }
+  }
+}
+
+void MDD::dfsRec(Node* currNode, double& bestCost, double cost, Node* prevNode)
+{
+  const auto& edges = currNode->getOutEdges();
+  if (edges.empty())
+  {
+    if (cost < bestCost)
+    {
+      // std::cout << "Improving solution cost " << cost << std::endl;
+      bestCost = cost;
+    }
+    //std::cout << "VISIT " << "t" << std::endl;
+    return;
+  }
+  else
+  {
+    //std::cout << "VISIT " << currNode->getNodeStringId() << std::endl;
+  }
+  for (auto it = edges.begin(); it != edges.end(); ++it)
+  {
+    cost += currNode->getDPState()->cost((*it)->getValue(), prevNode->getDPState());
+    dfsRec((*it)->getHead(), bestCost, cost, currNode);
+  }
+}
+
+
 void MDD::printMDD(const std::string& outFileName)
 {
   std::string ppMDD = "digraph D {\n";

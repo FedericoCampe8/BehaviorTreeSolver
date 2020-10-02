@@ -68,6 +68,10 @@ class SYS_EXPORT_CLASS MDD {
   /// Returns the path with maximum value from root to terminal node
   std::vector<Edge*> maximize();
 
+  /// Run DFS and calculate min cost
+  void dfs();
+  void dfsRec(Node* currNode, double& bestCost, double cost=0.0, Node* prevNode=nullptr);
+
   /// Prints a JPEG representation of this MDD to the given file name.dot.
   /// The file can be read by graphviz.
   /// For more information, visit https://graphviz.org/about/
