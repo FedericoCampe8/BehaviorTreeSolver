@@ -38,7 +38,20 @@ public:
   /// Returns the list of constraints in the problem
   const ConstraintsList& getConstraints() const noexcept { return pConstraintsList; }
 
+  /// Set problem as maximization
+  void setMaximization() noexcept { pIsMaximization = true; }
+
+  /// Set problem as minimization
+  void setMinimization() noexcept { pIsMaximization = false; }
+
+  /// Returns true if this is a maximization problem.
+  /// Returns false otherwise
+  bool isMaximization() const noexcept { return pIsMaximization; }
+
 private:
+  /// Maximization flag
+  bool pIsMaximization{true};
+
   /// List of all the variables in the problem
   VariablesList pVariablesList;
 

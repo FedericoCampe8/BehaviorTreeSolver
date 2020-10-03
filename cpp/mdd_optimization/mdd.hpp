@@ -62,8 +62,15 @@ class SYS_EXPORT_CLASS MDD {
   /// Returns all layers and nodes
   const MDDLayersList& getNodesPerLayer() const noexcept { return pNodesPerLayer; }
 
+  /// Returns the path with minimum value from root to terminal node
+  std::vector<Edge*> minimize();
+
   /// Returns the path with maximum value from root to terminal node
   std::vector<Edge*> maximize();
+
+  /// Run DFS and calculate min cost
+  void dfs();
+  void dfsRec(Node* currNode, double& bestCost, double cost=0.0, Node* prevNode=nullptr);
 
   /// Prints a JPEG representation of this MDD to the given file name.dot.
   /// The file can be read by graphviz.

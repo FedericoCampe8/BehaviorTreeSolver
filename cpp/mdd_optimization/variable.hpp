@@ -9,6 +9,7 @@
 #include <cstdint>  // for int64_t
 #include <limits>   // for std::numeric_limits
 #include <memory>   // for std::unique_ptr
+#include <string>
 #include <vector>
 
 #include "system/system_export_defs.hpp"
@@ -21,11 +22,15 @@ class SYS_EXPORT_CLASS Variable {
   using SPtr = std::shared_ptr<Variable>;
 
  public:
-  Variable(uint32_t id, uint32_t layer, int64_t lowerBound, int64_t upperBound);
-  Variable(uint32_t id, uint32_t layer, const std::vector<int64_t> &availableValues);
+  Variable(uint32_t id, uint32_t layer, int64_t lowerBound, int64_t upperBound,
+           const std::string& name="");
+  Variable(uint32_t id, uint32_t layer, const std::vector<int64_t> &availableValues,
+           const std::string& name="");
 
   /// Return this variable's unique identifier
   uint32_t getId() const noexcept { return pId; }
+
+  const std::string& getName() const noexcept { return pName; }
 
   /// Returns this variable' domain
   const std::vector<int64_t>& getAvailableValues() const noexcept { return pAvailableValues;}
@@ -42,6 +47,9 @@ class SYS_EXPORT_CLASS Variable {
 
   /// MDD Layer this variable is at
   uint32_t pLayerIndex;
+
+  /// Name of this variable
+  std::string pName{""};
 
   /// This variable's domain
   std::vector<int64_t> pAvailableValues;

@@ -7,10 +7,6 @@
 
 // #define DEBUG
 
-namespace {
-constexpr int32_t kDefaultBitmapSize{32};
-}  // namespace
-
 namespace mdd {
 
 AllDifferentState::AllDifferentState()
@@ -105,7 +101,7 @@ DPState::SPtr AllDifferentState::next(int64_t domainElement, DPState*) const noe
   return state;
 }
 
-double AllDifferentState::cost(int64_t domainElement) const noexcept
+double AllDifferentState::cost(int64_t domainElement, DPState*) const noexcept
 {
   return static_cast<double>(domainElement);
 }

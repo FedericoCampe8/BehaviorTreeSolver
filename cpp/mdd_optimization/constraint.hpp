@@ -27,6 +27,8 @@ enum class ConstraintType {
   /// Models Among(X, S, l, u):
   /// only l <= X <= u variables in X can take values in S
   kAmong,
+  /// Single constraint encoding the TSP-PD problem
+  kTSPPD,
   /// Unspecified constraint
   kUnspecified
 };
