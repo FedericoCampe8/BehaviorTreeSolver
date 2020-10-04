@@ -888,15 +888,7 @@ void MDD::runFilteringProcedure(Node* node)
   std::vector<Node*> newNodesList;
   for (auto& con : pProblem->getConstraints())
   {
-    for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)
-    {
-      newNodesList.clear();
-      for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
-      {
-        auto node = pNodesPerLayer.at(layerIdx).at(nodeIdx);
-        con->enforceConstraint(node, pArena.get(), pNodesPerLayer, newNodesList);
-      }
-    }
+    con->enforceConstraint(pArena.get(), pNodesPerLayer, newNodesList);
   }
 }
 

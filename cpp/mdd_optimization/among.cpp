@@ -542,23 +542,21 @@ void Among::enforceConstraintBottomUp(
   std::vector<Edge*> inEdges = lastNode->getInEdges();
   for (auto inEdge : inEdges ) {
 
-      const auto& path = lastNode->getIncomingPaths().at( inEdge->getUniqueId() ).at(0);
-      int count = getConstraintCountForPath(path);
+    const auto& path = lastNode->getIncomingPaths().at( inEdge->getUniqueId() ).at(0);
+    int count = getConstraintCountForPath(path);
 
-      // If count is less than lower bound, this edge is not feasible
-      if (count < pLowerBound) {
-          Node* tail = inEdge->getTail();
-          inEdge->removeEdgeFromNodes();
-          arena->deleteEdge(inEdge->getUniqueId());
+    // If count is less than lower bound, this edge is not feasible
+    if (count < pLowerBound) {
+        Node* tail = inEdge->getTail();
+        inEdge->removeEdgeFromNodes();
+        arena->deleteEdge(inEdge->getUniqueId());
 
-          // If tail has no outgoing edges, this node is no longer valid
-          if (tail->getOutEdges().empty()) {
-            queue.push( tail );
-          }
+        // If tail has no outgoing edges, this node is no longer valid
+        if (tail->getOutEdges().empty()) {
+          queue.push( tail );
         }
     }
-
-    
+  }
 
   while(!queue.empty())
   {
@@ -585,32 +583,12 @@ void Among::enforceConstraintBottomUp(
   // At this point only edges leading to feasible solutions should be left
 }
 
-void Among::enforceConstraint(Node* node, Arena* arena,
+void Among::enforceConstraint(Arena* arena,
                               std::vector<std::vector<Node*>>& mddRepresentation,
                               std::vector<Node*>& newNodesList) const
 {
-  if (node == nullptr)
-  {
-    throw std::invalid_argument("Among - enforceConstraint: empty pointer to the node");
-  }
-
-  if (arena == nullptr)
-  {
-    throw std::invalid_argument("Among - enforceConstraint: empty pointer to the arena");
-  }
-
-  // Hackish way of running this only once
-  // Current design calls enforce constraint for every node,
-  // but this constrain needs a global approach
-  // TODO add method inside MddConstraint class returning true if the constraint needs
-  // a global approach. Returning false otherwise.
-  // Re-write the implementation of the enforce method in the MDD class considering
-  // this new constraint query
-  if (node->getUniqueId() == mddRepresentation.at(0).at(0)->getUniqueId())
-  {
-    enforceConstraintTopDown(arena, mddRepresentation);
-    enforceConstraintBottomUp(arena, mddRepresentation);
-  }
+  enforceConstraintTopDown(arena, mddRepresentation);
+  enforceConstraintBottomUp(arena, mddRepresentation);
 }
 
 

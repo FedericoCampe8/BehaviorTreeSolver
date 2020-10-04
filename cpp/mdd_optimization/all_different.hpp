@@ -69,7 +69,7 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
    AllDifferent(const std::string& name="AllDifferent");
 
    /// Enforces this constraint on the given MDD node
-   void enforceConstraint(Node* node, Arena* arena,
+   void enforceConstraint(Arena* arena,
                           std::vector<std::vector<Node*>>& mddRepresentation,
                           std::vector<Node*>& newNodesList) const override;
 
@@ -90,6 +90,9 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
  private:
    /// Initial state for the DP model for the AllDifferent constraint
    AllDifferentState::SPtr pInitialDPState{nullptr};
+   void enforceConstraintForNode(Node* node, Arena* arena,
+                          std::vector<std::vector<Node*>>& mddRepresentation,
+                          std::vector<Node*>& newNodesList) const;
 };
 
 

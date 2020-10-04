@@ -57,7 +57,7 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
     */
    ///
    ///
-   virtual void enforceConstraint(Node* node, Arena* arena,
+   virtual void enforceConstraint(Arena* arena,
                                   std::vector<std::vector<Node*>>& mddRepresentation,
                                   std::vector<Node*>& newNodesList) const = 0;
 

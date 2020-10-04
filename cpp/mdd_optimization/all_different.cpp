@@ -198,7 +198,21 @@ DPState::SPtr AllDifferent::getInitialDPState() const noexcept
   return pInitialDPState;
 }
 
-void AllDifferent::enforceConstraint(Node* node, Arena* arena,
+
+void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation,
+                                     std::vector<Node*>& newNodesList) const
+{
+    for (int layerIdx{0}; layerIdx < mddRepresentation.size()-1; ++layerIdx) {
+        newNodesList.clear();
+        for (int nodeIdx{0}; nodeIdx < mddRepresentation.at(layerIdx).size(); ++nodeIdx) {
+          auto node = mddRepresentation.at(layerIdx).at(nodeIdx);
+          enforceConstraintForNode(node, arena, mddRepresentation, newNodesList);
+        }
+    }
+}
+
+
+void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
                                      std::vector<std::vector<Node*>>& mddRepresentation,
                                      std::vector<Node*>& newNodesList) const
 {
