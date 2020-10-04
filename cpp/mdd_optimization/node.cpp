@@ -21,21 +21,27 @@ Node::Node(uint32_t layer, Variable* variable)
 Node::~Node()
 {
   // Remove this node from all edges
-  auto inEdgeListCopy = pInEdges;
-  for (auto inEdge : inEdgeListCopy)
+  if (!pInEdges.empty())
   {
-    if (inEdge != nullptr)
+    auto inEdgeListCopy = pInEdges;
+    for (auto inEdge : inEdgeListCopy)
     {
-      inEdge->removeHead();
+      if (inEdge != nullptr)
+      {
+        inEdge->removeHead();
+      }
     }
   }
 
-  auto outEdgeListCopy = pOutEdges;
-  for (auto outEdge : outEdgeListCopy)
+  if (!pOutEdges.empty())
   {
-    if (outEdge != nullptr)
+    auto outEdgeListCopy = pOutEdges;
+    for (auto outEdge : outEdgeListCopy)
     {
-      outEdge->removeTail();
+      if (outEdge != nullptr)
+      {
+        outEdge->removeTail();
+      }
     }
   }
 }

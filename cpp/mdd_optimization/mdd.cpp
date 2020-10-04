@@ -4,6 +4,7 @@
 
 #include <algorithm>  // for std::find
 #include <cassert>
+#include <cstdlib>    // for std::rand
 #include <fstream>
 #include <iostream>
 #include <stack>
@@ -11,6 +12,8 @@
 #include <utility>    // for std::pair
 
 #include <sparsepp/spp.h>
+
+#include "tools/timer.hpp"
 
 // #define DEBUG
 
@@ -66,12 +69,14 @@ void MDD::enforceConstraints(MDDConstructionAlgorithm algorithmType)
   {
     // Start from the root node
     auto rootNode = buildRootMDD();
+    pRootNode->initializeNodeDomain();
     runTopDownProcedure(rootNode, false);
   }
   else if(algorithmType == MDDConstructionAlgorithm::RestrictedTopDown)
   {
     // Start from the root node
     auto rootNode = buildRootMDD();
+    pRootNode->initializeNodeDomain();
     runTopDownProcedure(rootNode, true);
   }
   else
@@ -691,6 +696,7 @@ void MDD::runSeparationAndRefinementProcedureOnConstraint(Node* root, MDDConstra
 
 void MDD::runTopDownProcedure(Node* node, bool isRestricted)
 {
+  srand( (unsigned)time(NULL) );
   if (node == nullptr)
   {
     throw std::runtime_error("MDD - runTopDownProcedure: empty pointer to node");
@@ -773,15 +779,18 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
     while(isRestricted && (pMaxWidth > 1) && (pNodesPerLayer.at(layerIdx).size() > pMaxWidth))
     {
       // Simply remove nodes
-      auto lastNode = pNodesPerLayer.at(layerIdx).back();
-      pNodesPerLayer.at(layerIdx).pop_back();
+      auto randPos = std::rand() % (pNodesPerLayer.at(layerIdx).size());
+      auto lastNode = pNodesPerLayer.at(layerIdx).at(randPos);
+      pNodesPerLayer.at(layerIdx).erase(pNodesPerLayer.at(layerIdx).begin() + randPos);
+
+      //auto lastNode = pNodesPerLayer.at(layerIdx).back();
+      //pNodesPerLayer.at(layerIdx).pop_back();
 
       // Note: remove all the connected edges as well
       assert(lastNode->getOutEdges().empty());
       auto allEdges = lastNode->getInEdges();
       for (auto inEdgeToRemove : allEdges)
       {
-        inEdgeToRemove->removeEdgeFromNodes();
         pArena->deleteEdge(inEdgeToRemove->getUniqueId());
       }
 
@@ -794,7 +803,7 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
     {
       // For all values of the domain of the current layer
       auto currNode = pNodesPerLayer.at(layerIdx).at(nodeIdx);
-      auto currDomain = currNode->getValues();
+      const auto& currDomain = currNode->getValues();
       for (auto val : currDomain)
       {
         // Calculate the DP state w.r.t. the given domain value
@@ -809,6 +818,7 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
         Node* matchingNode{nullptr};
         for (const auto& state : newDPStates)
         {
+          break;
           if (state.first->isEqual(nextDPState.get()))
           {
             // A match is found
@@ -832,6 +842,10 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
                   pProblem->getVariables().at(nextLayer).get() :
                   nullptr;
           auto nextNode = pArena->buildNode(currNode->getLayer() + 1, nextVar);
+          if (nextVar != nullptr)
+          {
+            nextNode->initializeNodeDomain();
+          }
 
           // Set the new DP state on the new node
           nextNode->resetDPState(nextDPState);
@@ -1016,27 +1030,28 @@ void MDD::dfs()
   }
 }
 
-void MDD::dfsRec(Node* currNode, double& bestCost, double cost, Node* prevNode)
+void MDD::dfsRec(Node* currNode, double& bestCost, const uint32_t maxLayer,
+                 double cost, Node* prevNode)
 {
   const auto& edges = currNode->getOutEdges();
   if (edges.empty())
   {
+    if (currNode->getLayer() < maxLayer)
+    {
+      return;
+    }
+
     if (cost < bestCost)
     {
-      // std::cout << "Improving solution cost " << cost << std::endl;
       bestCost = cost;
     }
-    //std::cout << "VISIT " << "t" << std::endl;
     return;
   }
-  else
-  {
-    //std::cout << "VISIT " << currNode->getNodeStringId() << std::endl;
-  }
+
   for (auto it = edges.begin(); it != edges.end(); ++it)
   {
     cost += currNode->getDPState()->cost((*it)->getValue(), prevNode->getDPState());
-    dfsRec((*it)->getHead(), bestCost, cost, currNode);
+    dfsRec((*it)->getHead(), bestCost, maxLayer, cost, currNode);
   }
 }
 
