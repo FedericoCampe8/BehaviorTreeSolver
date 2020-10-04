@@ -16,27 +16,6 @@
 
 namespace {
 constexpr uint32_t kLayerZero{0};
-
-void topologicalSortVisitUtility(mdd::Node* node,
-                                 spp::sparse_hash_set<uint32_t>& visited,
-                                 std::stack<mdd::Node*>& nodesToExpand)
-{
-  // Mark the current node as visited
-  visited.insert(node->getUniqueId());
-
-  // Recur for all the vertices adjacent to this node
-  for (auto outEdge : node->getOutEdges())
-  {
-    if (visited.find(outEdge->getHead()->getUniqueId()) == visited.end())
-    {
-      topologicalSortVisitUtility(outEdge->getHead(), visited, nodesToExpand);
-    }
-  }
-
-  // Push current vertex to stack which stores topological sort
-  nodesToExpand.push(node);
-}
-
 }  // namespace
 
 namespace mdd {

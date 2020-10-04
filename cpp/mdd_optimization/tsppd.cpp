@@ -284,9 +284,9 @@ DPState::SPtr TSPPD::getInitialDPState() const noexcept
   return pInitialDPState;
 }
 
-void TSPPD::enforceConstraint(Node* node, Arena* arena,
-                                     std::vector<std::vector<Node*>>& mddRepresentation,
-                                     std::vector<Node*>& newNodesList) const
+void TSPPD::enforceConstraint(Arena* arena,
+                              std::vector<std::vector<Node*>>& mddRepresentation,
+                              std::vector<Node*>& newNodesList) const
 {
 }
 

@@ -55,8 +55,6 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
     * \arg mddRepresentation: full MDD representation (layer by layer)
     * \arg newNodesList: list of all the new nodes created on the same level
     */
-   ///
-   ///
    virtual void enforceConstraint(Arena* arena,
                                   std::vector<std::vector<Node*>>& mddRepresentation,
                                   std::vector<Node*>& newNodesList) const = 0;
