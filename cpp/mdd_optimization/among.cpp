@@ -453,49 +453,6 @@ void Among::enforceConstraintTopDown(Arena* arena,
             arena->deleteEdge(outEdge->getUniqueId());
           }
 
-
-          // else
-          // {
-          //   auto newNode = arena->buildNode(head->getLayer(), head->getVariable());
-          //   newNode->initializeNodeDomain();
-          //   outEdge->setHead(newNode);
-
-          //   // Remove invalid values from new node:
-          //   // for each value in new node, check if that value is contained in head.
-          //   // If so, continue, if not remove it from new node
-          //   const auto& nodeDomain = head->getValues();
-          //   auto newNodeDomain = newNode->getValuesMutable();
-
-          //   // Keep a copy of the values to remove to avoid invalidating iterators
-          //   std::vector<int64_t> valuesToRemove;
-          //   for (auto val : *(newNodeDomain))
-          //   {
-          //     if (std::find(nodeDomain.cbegin(), nodeDomain.cend(), val) == nodeDomain.cend())
-          //     {
-          //       valuesToRemove.push_back(val);
-          //     }
-          //   }
-
-          //   for (auto val : valuesToRemove)
-          //   {
-          //     newNodeDomain->erase(std::find(newNodeDomain->begin(), newNodeDomain->end(), val));
-          //   }
-
-          //   // Copy outgoing edges for new node
-          //   for (auto outEdge : head->getOutEdges())
-          //   {
-          //     arena->buildEdge(newNode,
-          //                      outEdge->getHead(),
-          //                      outEdge->getValue(),
-          //                      outEdge->getValue());
-          //   }
-
-          //   // Add new node to the mdd representation
-          //   mddRepresentation[newNode->getLayer()].push_back(newNode);
-          // }  // else count < pUpperBound
-
-
-
         }
       }  // for all out edges of current node
 

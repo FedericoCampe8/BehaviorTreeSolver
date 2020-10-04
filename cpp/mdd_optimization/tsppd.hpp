@@ -31,6 +31,7 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   TSPPDState(NodeVisitSet* pickupNodes, NodeVisitSet* deliveryNodes,
              CostMatrix* costMatrix, bool isDefaultState=false);
   ~TSPPDState() = default;
+  
 
   TSPPDState(const TSPPDState& other);
   TSPPDState(TSPPDState&& other);
@@ -82,6 +83,8 @@ class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
          const TSPPDState::NodeVisitSet& deliveryNodes,
          const TSPPDState::CostMatrix& costMatrix,
          const std::string& name="TSPPD");
+
+    virtual ~TSPPD() {}
 
    /// Enforces this constraint on the given MDD node
    void enforceConstraint(Arena* arena,
