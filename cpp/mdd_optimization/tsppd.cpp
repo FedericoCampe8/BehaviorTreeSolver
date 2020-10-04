@@ -135,8 +135,6 @@ DPState::SPtr TSPPDState::next(int64_t val, DPState*) const noexcept
         break;
       }
     }
-    bool isDelivery = std::find(pDeliveryNodeList->begin(), pDeliveryNodeList->end(), val) !=
-            pDeliveryNodeList->end();
     for (const auto& subSet : pVisitedNodesList)
     {
       if (deliveryIdx >= 0)
@@ -145,15 +143,14 @@ DPState::SPtr TSPPDState::next(int64_t val, DPState*) const noexcept
         // already visited.
         // Get the correspondent pick-up node
         const auto pickUp = pPickUpNodeList->at(deliveryIdx);
-        if (std::find(subSet.begin(), subSet.end(), pickUp) != subSet.end())
+
+        if (std::find(subSet.begin(), subSet.end(), pickUp) != subSet.end() &&
+                std::find(subSet.begin(), subSet.end(), val) == subSet.end())
         {
           // Pickup is visited already, add the delivery to the list of visited nodes
           // First check if the node is not being already visited
-          if (std::find(subSet.begin(), subSet.end(), val) == subSet.end())
-          {
-            state->pVisitedNodesList.push_back(subSet);
-            state->pVisitedNodesList.back().insert(val);
-          }
+          state->pVisitedNodesList.push_back(subSet);
+          state->pVisitedNodesList.back().insert(val);
         }
       }
       else
@@ -210,7 +207,6 @@ std::string TSPPDState::toString() const noexcept
     out += "}";
     return out;
   }
-
   for (const auto& sublist : pVisitedNodesList)
   {
     out += "{";

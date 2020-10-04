@@ -70,7 +70,8 @@ class SYS_EXPORT_CLASS MDD {
 
   /// Run DFS and calculate min cost
   void dfs();
-  void dfsRec(Node* currNode, double& bestCost, double cost=0.0, Node* prevNode=nullptr);
+  void dfsRec(Node* currNode, double& bestCost, const uint32_t maxLayer,
+              double cost=0.0, Node* prevNode=nullptr);
 
   /// Prints a JPEG representation of this MDD to the given file name.dot.
   /// The file can be read by graphviz.

@@ -28,7 +28,7 @@ void runTSPPD()
 {
   using namespace mdd;
 
-  std::string instancePath{"../cpp/mdd_client/data/grubhub-02-0.json"};
+  std::string instancePath{"../cpp/mdd_client/data/grubhub-15-9.json"};
   std::ifstream datafile(instancePath);
   std::string dataString((std::istreambuf_iterator<char>(datafile)),
                          (std::istreambuf_iterator<char>()));
@@ -76,8 +76,23 @@ void runTSPPD()
     {
       deliveryNode.push_back(idx + 2);
     }
+    /*
+    if (idx == 1)
+    {
+      problem->addVariable(std::make_shared<Variable>(idx, idx, 20, 20));
+    }
+    else if (idx == 2)
+    {
+      problem->addVariable(std::make_shared<Variable>(idx, idx, 21, 21));
+    }
+    else
+    {
+      problem->addVariable(std::make_shared<Variable>(idx, idx, 2, numVars-1));
+    }
+    */
     problem->addVariable(std::make_shared<Variable>(idx, idx, 2, numVars-1));
   }
+  std::cout << "Num Vars: " << numVars << " with domain [" << 2 << ", " << numVars-1 << "]\n";
 
   // Last variable is always the node "-0"
   problem->addVariable(std::make_shared<Variable>(numVars-1, numVars-1, 1, 1));
@@ -90,12 +105,36 @@ void runTSPPD()
   tools::Timer timer;
 
   // Create the MDD
+  double bestCost{std::numeric_limits<double>::max()};
   int32_t width{std::numeric_limits<int32_t>::max()};
-  width = 10;
+  width = 3;
+  for (int i = 0; i < 10000; ++i)
+  {
+    MDD mdd(problem, width);
+
+    // Enforce all the constraints on the MDD
+    mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::RestrictedTopDown);
+    //std::cout << "Wallclock time enforce constraints (msec.): " <<
+    //        timer.getWallClockTimeMsec() << std::endl;
+
+    timer.reset();
+    timer.start();
+
+    double oldCost = std::numeric_limits<double>::max();
+    mdd.dfsRec(mdd.getMDD(), oldCost, numVars, 0.0, mdd.getMDD());
+    if (oldCost < bestCost)
+    {
+      bestCost = oldCost;
+      std::cout << "Improving solution: " << bestCost << std::endl;
+    }
+  }
+  std::cout << "Best solution: " << bestCost << std::endl;
+
+  /*
   MDD mdd(problem, width);
 
   // Enforce all the constraints on the MDD
-  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::Separation);
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::RestrictedTopDown);
   std::cout << "Wallclock time enforce constraints (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
 
@@ -103,12 +142,14 @@ void runTSPPD()
   timer.start();
 
   double bestCost{std::numeric_limits<double>::max()};
-  mdd.dfsRec(mdd.getMDD(), bestCost, 0.0, mdd.getMDD());
+  mdd.dfsRec(mdd.getMDD(), bestCost, numVars, 0.0, mdd.getMDD());
   std::cout << "Best solution: " << bestCost << std::endl;
   mdd.printMDD("mdd");
-/*
+  */
+
+  /*
   // Create the MDD problem
-  //auto problem = std::make_shared<MDDProblem>();
+  auto problem = std::make_shared<MDDProblem>();
   problem->setMinimization();
 
   // Add the list of variables
@@ -142,7 +183,7 @@ void runTSPPD()
   tools::Timer timer;
 
   // Enforce all the constraints on the MDD
-  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::Separation);
+  mdd.enforceConstraints(MDD::MDDConstructionAlgorithm::TopDown);
   std::cout << "Wallclock time enforce constraints (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
 
@@ -172,7 +213,7 @@ void runTSPPD()
   std::cout << "Wallclock time solution (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
   mdd.printMDD("mdd");
-  */
+*/
 }
 
 /*
