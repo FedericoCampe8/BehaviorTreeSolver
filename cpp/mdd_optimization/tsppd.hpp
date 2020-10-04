@@ -83,6 +83,8 @@ class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
          const TSPPDState::CostMatrix& costMatrix,
          const std::string& name="TSPPD");
 
+   virtual ~TSPPD() {}
+
    /// Enforces this constraint on the given MDD node
    void enforceConstraint(Arena* arena,
                           std::vector<std::vector<Node*>>& mddRepresentation,
