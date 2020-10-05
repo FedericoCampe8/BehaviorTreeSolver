@@ -5,6 +5,7 @@
 #include <stdexcept>  // for std::exception
 
 #include "mdd_optimization/top_down_compiler.hpp"
+#include "tools/timer.hpp"
 
 namespace {
 constexpr uint32_t kLayerZero{0};
@@ -31,7 +32,7 @@ MDDOptimizer::MDDOptimizer(MDDProblem::SPtr problem)
   pMDDGraph.resize(pProblem->getVariables().size() + 1);
 }
 
-void MDDOptimizer::runOptimization(int32_t width)
+void MDDOptimizer::runOptimization(int32_t width, uint64_t timeoutMsec)
 {
   if (width < 1)
   {
@@ -40,13 +41,16 @@ void MDDOptimizer::runOptimization(int32_t width)
   pMaxWidth = width;
 
   // Use a top-down compiler for B&B optimization
-  pMDDCompiler = std::make_unique<TopDownCompiler>();
+  pMDDCompiler = std::make_unique<TopDownCompiler>(pProblem);
 
   // Set the compiler parameters
   pMDDCompiler->setCompilationType(MDDCompiler::MDDCompilationType::Restricted);
   pMDDCompiler->setNodesRemovalStrategy(
           MDDCompiler::RestrictedNodeSelectionStrategy::CumulativeCost);
   pMDDCompiler->setMaxWidth(width);
+
+  // Start the timer before any computation
+  tools::Timer timeoutTimer;
 
   // Prepare the first layer for the top-down compilation
   buildRootMDD();
@@ -56,7 +60,7 @@ void MDDOptimizer::runOptimization(int32_t width)
   MDDCompiler::NodePool nodePool;
 
   // Compile the MDD and get the list of nodes to expand in the next B&B iteration
-  pMDDCompiler->compileMDD(pProblem, pMDDGraph, pArena.get(), nodePool);
+  pMDDCompiler->compileMDD(pMDDGraph, pArena.get(), nodePool);
 
   // Get the incumbent, i.e., the best solution found so far
   double bestCost{std::numeric_limits<double>::max()};
@@ -66,38 +70,57 @@ void MDDOptimizer::runOptimization(int32_t width)
   if (bestCost < pBestCost)
   {
     pBestCost = bestCost;
-    std::cout << "New incumbent: " << pBestCost << std::endl;
+    std::cout << "New incumbent: " << pBestCost << " at " <<
+            timeoutTimer.getWallClockTimeMsec() << " msec" <<  std::endl;
   }
 
   // Repeat the compilation process branching on nodes and states and bounding
   // on the bestCost/incumbents found at each iteration
+  MDDCompiler::NodePool nodePoolAux;
   bool improveIncumbent{true};
+  bool oneEmpty{false};
   while(improveIncumbent)
   {
-    if (pBestCost < 12800)
-      improveIncumbent = false;
-    int layerCtr{0};
-    for (auto& layerPool : nodePool)
+    if (timeoutTimer.getWallClockTimeMsec() > timeoutMsec)
     {
-      // Get the node from the pool
+      // Return on timeout
+      break;
+    }
+
+    int layerCtr{0};
+    for (int currLayer{1}; currLayer < static_cast<int>(nodePool.size()); ++currLayer)
+    {
+      auto& layerPool = nodePool.at(currLayer);
+
+      // If the current layer is empty, try the next one
       if (layerPool.empty())
       {
         layerCtr++;
-        if (layerCtr > static_cast<int>(nodePool.size()))
+        if (layerCtr >= (static_cast<int>(nodePool.size()) - 1))
         {
-          std::cout << "Empty node pool" << std::endl;
-          improveIncumbent = false;
+          // If the pool of nodes is empty, swap with the next one
+          // TODO this could loop forever on empty pools
+          // improveIncumbent = false;
+          nodePool.clear();
+          nodePool.swap(nodePoolAux);
           break;
         }
         continue;
       }
 
+      // Found a layer that is not empty, reset the counter
       layerCtr = 0;
+
+      // Get the node from the current layer
       auto topNode = layerPool.top();
       layerPool.pop();
+
       if (topNode->getDPState()->cumulativeCost() >= pBestCost)
       {
-        // Branch on nodes/states that are already more expensive than the current incumbent
+        // Branch the states that are already more expensive
+        // than the current incumbent.
+        // Note try again with another node on the same layer
+        currLayer -= 1;
         continue;
       }
 
@@ -108,7 +131,7 @@ void MDDOptimizer::runOptimization(int32_t width)
       assert(pMDDGraph.at(topNode->getLayer()).at(0) == topNode);
 
       // Repeat the optimization process on the new MDD
-      pMDDCompiler->compileMDD(pProblem, pMDDGraph, pArena.get(), nodePool);
+      pMDDCompiler->compileMDD(pMDDGraph, pArena.get(), nodePoolAux);
 
       // Get the incumbent, i.e., the best solution found so far
       bestCost = std::numeric_limits<double>::max();
@@ -121,7 +144,8 @@ void MDDOptimizer::runOptimization(int32_t width)
 
         // Set the incumbent on the compiler to avoid storing useless nodes
         pMDDCompiler->setIncumbent(pBestCost);
-        std::cout << "New incumbent: " << pBestCost << std::endl;
+        std::cout << "New incumbent: " << pBestCost << " at " <<
+                timeoutTimer.getWallClockTimeMsec() << " msec" <<  std::endl;
       }
     }
   }

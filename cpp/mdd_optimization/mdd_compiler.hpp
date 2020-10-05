@@ -118,6 +118,12 @@ class SYS_EXPORT_CLASS MDDCompiler {
     return pNodesRemovalStrategy;
   }
 
+  /// Sets the flag to force state equivalence check and merge during compilation
+  void forceStateEquivalenceCheckAndMerge(bool eqCheck=true) noexcept
+  {
+    pForceStateEquivalenceMerge = eqCheck;
+  }
+
   /// Sets the incumbent
   void setIncumbent(double incumbent) noexcept { pBestCost = incumbent; }
 
@@ -130,13 +136,11 @@ class SYS_EXPORT_CLASS MDDCompiler {
 
   /**
    * \brief Compiles the MDD.
-   * \param[in] problem: the optimization problem to represent as an MDD.
    * \param[in] mddGraph: the graph data structure reference to the MDD to build.
    * \param[in] arena: arena to build nodes and edges.
    * \param[in] the node pool used for branch & bound search.
    */
-  virtual void compileMDD(MDDProblem::SPtr problem, MDDGraph& mddGraph, Arena* arena,
-                          NodePool& nodePool) = 0;
+  virtual void compileMDD(MDDGraph& mddGraph, Arena* arena, NodePool& nodePool) = 0;
 
  protected:
   MDDCompiler(MDDConstructionAlgorithm compilerType)
@@ -150,6 +154,13 @@ class SYS_EXPORT_CLASS MDDCompiler {
   /// Returns the (best) incumbent
   double getBestCost() const noexcept { return pBestCost; }
 
+  /// Returns the flag indicating whether the state equivalence check
+  /// and merge is enabled or not
+  bool isStateEquivalenceCheckAndMergeEnabled() const noexcept
+  {
+    return pForceStateEquivalenceMerge;
+  }
+
  private:
   /// Type of this compiler
   MDDConstructionAlgorithm pCompilerType{MDDConstructionAlgorithm::TopDown};
@@ -160,6 +171,10 @@ class SYS_EXPORT_CLASS MDDCompiler {
   /// Nodes removal strategy
   RestrictedNodeSelectionStrategy pNodesRemovalStrategy{
     RestrictedNodeSelectionStrategy::CumulativeCost};
+
+  /// Flag indicating whether or not state equivalence check and merge
+  /// should be applied
+  bool pForceStateEquivalenceMerge{false};
 
   /// Maximum width of the MDD to build
   int32_t pMaxWidth{std::numeric_limits<int32_t>::max()};

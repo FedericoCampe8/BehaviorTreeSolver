@@ -36,7 +36,7 @@ class SYS_EXPORT_CLASS MDDOptimizer {
    *         MDDs with specified width and applying
    *         branch & bound on the compiled MDDs.
    */
-  void runOptimization(int32_t width);
+  void runOptimization(int32_t width, uint64_t timeoutMsec=std::numeric_limits<uint64_t>::max());
 
   /// Prints a JPEG representation of this MDD to the given file name.dot.
   /// The file can be read by graphviz.

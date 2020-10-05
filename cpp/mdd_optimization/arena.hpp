@@ -10,7 +10,6 @@
 #include <limits>   // for std::numeric_limits
 #include <memory>   // for std::unique_ptr
 #include <vector>
-
 #include <sparsepp/spp.h>
 
 #include "mdd_optimization/edge.hpp"
@@ -23,6 +22,12 @@ namespace mdd {
 
 class SYS_EXPORT_CLASS Arena {
  public:
+  /// Map from node id to its index in the node list
+  using NodeArena = spp::sparse_hash_map<uint32_t, Node*>;
+
+  /// Map from edge id to its index in the edge list
+  using EdgeArena = spp::sparse_hash_map<uint32_t, Edge*>;
+
   using UPtr = std::unique_ptr<Arena>;
   using SPtr = std::shared_ptr<Arena>;
 
@@ -32,11 +37,9 @@ class SYS_EXPORT_CLASS Arena {
 
   Node* buildNode(uint32_t layer, Variable* variable = nullptr)
   {
-    // TODO add garbage collector: check if size is greater than max and, if so,
-    // resize the pool
-    pNodePool.push_back(std::make_unique<Node>(layer, variable));
-    pNodeArena[pNodePool.back()->getUniqueId()] = static_cast<uint32_t>((pNodePool.size() - 1));
-    return pNodePool.back().get();
+    auto newNode = new Node(layer, variable);
+    pNodeArena[newNode->getUniqueId()] = newNode;
+    return newNode;
   }
 
   /// Create a new node edge returns its raw pointer
@@ -45,11 +48,9 @@ class SYS_EXPORT_CLASS Arena {
                   int64_t valueLB = std::numeric_limits<int64_t>::min(),
                   int64_t valueUB = std::numeric_limits<int64_t>::max())
   {
-    // TODO add garbage collector: check if size is greater than max and, if so,
-    // resize the pool
-    pEdgePool.push_back(std::make_unique<Edge>(tail, head, valueLB, valueUB));
-    pEdgeArena[pEdgePool.back()->getUniqueId()] = static_cast<uint32_t>((pEdgePool.size() - 1));
-    return pEdgePool.back().get();
+    auto newEdge = new Edge(tail, head, valueLB, valueUB);
+    pEdgeArena[newEdge->getUniqueId()] = newEdge;
+    return newEdge;
   }
 
   /// Returns true if the arena contains the given node. Returns false otherwise
@@ -67,29 +68,22 @@ class SYS_EXPORT_CLASS Arena {
   /// Deletes the node with given id
   void deleteNode(uint32_t nodeId)
   {
-    pNodePool[pNodeArena.at(nodeId)].reset();
+    delete pNodeArena[nodeId];
     pNodeArena.erase(nodeId);
   }
 
   /// Deletes the edge with given id
   void deleteEdge(uint32_t edgeId)
   {
-    pEdgePool[pEdgeArena.at(edgeId)].reset();
+    delete pEdgeArena[edgeId];
     pEdgeArena.erase(edgeId);
   }
 
   /// Returns the pool of nodes
-  const std::vector<Node::UPtr>& getNodePool() const noexcept { return pNodePool; }
+  const NodeArena& getNodePool() const noexcept { return pNodeArena; }
 
   /// Returns the pool of edges
-  const std::vector<Edge::UPtr>& getEdgePool() const noexcept { return pEdgePool; }
-
- private:
-  /// Map from node id to its index in the node list
-  using NodeArena = spp::sparse_hash_map<uint32_t, uint32_t>;
-
-  /// Map from edge id to its index in the edge list
-  using EdgeArena = spp::sparse_hash_map<uint32_t, uint32_t>;
+  const EdgeArena& getEdgePool() const noexcept { return pEdgeArena; }
 
  private:
    /// Node map
@@ -97,12 +91,6 @@ class SYS_EXPORT_CLASS Arena {
 
    /// Edge map
    EdgeArena pEdgeArena;
-
-   /// List of all the node instances in the Behavior Tree
-   std::vector<Node::UPtr> pNodePool;
-
-   /// List of all the edge instances in the Behavior Tree
-   std::vector<Edge::UPtr> pEdgePool;
 };
 
 }  // namespace mdd

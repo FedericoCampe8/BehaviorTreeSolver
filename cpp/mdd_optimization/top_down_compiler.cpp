@@ -14,19 +14,21 @@ constexpr uint32_t kLayerZero{0};
 
 namespace mdd {
 
-TopDownCompiler::TopDownCompiler()
-: MDDCompiler(MDDCompiler::MDDConstructionAlgorithm::TopDown)
-{
-}
-
-void TopDownCompiler::compileMDD(MDDProblem::SPtr problem, MDDCompiler::MDDGraph& mddGraph,
-                                 Arena* arena, NodePool& nodePool)
+TopDownCompiler::TopDownCompiler(MDDProblem::SPtr problem)
+: MDDCompiler(MDDCompiler::MDDConstructionAlgorithm::TopDown),
+  pProblem(problem)
 {
   if (problem == nullptr)
   {
     throw std::invalid_argument("TopDownCompiler - compileMDD: nullptr to problem");
   }
 
+  // Initialize random seed
+  srand((unsigned)time(NULL));
+}
+
+void TopDownCompiler::compileMDD(MDDCompiler::MDDGraph& mddGraph, Arena* arena, NodePool& nodePool)
+{
   if (arena == nullptr)
   {
     throw std::invalid_argument("TopDownCompiler - compileMDD: nullptr to arena");
@@ -38,11 +40,7 @@ void TopDownCompiler::compileMDD(MDDProblem::SPtr problem, MDDCompiler::MDDGraph
   }
 
   // Initialize internal members
-  pProblem = problem;
   pArena = arena;
-
-  // Initialize random seed
-  srand((unsigned)time(NULL));
 
   // Build the MDD
   buildTopDownMDD(mddGraph, nodePool);
@@ -57,7 +55,7 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
     throw std::runtime_error("TopDownCompiler - buildTopDownMDD: the model should be defined by "
             "one and only one Dynamic Programming model");
   }
-  auto dpConstraint = getConstraintsList().at(0);
+  auto dpConstraint = getConstraintsList().at(0).get();
 
   // Set the initial DP state on the root node to activate the DP chain
   mddGraph.at(kLayerZero).at(0)->resetDPState(dpConstraint->getInitialDPState());
@@ -75,7 +73,7 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
 
   // Build the list of new states for comparing states to merge when running
   // exact compilation
-  std::vector<std::pair<DPState*, Node*>> newDPStates;
+  std::vector<Node*> newDPStates;
   newDPStates.reserve(std::min(32, getMaxWidth()));
 
   // Proceed one layer at a time top-down
@@ -126,7 +124,7 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
       {
         // Calculate the DP state w.r.t. the given domain value
         auto nextDPState = currNode->getDPState()->next(val);
-        if (nextDPState->isInfeasible())
+        if (nextDPState->isInfeasible() || nextDPState->cumulativeCost() >= getBestCost())
         {
           // Continue with next value if this current value
           // leads to an infeasible state
@@ -134,17 +132,17 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
         }
 
         Node* matchingNode{nullptr};
-        if (getCompilationType() == MDDCompiler::MDDCompilationType::Exact)
+        if (getCompilationType() == MDDCompiler::MDDCompilationType::Exact ||
+                isStateEquivalenceCheckAndMergeEnabled())
         {
           // Check if the new DP state matches a DP state just created.
-          // Note: for exact compilation states are merged
-          for (const auto& state : newDPStates)
+          // Note: for exact compilation or forced equivalence check states are merged
+          for (auto storedNode : newDPStates)
           {
-            break;
-            if (state.first->isEqual(nextDPState.get()))
+            if (storedNode->getDPState()->isEqual(nextDPState.get()))
             {
               // A match is found
-              matchingNode = state.second;
+              matchingNode = storedNode;
               break;
             }
           }
@@ -152,10 +150,16 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
 
         if (matchingNode != nullptr)
         {
-          // Found a match, re-use the same state
+          // Found a match, re-use the same state.
           // Create an edge connecting the current node and the next node.
-          // Note: this happens only on exact compilations
+          // Note: this happens only on exact compilations or while forcing equivalence checks
           pArena->buildEdge(currNode, matchingNode, val, val);
+
+          // If enabled, force merging states
+          if (isStateEquivalenceCheckAndMergeEnabled())
+          {
+            currNode->getDPState()->mergeState(matchingNode->getDPState());
+          }
         }
         else
         {
@@ -181,10 +185,12 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
           mddGraph.at(nextLayer).push_back(nextNode);
 
           // Store the current state to see if it can be re-used later.
-          // Note: this is only valid for exact compilations
-          if (getCompilationType() == MDDCompiler::MDDCompilationType::Exact)
+          // Note: this is only valid for exact compilations or
+          // while forcing equivalence checks
+          if (getCompilationType() == MDDCompiler::MDDCompilationType::Exact ||
+                  isStateEquivalenceCheckAndMergeEnabled())
           {
-            newDPStates.push_back({nextDPState.get(), nextNode});
+            newDPStates.push_back(nextNode);
           }
         }
       }  // for all values of the domain of a node
@@ -317,6 +323,11 @@ void TopDownCompiler::removeNodes(int layer, MDDGraph& mddGraph, NodePool& nodeP
     if (lastNode->getDPState()->cumulativeCost() < getBestCost())
     {
       nodePool.at(lastNode->getLayer()).push(lastNode);
+    }
+    else
+    {
+      // Delete the node if not stored
+      pArena->deleteNode(lastNode->getUniqueId());
     }
   }
 }

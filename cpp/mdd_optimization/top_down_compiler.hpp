@@ -28,16 +28,15 @@ class SYS_EXPORT_CLASS TopDownCompiler : public MDDCompiler {
   using SPtr = std::shared_ptr<TopDownCompiler>;
 
  public:
-  TopDownCompiler();
+  TopDownCompiler(MDDProblem::SPtr problem);
 
   /**
    * \brief Compiles the MDD.
-   * \param[in] problem: the optimization problem to represent as an MDD.
    * \param[in] mddGraph: the graph data structure reference to the MDD to build.
    * \param[in] arena: arena to build nodes and edges.
    * \param[int] the node pool used for branch & bound search.
    */
-  void compileMDD(MDDProblem::SPtr problem, MDDCompiler::MDDGraph& mddGraph, Arena* arena,
+  void compileMDD(MDDCompiler::MDDGraph& mddGraph, Arena* arena,
                   MDDCompiler::NodePool& nodePool) override;
 
  private:

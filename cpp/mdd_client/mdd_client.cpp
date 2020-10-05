@@ -66,6 +66,8 @@ void runTSPPD()
 
   std::vector<int64_t> pickupNode;
   std::vector<int64_t> deliveryNode;
+  pickupNode.push_back(0);
+  deliveryNode.push_back(1);
   for (int idx{1}; idx < numVars-1; ++idx)
   {
     if (((idx+1) % 2) == 0)
@@ -77,22 +79,22 @@ void runTSPPD()
     {
       deliveryNode.push_back(idx + 2);
     }
-    /*
-    if (idx == 1)
-    {
-      problem->addVariable(std::make_shared<Variable>(idx, idx, 20, 20));
-    }
-    else if (idx == 2)
-    {
-      problem->addVariable(std::make_shared<Variable>(idx, idx, 21, 21));
-    }
-    else
-    {
-      problem->addVariable(std::make_shared<Variable>(idx, idx, 2, numVars-1));
-    }
-    */
     problem->addVariable(std::make_shared<Variable>(idx, idx, 2, numVars-1));
   }
+
+  std::cout << "Pickup locations: " << std::endl;
+  for (auto pickupLoc : pickupNode)
+  {
+    std::cout << pickupLoc << " ";
+  }
+  std::cout << std::endl;
+
+  std::cout << "Delivery locations: " << std::endl;
+  for (auto deliveryLoc : deliveryNode)
+  {
+    std::cout << deliveryLoc << " ";
+  }
+  std::cout << std::endl;
   std::cout << "Num Vars: " << numVars << " with domain [" << 2 << ", " << numVars-1 << "]\n";
 
   // Last variable is always the node "-0"
@@ -105,11 +107,12 @@ void runTSPPD()
 
   // Create the optimizer
   MDDOptimizer optimizer(problem);
-  int32_t width{3};
+  int32_t width{2};
 
   // Run optimization
   tools::Timer timer;
-  optimizer.runOptimization(width);
+  uint64_t timeoutMsec{340};
+  optimizer.runOptimization(width, timeoutMsec);
   std::cout << "Wallclock time Branch and Bound optimization (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
 

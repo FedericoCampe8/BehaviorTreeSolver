@@ -112,9 +112,9 @@ void MDD::revertMDD()
 {
   // Swap all edges in the arena
   const auto& edges = pArena->getEdgePool();
-  for (auto& edge : edges)
+  for (auto& edgeIt : edges)
   {
-    edge->reverseEdge();
+    edgeIt.second->reverseEdge();
   }
 
   // Swap the layers of the mdd top to bottom

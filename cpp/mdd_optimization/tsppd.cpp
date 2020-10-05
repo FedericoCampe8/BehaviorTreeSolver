@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>  // for std::invalid_argument
 #include <utility>    // for std::move
+#include <unordered_set>
 
 // #define DEBUG
 
@@ -85,23 +86,34 @@ bool TSPPDState::isEqual(const DPState* other) const noexcept
 {
   auto otherDPState = reinterpret_cast<const TSPPDState*>(other);
 
-  // Check if "other" is contained in this states
-  if (pPath.size() < otherDPState->pPath.size())
+  // Check if "other" is a permutation of this path ending with the same edge
+  if ((pPath.size() != otherDPState->pPath.size()) ||
+          (pPath.back() != otherDPState->pPath.back()))
   {
-    // Return, there is at least one state in "other" that this DP doesn't have
     return false;
   }
 
-  for (int idx{0}; idx < static_cast<int>(otherDPState->pPath.size()); ++idx)
+  // Compare the elements
+  std::unordered_set<int64_t> thisSetOfNum(pPath.begin(), pPath.end());
+  std::unordered_set<int64_t> otherSetOfNum(otherDPState->pPath.begin(), otherDPState->pPath.end());
+#ifdef DEBUG
+  if (thisSetOfNum == otherSetOfNum)
   {
-    if (pPath[idx] != otherDPState->pPath.at(idx))
+    std::cout << "EQUAL STATES\n";
+    for (auto v: pPath)
     {
-      return false;
+      std::cout << v << " ";
     }
+    std::cout << std::endl;
+    for (auto v: otherDPState->pPath)
+    {
+      std::cout << v << " ";
+    }
+    std::cout << std::endl;
+    getchar();
   }
-
-  // Paths are the same
-  return true;
+#endif
+  return thisSetOfNum == otherSetOfNum;
 }
 
 bool TSPPDState::isInfeasible() const noexcept
@@ -181,8 +193,19 @@ double TSPPDState::cumulativeCost() const noexcept
   return pCost;
 }
 
-void TSPPDState::mergeState(DPState*) noexcept
+void TSPPDState::mergeState(DPState* other) noexcept
 {
+  auto otherDPState = reinterpret_cast<const TSPPDState*>(other);
+  if (this->pCost <= otherDPState->pCost)
+  {
+    return;
+  }
+#ifdef DEBUG
+  std::cout << "MERGING " << this->pCost << " vs " << otherDPState->pCost << std::endl;
+  getchar();
+#endif
+  this->pCost = otherDPState->pCost;
+  pPath = otherDPState->pPath;
 }
 
 std::string TSPPDState::toString() const noexcept
