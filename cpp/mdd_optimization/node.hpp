@@ -16,6 +16,7 @@
 #include "mdd_optimization/dp_model.hpp"
 #include "mdd_optimization/edge.hpp"
 #include "mdd_optimization/variable.hpp"
+#include "mdd_optimization/node_domain.hpp"
 
 #include "system/system_export_defs.hpp"
 
@@ -41,10 +42,12 @@ class SYS_EXPORT_CLASS Node {
   void initializeNodeDomain();
 
   /// Returns this node's values
-  const std::vector<int64_t>& getValues() const noexcept { return pNodeDomain; }
+  // const std::vector<int64_t>& getValues() const noexcept { return pNodeDomain; }
+  NodeDomain* getNodeDomain() const noexcept { return pNodeDomain; }
 
   /// Returns the pointer to this node's values
-  std::vector<int64_t>* getValuesMutable() noexcept { return &pNodeDomain; }
+  // std::vector<int64_t>* getValuesMutable() noexcept { return &pNodeDomain; }
+
 
   /// Resets the layer for this node
   void resetLayer(uint32_t layer) noexcept { pLayer = layer; }
@@ -165,7 +168,8 @@ class SYS_EXPORT_CLASS Node {
 
   /// Domain/state paired with this node.
   /// This is used on filtering compilation
-  std::vector<int64_t> pNodeDomain;
+  // std::vector<int64_t> pNodeDomain;
+  NodeDomain* pNodeDomain;
 
   /// Flag indicating whether or not the original DP state has been changed
   bool pIsDPStateChanged{false};

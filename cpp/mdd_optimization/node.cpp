@@ -47,7 +47,7 @@ void Node::initializeNodeDomain()
     throw std::runtime_error("Node - getValues: empty pointer to the variable");
   }
 
-  pNodeDomain = pVariable->getAvailableValues();
+  pNodeDomain = new NodeDomain( pVariable->getAvailableValues() );
 }
 
 void Node::addInEdge(Edge* edge)

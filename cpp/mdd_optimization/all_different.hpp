@@ -14,6 +14,7 @@
 
 #include "mdd_optimization/dp_model.hpp"
 #include "mdd_optimization/mdd_constraint.hpp"
+#include "mdd_optimization/node_domain.hpp"
 #include "system/system_export_defs.hpp"
 
 namespace mdd {

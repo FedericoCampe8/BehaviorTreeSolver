@@ -356,22 +356,27 @@ void Among::enforceConstraintTopDown(Arena* arena,
             // Remove invalid values from new node:
             // for each value in new node, check if that value is contained in node.
             // If so, continue, if not remove it from new node
-            const auto& nodeDomain = node->getValues();
-            auto newNodeDomain = newNode->getValuesMutable();
+            // const auto& nodeDomain = node->getValues();
+            // auto newNodeDomain = newNode->getValuesMutable();
+
+            auto nodeDomain = node->getNodeDomain();
+            auto newNodeDomain = newNode->getNodeDomain();
+
 
             // Keep a copy of the values to remove to avoid invalidating iterators
             std::vector<int64_t> valuesToRemove;
-            for (auto val : *(newNodeDomain))
+            for (auto val : *(newNodeDomain->getValues()))
             {
-              if (std::find(nodeDomain.cbegin(), nodeDomain.cend(), val) == nodeDomain.cend())
+              if ( nodeDomain->isValueInDomain(val) == false )
               {
                 valuesToRemove.push_back(val);
               }
             }
 
+
             for (auto val : valuesToRemove)
             {
-              newNodeDomain->erase(std::find(newNodeDomain->begin(), newNodeDomain->end(), val));
+              newNodeDomain->removeValue( val );
             }
 
             // Copy outgoing edges for new node
@@ -435,12 +440,10 @@ void Among::enforceConstraintTopDown(Arena* arena,
           if (count >= pUpperBound)
           {
             outEdge->removeEdgeFromNodes();
-            auto nodeDomain = node->getValuesMutable();
-            auto iter = std::find(nodeDomain->begin(), nodeDomain->end(), outEdge->getValue());
-            if (iter != nodeDomain->end())
-            {
-              nodeDomain->erase(iter);
-            }
+            auto nodeDomain = node->getNodeDomain();
+
+            nodeDomain->removeValue( outEdge->getValue() );
+            
 
             // The head of the edge could become unreachable if removed only edge leading to it
             // Clean up unreachable successors and invalid predecessors

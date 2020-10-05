@@ -253,19 +253,20 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
   for (int nodeIdx{0}; nodeIdx < static_cast<int>(children.size()); ++nodeIdx)
   {
     auto nextNode = children.at(nodeIdx);
-    const auto& availableValuesTail = node->getValues();
-    auto availableValuesHead = nextNode->getValuesMutable();
-
+    // const auto& availableValuesTail = node->getValues();
+    auto tailDomain = node->getNodeDomain();
+    // auto availableValuesHead = nextNode->getValuesMutable();
+    auto headDomain = nextNode->getNodeDomain();
+    
 #ifdef DEBUG
     std::cout << "Check for " << availableValuesTail.size() << " values\n";
 #endif
 
     // Find all conflicting values
     std::vector<int64_t> conflictingValues;
-    for (auto val : availableValuesTail)
+    for (auto val : *tailDomain->getValues())
     {
-      if (std::find(availableValuesHead->begin(), availableValuesHead->end(), val) !=
-              availableValuesHead->end())
+      if ( headDomain->isValueInDomain(val) )
       {
 
 #ifdef DEBUG
@@ -304,14 +305,19 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
         // BUG FIX: the domain of newNode was initialized with the full domain of the variable:
         //      newNode->initializeNodeDomain();
         // I believe that it should be initialized with the restricted domain of nextVariable
-        auto newReducedDomain = *(node->getValuesMutable());
+        // auto newReducedDomain = *(node->getValuesMutable());
+        auto newReducedDomain = *(node->getNodeDomain());
 
         // Remove the non admissible value
-        auto iterValueNotGood = std::find(newReducedDomain.begin(),
-                                          newReducedDomain.end(),
-                                          conflictingValue);
-        assert(iterValueNotGood != newReducedDomain.end());
-        newReducedDomain.erase(iterValueNotGood);
+        // auto iterValueNotGood = std::find(newReducedDomain.begin(),
+        //                                   newReducedDomain.end(),
+        //                                   conflictingValue);
+        
+        // assert(iterValueNotGood != newReducedDomain.end());
+        // newReducedDomain.erase(iterValueNotGood);
+
+        bool result = newReducedDomain.removeValue(conflictingValue);
+        assert( result == true );
 
         // BUG FIX: before creating a new node, check if the domain/values that would go into
         // the newNode is already present in another node on the same level.
@@ -321,7 +327,7 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
         {
           // Note: the following works only on ordered list of values.
           // TODO move from lists to sets/bitsets/ranges
-          if (newNode->getValues() == newReducedDomain)
+          if (*newNode->getNodeDomain() == newReducedDomain)
           {
             mappedNode = newNode;
             break;
@@ -346,12 +352,14 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
 
           // TODO check if it is possible to "build" the domain rather than copying the entire
           // variable domain and removing values
-          auto newAvailableValues = newNode->getValuesMutable();
-          *newAvailableValues = newReducedDomain;
+          // auto newAvailableValues = newNode->getValuesMutable();
+          // *newAvailableValues = newReducedDomain;
+
+          auto newDomain = newNode->getNodeDomain();
 
           // If new node has no available values,
           // then it is infeasible so do not add it to the graph
-          if (newAvailableValues->size() > 0)
+          if (newDomain->getSize() > 0)
           {
             // Add the node to the current level
             mddRepresentation[nextNode->getLayer()].push_back(newNode);
@@ -372,8 +380,7 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
               // Add an outgoing edge ONLY IF its correspondent label can be taken from the
               // domain of the curren node
               const auto outValue = outEdge->getValue();
-              if (std::find(newAvailableValues->begin(), newAvailableValues->end(), outValue) !=
-                      newAvailableValues->end())
+              if ( newDomain->isValueInDomain( outValue) )
               {
                 // Build the edge.
                 // Note: the constructor will automatically set the pointers to the nodes
