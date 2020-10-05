@@ -17,6 +17,7 @@
 #include "mdd_optimization/all_different.hpp"
 #include "mdd_optimization/among.hpp"
 #include "mdd_optimization/mdd.hpp"
+#include "mdd_optimization/mdd_optimizer.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
 #include "mdd_optimization/tsppd.hpp"
 #include "mdd_optimization/variable.hpp"
@@ -102,12 +103,20 @@ void runTSPPD()
   tsppd->setScope(problem->getVariables());
   problem->addConstraint(tsppd);
 
+  // Create the optimizer
+  MDDOptimizer optimizer(problem);
+  int32_t width{3};
+
+  // Run optimization
   tools::Timer timer;
+  optimizer.runOptimization(width);
+  std::cout << "Wallclock time Branch and Bound optimization (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
+
+  optimizer.printMDD("mdd");
 
   // Create the MDD
-  double bestCost{std::numeric_limits<double>::max()};
-  int32_t width{std::numeric_limits<int32_t>::max()};
-  width = 3;
+  /*
   for (int i = 0; i < 10000; ++i)
   {
     MDD mdd(problem, width);
@@ -129,8 +138,12 @@ void runTSPPD()
     }
   }
   std::cout << "Best solution: " << bestCost << std::endl;
+  */
 
   /*
+  double bestCost{std::numeric_limits<double>::max()};
+  int32_t width{std::numeric_limits<int32_t>::max()};
+  width = 3;
   MDD mdd(problem, width);
 
   // Enforce all the constraints on the MDD
@@ -140,8 +153,6 @@ void runTSPPD()
 
   timer.reset();
   timer.start();
-
-  double bestCost{std::numeric_limits<double>::max()};
   mdd.dfsRec(mdd.getMDD(), bestCost, numVars, 0.0, mdd.getMDD());
   std::cout << "Best solution: " << bestCost << std::endl;
   mdd.printMDD("mdd");

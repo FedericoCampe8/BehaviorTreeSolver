@@ -13,6 +13,7 @@
 
 #include "mdd_optimization/arena.hpp"
 #include "mdd_optimization/edge.hpp"
+#include "mdd_optimization/mdd_compiler.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
 #include "mdd_optimization/node.hpp"
 #include "mdd_optimization/variable.hpp"

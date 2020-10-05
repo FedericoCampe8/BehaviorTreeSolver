@@ -9,8 +9,7 @@
 #include <cstdint>  // for int64_t
 #include <memory>
 #include <string>
-
-#include <sparsepp/spp.h>
+#include <vector>
 
 #include "mdd_optimization/dp_model.hpp"
 #include "mdd_optimization/mdd_constraint.hpp"
@@ -44,16 +43,20 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
 
   double cost(int64_t val, DPState* fromState=nullptr) const noexcept override;
 
+  std::vector<int64_t> cumulativePath() const noexcept override;
+
+  double cumulativeCost() const noexcept override;
+
   bool isInfeasible() const noexcept override;
 
   std::string toString() const noexcept override;
 
   bool isEqual(const DPState* other) const noexcept override;
 
-  bool isMerged() const noexcept override { return pVisitedNodesList.size() > 1; }
+  bool isMerged() const noexcept override { return false; }
 
  private:
-  using NodesSet = spp::sparse_hash_set<int64_t>;
+  using NodesList = std::vector<int64_t>;
 
  private:
   /// Pointer to the set of pickup nodes
@@ -68,8 +71,11 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   /// Last node visited, i.e., this state
   mutable int64_t pLastNodeVisited{-1};
 
-  /// List of nodes/places visited so far
-  std::vector<NodesSet> pVisitedNodesList;
+  /// Cost of the path up to this state
+  double pCost{0.0};
+
+  /// Path taken up to this point
+  NodesList pPath;
 };
 
 class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {

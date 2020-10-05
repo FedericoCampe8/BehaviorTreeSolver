@@ -9,6 +9,7 @@
 #include <cstdint>  // for uint32_t
 #include <memory>   // for std::shared_ptr
 #include <string>
+#include <vector>
 
 #include "system/system_export_defs.hpp"
 
@@ -57,6 +58,13 @@ class SYS_EXPORT_STRUCT DPState {
   /// @note some costs on the current state can be calculated only if
   /// the previous state arriving to the current state is known
   virtual double cost(int64_t domainElement, DPState* fromState=nullptr) const noexcept;
+
+  /// Returns the path values (edges) up to this state.
+  /// @note this DOES NOT work for merged nodes
+  virtual std::vector<int64_t> cumulativePath() const noexcept;
+
+  /// Returns the cumulative cost up to this state
+  virtual double cumulativeCost() const noexcept;
 
   /// Returns whether or not this
   virtual bool isInfeasible() const noexcept;

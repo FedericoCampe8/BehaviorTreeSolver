@@ -1,5 +1,7 @@
 #include "mdd_optimization/dp_model.hpp"
 
+#include <limits>  // for std::numeric_limits
+
 namespace mdd {
 
 
@@ -31,6 +33,16 @@ DPState::SPtr DPState::next(int64_t, DPState*) const noexcept
 double DPState::cost(int64_t domainElement, DPState*) const noexcept
 {
   return static_cast<double>(domainElement);
+}
+
+std::vector<int64_t> DPState::cumulativePath() const noexcept
+{
+  return {};
+}
+
+double DPState::cumulativeCost() const noexcept
+{
+  return std::numeric_limits<double>::max();
 }
 
 bool DPState::isInfeasible() const noexcept

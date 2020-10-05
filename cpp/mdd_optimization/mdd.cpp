@@ -7,6 +7,7 @@
 #include <cstdlib>    // for std::rand
 #include <fstream>
 #include <iostream>
+#include <queue>      // for std::priority_queue
 #include <stack>
 #include <stdexcept>  // for std::invalid_argument
 #include <utility>    // for std::pair
@@ -19,6 +20,17 @@
 
 namespace {
 constexpr uint32_t kLayerZero{0};
+
+class CompareNodesOnCost
+{
+public:
+  CompareNodesOnCost(){}
+  bool operator() (const mdd::Node* lhs, const mdd::Node* rhs) const
+  {
+    return (lhs->getDPState()->cumulativeCost() > lhs->getDPState()->cumulativeCost());
+  }
+};
+
 }  // namespace
 
 namespace mdd {
@@ -696,7 +708,7 @@ void MDD::runSeparationAndRefinementProcedureOnConstraint(Node* root, MDDConstra
 
 void MDD::runTopDownProcedure(Node* node, bool isRestricted)
 {
-  srand( (unsigned)time(NULL) );
+  // srand( (unsigned)time(NULL) );
   if (node == nullptr)
   {
     throw std::runtime_error("MDD - runTopDownProcedure: empty pointer to node");
@@ -715,10 +727,16 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
   // Set the first state
   pNodesPerLayer.at(kLayerZero).at(0)->resetDPState(conDPModel->getInitialDPState());
 
+  // Get the total number of layers
+  const auto totLayers = static_cast<int>(pProblem->getVariables().size());
+
+  // Keep track of the discarded nodes per layer
+  std::vector<std::priority_queue<Node*, std::vector<Node*>, CompareNodesOnCost>> nodePool;
+  nodePool.resize(totLayers);
+
   // For all layers
   std::vector<std::pair<DPState*, Node*>> newDPStates;
   newDPStates.reserve(std::min(32, pMaxWidth));
-  const auto totLayers = static_cast<int>(pProblem->getVariables().size());
   for (int layerIdx{0}; layerIdx < totLayers; ++layerIdx)
   {
     // Reset the list of new states
@@ -779,9 +797,28 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
     while(isRestricted && (pMaxWidth > 1) && (pNodesPerLayer.at(layerIdx).size() > pMaxWidth))
     {
       // Simply remove nodes
-      auto randPos = std::rand() % (pNodesPerLayer.at(layerIdx).size());
-      auto lastNode = pNodesPerLayer.at(layerIdx).at(randPos);
-      pNodesPerLayer.at(layerIdx).erase(pNodesPerLayer.at(layerIdx).begin() + randPos);
+      //auto randPos = std::rand() % (pNodesPerLayer.at(layerIdx).size());
+      //auto lastNode = pNodesPerLayer.at(layerIdx).at(randPos);
+      //pNodesPerLayer.at(layerIdx).erase(pNodesPerLayer.at(layerIdx).begin() + randPos);
+
+      // Pick and remove the most expensive node
+      int nodeToRemoveIdx{0};
+      double worstCost{0};
+      for (int nidx{0}; nidx < static_cast<int>(pNodesPerLayer.at(layerIdx).size()); ++nidx)
+      {
+        auto currNode = pNodesPerLayer.at(layerIdx).at(nidx);
+        assert((currNode->getInEdges()).size() == 1);
+
+        const auto currCost = currNode->getDPState()->cumulativeCost();
+        if (currCost > worstCost)
+        {
+          worstCost = currCost;
+          nodeToRemoveIdx = nidx;
+        }
+      }
+
+      auto lastNode = pNodesPerLayer.at(layerIdx).at(nodeToRemoveIdx);
+      pNodesPerLayer.at(layerIdx).erase(pNodesPerLayer.at(layerIdx).begin() + nodeToRemoveIdx);
 
       //auto lastNode = pNodesPerLayer.at(layerIdx).back();
       //pNodesPerLayer.at(layerIdx).pop_back();
@@ -794,8 +831,9 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
         pArena->deleteEdge(inEdgeToRemove->getUniqueId());
       }
 
-      // Remove the node
-      pArena->deleteNode(lastNode->getUniqueId());
+      // Store the node to be used later on during branch and bound
+      nodePool.at(lastNode->getLayer()).push(lastNode);
+      //pArena->deleteNode(lastNode->getUniqueId());
     }
 
     // For all nodes per layer
@@ -862,6 +900,24 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
       }
     }  // for each node
   }  // for each layer
+
+  // Check min/max on node pool
+  double minCost{std::numeric_limits<double>::max()};
+  double maxCost{std::numeric_limits<double>::lowest()};
+  for (auto& q : nodePool)
+  {
+    while(!q.empty())
+    {
+      auto topNode = q.top();
+      const auto val = topNode->getDPState()->cumulativeCost();
+      pArena->deleteNode(topNode->getUniqueId());
+      q.pop();
+      if (val < minCost) minCost = val;
+      if (val > maxCost) maxCost = val;
+    }
+  }
+  std::cout << "Min cost " << minCost << " Max cost " << maxCost << std::endl;
+
 }
 
 void MDD::runFilteringProcedure(Node* node)
@@ -1054,7 +1110,6 @@ void MDD::dfsRec(Node* currNode, double& bestCost, const uint32_t maxLayer,
     dfsRec((*it)->getHead(), bestCost, maxLayer, cost, currNode);
   }
 }
-
 
 void MDD::printMDD(const std::string& outFileName)
 {

@@ -29,7 +29,7 @@ TSPPDState::TSPPDState(const TSPPDState& other)
   pDeliveryNodeList = other.pDeliveryNodeList;
   pCostMatrix = other.pCostMatrix;
   pLastNodeVisited = other.pLastNodeVisited;
-  pVisitedNodesList = other.pVisitedNodesList;
+  pPath = other.pPath;
 }
 
 TSPPDState::TSPPDState(TSPPDState&& other)
@@ -38,7 +38,7 @@ TSPPDState::TSPPDState(TSPPDState&& other)
   pDeliveryNodeList = other.pDeliveryNodeList;
   pCostMatrix = other.pCostMatrix;
   pLastNodeVisited = other.pLastNodeVisited;
-  pVisitedNodesList = std::move(other.pVisitedNodesList);
+  pPath = std::move(other.pPath);
 
   other.pPickUpNodeList = nullptr;
   other.pDeliveryNodeList = nullptr;
@@ -57,7 +57,7 @@ TSPPDState& TSPPDState::operator=(const TSPPDState& other)
   pDeliveryNodeList = other.pDeliveryNodeList;
   pCostMatrix = other.pCostMatrix;
   pLastNodeVisited = other.pLastNodeVisited;
-  pVisitedNodesList = other.pVisitedNodesList;
+  pPath = other.pPath;
   return *this;
 }
 
@@ -72,7 +72,7 @@ TSPPDState& TSPPDState::operator=(TSPPDState&& other)
   pDeliveryNodeList = other.pDeliveryNodeList;
   pCostMatrix = other.pCostMatrix;
   pLastNodeVisited = other.pLastNodeVisited;
-  pVisitedNodesList = std::move(other.pVisitedNodesList);
+  pPath = std::move(other.pPath);
 
   other.pPickUpNodeList = nullptr;
   other.pDeliveryNodeList = nullptr;
@@ -86,32 +86,27 @@ bool TSPPDState::isEqual(const DPState* other) const noexcept
   auto otherDPState = reinterpret_cast<const TSPPDState*>(other);
 
   // Check if "other" is contained in this states
-  if (pVisitedNodesList.size() < otherDPState->pVisitedNodesList.size())
+  if (pPath.size() < otherDPState->pPath.size())
   {
     // Return, there is at least one state in "other" that this DP doesn't have
     return false;
   }
 
-  // Check that all states in "other" are contained in this state
-  const auto& otherList = otherDPState->pVisitedNodesList;
-  for (const auto& otherSubList : otherList)
+  for (int idx{0}; idx < static_cast<int>(otherDPState->pPath.size()); ++idx)
   {
-    // Check if this subSet is contained in the other state subset list
-    if (std::find(pVisitedNodesList.begin(), pVisitedNodesList.end(), otherSubList) ==
-            pVisitedNodesList.end())
+    if (pPath[idx] != otherDPState->pPath.at(idx))
     {
-      // State not found
       return false;
     }
   }
 
-  // All states are present
+  // Paths are the same
   return true;
 }
 
 bool TSPPDState::isInfeasible() const noexcept
 {
-  return pVisitedNodesList.empty();
+  return pPath.empty();
 }
 
 DPState::SPtr TSPPDState::next(int64_t val, DPState*) const noexcept
@@ -119,10 +114,10 @@ DPState::SPtr TSPPDState::next(int64_t val, DPState*) const noexcept
   auto state = std::make_shared<TSPPDState>(pPickUpNodeList,
                                             pDeliveryNodeList,
                                             pCostMatrix);
-  if (pVisitedNodesList.empty())
+  if (pPath.empty())
   {
-    state->pVisitedNodesList.resize(1);
-    state->pVisitedNodesList.back().insert(val);
+    state->pPath.push_back(val);
+    state->pCost = pCost + (pCostMatrix->at(0)).at(val);
   }
   else
   {
@@ -135,33 +130,31 @@ DPState::SPtr TSPPDState::next(int64_t val, DPState*) const noexcept
         break;
       }
     }
-    for (const auto& subSet : pVisitedNodesList)
-    {
-      if (deliveryIdx >= 0)
-      {
-        // A delivery can be added ONLY IF the correspondent pick-up has been
-        // already visited.
-        // Get the correspondent pick-up node
-        const auto pickUp = pPickUpNodeList->at(deliveryIdx);
 
-        if (std::find(subSet.begin(), subSet.end(), pickUp) != subSet.end() &&
-                std::find(subSet.begin(), subSet.end(), val) == subSet.end())
-        {
-          // Pickup is visited already, add the delivery to the list of visited nodes
-          // First check if the node is not being already visited
-          state->pVisitedNodesList.push_back(subSet);
-          state->pVisitedNodesList.back().insert(val);
-        }
-      }
-      else
+    if (deliveryIdx >= 0)
+    {
+      // Get the correspondent pick-up node
+      const auto pickUp = pPickUpNodeList->at(deliveryIdx);
+
+      // A delivery can be added ONLY IF the correspondent pick-up has been
+      // already visited and the node has not being already visited
+      if (std::find(pPath.begin(), pPath.end(), pickUp) != pPath.end() &&
+              std::find(pPath.begin(), pPath.end(), val) == pPath.end())
       {
-        // The value corresponds to a  pick-up node which can always be visited
-        // if not already visited
-        if (std::find(subSet.begin(), subSet.end(), val) == subSet.end())
-        {
-          state->pVisitedNodesList.push_back(subSet);
-          state->pVisitedNodesList.back().insert(val);
-        }
+        state->pPath = pPath;
+        state->pPath.push_back(val);
+        state->pCost = pCost + (pCostMatrix->at(pPath.back())).at(val);
+      }
+    }
+    else
+    {
+      // The value corresponds to a  pick-up node which can always be visited
+      // if not already visited
+      if (std::find(pPath.begin(), pPath.end(), val) == pPath.end())
+      {
+        state->pPath = pPath;
+        state->pPath.push_back(val);
+        state->pCost = pCost + (pCostMatrix->at(pPath.back())).at(val);
       }
     }
   }
@@ -169,58 +162,44 @@ DPState::SPtr TSPPDState::next(int64_t val, DPState*) const noexcept
   return state;
 }
 
-double TSPPDState::cost(int64_t val, DPState* fromState) const noexcept
+double TSPPDState::cost(int64_t val, DPState*) const noexcept
 {
-
-  auto fromTSPPDState = reinterpret_cast<const TSPPDState*>(fromState);
-  assert(fromTSPPDState != nullptr);
-
-  pLastNodeVisited = val;
-  return (pCostMatrix->at(fromTSPPDState->pLastNodeVisited)).at(pLastNodeVisited);
+  if (pPath.empty())
+  {
+    return static_cast<double>((pCostMatrix->at(0)).at(val));
+  }
+  return static_cast<double>((pCostMatrix->at(pPath.back())).at(val));
 }
 
-void TSPPDState::mergeState(DPState* other) noexcept
+std::vector<int64_t> TSPPDState::cumulativePath() const noexcept
 {
-  if (other == nullptr)
-  {
-    return;
-  }
+  return pPath;
+}
 
-  auto otherDP = reinterpret_cast<const TSPPDState*>(other);
-  for (const auto& otherSubList : otherDP->pVisitedNodesList)
-  {
-    // Check if the other sublist is already present in the current list
-    // and, if not, add it
-    if (std::find(pVisitedNodesList.begin(), pVisitedNodesList.end(), otherSubList) ==
-            pVisitedNodesList.end())
-    {
-      pVisitedNodesList.push_back(otherSubList);
-    }
-  }
+double TSPPDState::cumulativeCost() const noexcept
+{
+  return pCost;
+}
+
+void TSPPDState::mergeState(DPState*) noexcept
+{
 }
 
 std::string TSPPDState::toString() const noexcept
 {
   std::string out{"{"};
-  if (pVisitedNodesList.empty())
+  if (pPath.empty())
   {
     out += "}";
     return out;
   }
-  for (const auto& sublist : pVisitedNodesList)
+  for (auto val : pPath)
   {
-    out += "{";
-    for (auto val : sublist)
-    {
-      out += std::to_string(val) + ", ";
-    }
-    out.pop_back();
-    out.pop_back();
-    out += "}, ";
+    out += std::to_string(val) + ", ";
   }
   out.pop_back();
   out.pop_back();
-  out += "}";
+  out += "}, ";
   return out;
 }
 
