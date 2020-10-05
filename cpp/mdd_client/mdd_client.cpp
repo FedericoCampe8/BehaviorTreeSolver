@@ -111,7 +111,7 @@ void runTSPPD()
 
   // Run optimization
   tools::Timer timer;
-  uint64_t timeoutMsec{340};
+  uint64_t timeoutMsec{40000};
   optimizer.runOptimization(width, timeoutMsec);
   std::cout << "Wallclock time Branch and Bound optimization (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;

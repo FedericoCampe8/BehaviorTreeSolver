@@ -131,6 +131,9 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
           continue;
         }
 
+        // TODO implement an algorithmic way to cut on nodes early in the search
+        // if (currNode->getLayer() > 0 && nextDPState->cumulativeCost() > 12000) continue;
+
         Node* matchingNode{nullptr};
         if (getCompilationType() == MDDCompiler::MDDCompilationType::Exact ||
                 isStateEquivalenceCheckAndMergeEnabled())
