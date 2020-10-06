@@ -183,7 +183,7 @@ double TSPPDState::cost(int64_t val, DPState*) const noexcept
   return static_cast<double>((pCostMatrix->at(pPath.back())).at(val));
 }
 
-std::vector<int64_t> TSPPDState::cumulativePath() const noexcept
+const std::vector<int64_t>& TSPPDState::cumulativePath() const noexcept
 {
   return pPath;
 }

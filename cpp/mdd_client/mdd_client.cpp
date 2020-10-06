@@ -16,6 +16,7 @@
 
 #include "mdd_optimization/all_different.hpp"
 #include "mdd_optimization/among.hpp"
+#include "mdd_optimization/job_shop.hpp"
 #include "mdd_optimization/mdd.hpp"
 #include "mdd_optimization/mdd_optimizer.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
@@ -24,6 +25,117 @@
 #include "tools/timer.hpp"
 
 namespace {
+
+void runJobShop()
+{
+  using namespace mdd;
+
+  const std::string resPath =  "../cpp/mdd_client/data_job_shop/res.json";
+  const std::string taskPath = "../cpp/mdd_client/data_job_shop/task.json";
+
+  std::ifstream resfile(resPath);
+  std::string resString((std::istreambuf_iterator<char>(resfile)),
+                        (std::istreambuf_iterator<char>()));
+
+  std::ifstream taskfile(taskPath);
+  std::string taskString((std::istreambuf_iterator<char>(taskfile)),
+                         (std::istreambuf_iterator<char>()));
+
+  // Parse the inputs into Json
+  rapidjson::Document resDoc;
+  resDoc.Parse(resString.c_str());
+
+  rapidjson::Document taskDoc;
+  taskDoc.Parse(taskString.c_str());
+
+  // Parse the resources
+  const auto& resJson = resDoc["res"];
+  uint64_t numMachines = 0;
+  for (rapidjson::SizeType idx{0}; idx < resJson.Size(); ++idx)
+  {
+    const auto& resObj = resJson[idx].GetObject();
+    const auto machineId = resObj.FindMember("id")->value.GetInt();
+    if (numMachines < machineId)
+    {
+      numMachines = machineId;
+    }
+
+    std::vector<std::pair<int64_t, int64_t>> availability;
+    const auto& machineAvailability = resObj.FindMember("periods")->value.GetArray();
+    for (rapidjson::SizeType availIdx{0}; availIdx < machineAvailability.Size(); ++availIdx)
+    {
+      const auto& availObj = machineAvailability[availIdx].GetObject();
+      const auto start = availObj.FindMember("s")->value.GetInt() * 10;
+      const auto end = availObj.FindMember("e")->value.GetInt() * 10;
+      availability.push_back({start, end});
+    }
+  }
+  // Identifiers starts from zero
+  ++numMachines;
+
+  // Parse the tasks
+  JobShopState::TaskSpecMap taskSpecMap;
+  const auto& taskJson = taskDoc["tasks"];
+  for (rapidjson::SizeType idx{0}; idx < taskJson.Size(); ++idx)
+  {
+    const auto& taskObj = taskJson[idx].GetObject();
+
+    const auto jobId = taskObj.FindMember("id")->value.GetInt();
+    const auto jobDuration = static_cast<int>(taskObj.FindMember("dur")->value.GetDouble() * 10);
+    const auto jobDependencyList = taskObj.FindMember("dep")->value.GetArray();
+    const auto jobResourcesList = taskObj.FindMember("res")->value.GetArray();
+    const auto resNeeded = jobResourcesList[0].GetInt();
+
+
+    // Note: 1 job <-> 1 task
+    taskSpecMap[jobId].push_back(resNeeded);
+    taskSpecMap[jobId].push_back(jobDuration);
+    taskSpecMap[jobId].push_back(10);
+    for (rapidjson::Value::ConstValueIterator itr = jobDependencyList.Begin();
+            itr != jobDependencyList.End(); ++itr)
+    {
+      const auto depId = itr->GetInt();
+      if (depId > -1)
+      {
+        taskSpecMap[jobId].push_back(depId);
+      }
+    }
+  }
+
+  // Create the MDD problem
+  auto problem = std::make_shared<MDDProblem>();
+  problem->setMinimization();
+
+  // Create a variable per task
+  // First variable corresponds to the first task that doesn't require
+  // any dependencies and it can be scheduled right away
+  problem->addVariable(std::make_shared<Variable>(0, 0, 0, 0));
+  const auto numTasks = static_cast<int>(taskSpecMap.size());
+  for (int taskIdx{1}; taskIdx < numTasks; ++taskIdx)
+  {
+    problem->addVariable(std::make_shared<Variable>(taskIdx, taskIdx, 1, numTasks-1));
+  }
+
+  std::cout << "Num. Machines: " << numMachines << std::endl;
+  std::cout << "Num. Tasks: " << numTasks << std::endl;
+
+  auto jobShopConstraint = std::make_shared<JobShop>(taskSpecMap, numMachines);
+  jobShopConstraint->setScope(problem->getVariables());
+  problem->addConstraint(jobShopConstraint);
+
+  // Create the optimizer
+  MDDOptimizer optimizer(problem);
+  int32_t width{2};
+
+  // Run optimization
+  tools::Timer timer;
+  uint64_t timeoutMsec{40000};
+  optimizer.runOptimization(width, timeoutMsec);
+  std::cout << "Wallclock time Branch and Bound optimization (msec.): " <<
+          timer.getWallClockTimeMsec() << std::endl;
+
+  optimizer.printMDD("mdd");
+}
 
 void runTSPPD()
 {
@@ -290,7 +402,16 @@ int main(int argc, char* argv[]) {
   {
     // TODO Add entry point code here
     //runMDDOpt();
-    runTSPPD();
+    if (argc > 1)
+    {
+      std::cout << "RUN JOB-SHOP\n";
+      runJobShop();
+    }
+    else
+    {
+      std::cout << "RUN TSPPD\n";
+      runTSPPD();
+    }
   }
   catch (const std::exception& e)
   {

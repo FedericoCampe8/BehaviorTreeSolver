@@ -120,6 +120,11 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
         continue;
       }
 
+      // TODO this is too expensive and needs to be addressed.
+      // Possible solutions:
+      // 1) use bounds on edges
+      // 2) create only the first k edges where k is the width and let |D| - k edges
+      //    expansion for next iterations (put the node back in the queue with reduced domain)
       for (auto val : currDomain)
       {
         // Calculate the DP state w.r.t. the given domain value

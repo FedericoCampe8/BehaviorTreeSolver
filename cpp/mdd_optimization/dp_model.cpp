@@ -35,9 +35,9 @@ double DPState::cost(int64_t domainElement, DPState*) const noexcept
   return static_cast<double>(domainElement);
 }
 
-std::vector<int64_t> DPState::cumulativePath() const noexcept
+const std::vector<int64_t>& DPState::cumulativePath() const noexcept
 {
-  return {};
+  return pMockPath;
 }
 
 double DPState::cumulativeCost() const noexcept

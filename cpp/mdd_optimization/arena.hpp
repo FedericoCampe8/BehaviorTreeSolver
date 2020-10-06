@@ -33,7 +33,20 @@ class SYS_EXPORT_CLASS Arena {
 
  public:
   Arena() = default;
-  ~Arena() = default;
+  ~Arena()
+  {
+    for (auto ptr : pNodeArena)
+    {
+      delete ptr.second;
+    }
+    pNodeArena.clear();
+
+    for (auto ptr : pEdgeArena)
+    {
+      delete ptr.second;
+    }
+    pEdgeArena.clear();
+  }
 
   Node* buildNode(uint32_t layer, Variable* variable = nullptr)
   {

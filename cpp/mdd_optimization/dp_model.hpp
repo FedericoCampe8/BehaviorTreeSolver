@@ -61,7 +61,7 @@ class SYS_EXPORT_STRUCT DPState {
 
   /// Returns the path values (edges) up to this state.
   /// @note this DOES NOT work for merged nodes
-  virtual std::vector<int64_t> cumulativePath() const noexcept;
+  virtual const std::vector<int64_t>& cumulativePath() const noexcept;
 
   /// Returns the cumulative cost up to this state
   virtual double cumulativeCost() const noexcept;
@@ -86,6 +86,9 @@ class SYS_EXPORT_STRUCT DPState {
  private:
    /// Unique identifier for this variable
    uint32_t pStateId{0};
+
+   // Path up to this point
+   std::vector<int64_t> pMockPath;
 };
 
 }  // namespace mdd

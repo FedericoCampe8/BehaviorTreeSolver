@@ -1,7 +1,8 @@
 //
 // Copyright OptiLab 2020. All rights reserved.
 //
-// MDD-based implementation of the AllDifferent constraint.
+// MDD-based implementation of the TSP
+// Pickup and Delivery constraint.
 //
 
 #pragma once
@@ -43,7 +44,7 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
 
   double cost(int64_t val, DPState* fromState=nullptr) const noexcept override;
 
-  std::vector<int64_t> cumulativePath() const noexcept override;
+  const std::vector<int64_t>& cumulativePath() const noexcept override;
 
   double cumulativeCost() const noexcept override;
 
