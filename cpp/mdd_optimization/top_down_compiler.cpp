@@ -92,7 +92,10 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
     if (getCompilationType() == MDDCompiler::MDDCompilationType::Restricted)
     {
       // Apply restricted procedure to remove nodes from the MDD
-      removeNodes(layerIdx, mddGraph, nodePool);
+      if (mddGraph.at(layerIdx).size() > getMaxWidth())
+      {
+        removeNodes(layerIdx, mddGraph, nodePool);
+      }
     }
 
     // For all nodes per layer
@@ -100,7 +103,6 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
     {
       // For all values of the domain of the current layer
       auto currNode = mddGraph.at(layerIdx).at(nodeIdx);
-      const auto& currDomain = currNode->getValues();
 
       // Handle the corner case where the MDD is already build:
       // On the first node of the current layer, check the following layer.
@@ -120,88 +122,54 @@ void TopDownCompiler::buildTopDownMDD(MDDGraph& mddGraph, NodePool& nodePool)
         continue;
       }
 
-      // TODO this is too expensive and needs to be addressed.
-      // Possible solutions:
-      // 1) use bounds on edges
-      // 2) create only the first k edges where k is the width and let |D| - k edges
-      //    expansion for next iterations (put the node back in the queue with reduced domain)
-      for (auto val : currDomain)
+      // Expand on the next node BUT do not build a new node per domain element,
+      // but build only "width" admissible good nodes
+      const auto* var = currNode->getVariable();
+      auto nextLayerStates = currNode->getDPState()->next(var->getLowerBound(),
+                                                          var->getUpperBound(),
+                                                          getMaxWidth(),
+                                                          getBestCost());
+      if (nextLayerStates.empty() || nextLayerStates.at(0) == nullptr)
       {
-        // Calculate the DP state w.r.t. the given domain value
-        auto nextDPState = currNode->getDPState()->next(val);
-        if (nextDPState->isInfeasible() || nextDPState->cumulativeCost() >= getBestCost())
-        {
-          // Continue with next value if this current value
-          // leads to an infeasible state
-          continue;
-        }
+        // This node cannot lead to anything
+        continue;
+      }
 
-        // TODO implement an algorithmic way to cut on nodes early in the search
-        // if (currNode->getLayer() > 0 && nextDPState->cumulativeCost() > 12000) continue;
+      // Create a new now for each state and connect it to the current node,
+      // except the last state which goes into the queue
+      for (int sidx{0}; sidx < static_cast<int>(nextLayerStates.size()) - 1; ++sidx)
+      {
+        // Create a new node for the current state.
+        // The new node should own the variable on next layer
+        const auto nextLayer = currNode->getLayer() + 1;
+        auto nextVar = nextLayer < (getVariablesList()).size() ?
+                getVariablesList().at(nextLayer).get() :
+                nullptr;
+        auto nextNode = pArena->buildNode(currNode->getLayer() + 1, nextVar);
 
-        Node* matchingNode{nullptr};
-        if (getCompilationType() == MDDCompiler::MDDCompilationType::Exact ||
-                isStateEquivalenceCheckAndMergeEnabled())
-        {
-          // Check if the new DP state matches a DP state just created.
-          // Note: for exact compilation or forced equivalence check states are merged
-          for (auto storedNode : newDPStates)
-          {
-            if (storedNode->getDPState()->isEqual(nextDPState.get()))
-            {
-              // A match is found
-              matchingNode = storedNode;
-              break;
-            }
-          }
-        }
+        // Set the new DP state on the new node
+        nextNode->resetDPState(nextLayerStates.at(sidx));
 
-        if (matchingNode != nullptr)
-        {
-          // Found a match, re-use the same state.
-          // Create an edge connecting the current node and the next node.
-          // Note: this happens only on exact compilations or while forcing equivalence checks
-          pArena->buildEdge(currNode, matchingNode, val, val);
+        // Create an edge connecting the current node and the next node
+        const auto val = nextNode->getDPState()->cumulativePath().back();
+        pArena->buildEdge(currNode, nextNode, val, val);
 
-          // If enabled, force merging states
-          if (isStateEquivalenceCheckAndMergeEnabled())
-          {
-            currNode->getDPState()->mergeState(matchingNode->getDPState());
-          }
-        }
-        else
-        {
-          // Create a new node for the current state.
-          // The new node should own the variable on next layer
-          const auto nextLayer = currNode->getLayer() + 1;
-          auto nextVar = nextLayer < (getVariablesList()).size() ?
-                  getVariablesList().at(nextLayer).get() :
-                  nullptr;
-          auto nextNode = pArena->buildNode(currNode->getLayer() + 1, nextVar);
-          if (nextVar != nullptr)
-          {
-            nextNode->initializeNodeDomain();
-          }
+        // Add the node to the next layer
+        mddGraph.at(nextLayer).push_back(nextNode);
+      }
 
-          // Set the new DP state on the new node
-          nextNode->resetDPState(nextDPState);
-
-          // Create an edge connecting the current node and the next node
-          pArena->buildEdge(currNode, nextNode, val, val);
-
-          // Add the node to the next layer
-          mddGraph.at(nextLayer).push_back(nextNode);
-
-          // Store the current state to see if it can be re-used later.
-          // Note: this is only valid for exact compilations or
-          // while forcing equivalence checks
-          if (getCompilationType() == MDDCompiler::MDDCompilationType::Exact ||
-                  isStateEquivalenceCheckAndMergeEnabled())
-          {
-            newDPStates.push_back(nextNode);
-          }
-        }
-      }  // for all values of the domain of a node
+      // Create last node to put in the queue
+      auto& lastState = nextLayerStates.back();
+      if (lastState != nullptr)
+      {
+        // This node represents all the choices that are filtered (but still valid)
+        // on calling "next" above.
+        // Note: the new node will replace "currNode" once the MDD is re-built.
+        //       Therefore it must point to its variable and be on the current layer
+        auto filterNode = pArena->buildNode(currNode->getLayer(), currNode->getVariable());
+        filterNode->resetDPState(lastState);
+        nodePool.at(filterNode->getLayer()).push(filterNode);
+      }
     }  // for all nodes in a given layer
   }  // for all layers in the MDD
 }

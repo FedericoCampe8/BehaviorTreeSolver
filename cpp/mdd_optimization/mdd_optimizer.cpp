@@ -54,7 +54,6 @@ void MDDOptimizer::runOptimization(int32_t width, uint64_t timeoutMsec)
 
   // Prepare the first layer for the top-down compilation
   buildRootMDD();
-  pRootNode->initializeNodeDomain();
 
   // Find first incumbent
   MDDCompiler::NodePool nodePool;
@@ -99,10 +98,21 @@ void MDDOptimizer::runOptimization(int32_t width, uint64_t timeoutMsec)
         if (layerCtr >= (static_cast<int>(nodePool.size()) - 1))
         {
           // If the pool of nodes is empty, swap with the next one
-          // TODO this could loop forever on empty pools
-          // improveIncumbent = false;
           nodePool.clear();
           nodePool.swap(nodePoolAux);
+          bool noMoreNodes{true};
+          for (const auto& poolLayer : nodePool)
+          {
+            if (!poolLayer.empty())
+            {
+              noMoreNodes = false;
+              break;
+            }
+          }
+          if (noMoreNodes)
+          {
+            improveIncumbent = false;
+          }
           break;
         }
         continue;
@@ -143,7 +153,7 @@ void MDDOptimizer::runOptimization(int32_t width, uint64_t timeoutMsec)
         pBestCost = bestCost;
 
         // Set the incumbent on the compiler to avoid storing useless nodes
-        pMDDCompiler->setIncumbent(pBestCost);
+        //pMDDCompiler->setIncumbent(pBestCost);
         std::cout << "New incumbent: " << pBestCost << " at " <<
                 timeoutTimer.getWallClockTimeMsec() << " msec" <<  std::endl;
       }

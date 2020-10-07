@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <rapidjson/document.h>
+#include <sparsepp/spp.h>
 
 #include "mdd_optimization/all_different.hpp"
 #include "mdd_optimization/among.hpp"
@@ -141,7 +142,7 @@ void runTSPPD()
 {
   using namespace mdd;
 
-  std::string instancePath{"../cpp/mdd_client/data/grubhub-15-9.json"};
+  std::string instancePath{"../cpp/mdd_client/data/grubhub-15-0.json"};
   std::ifstream datafile(instancePath);
   std::string dataString((std::istreambuf_iterator<char>(datafile)),
                          (std::istreambuf_iterator<char>()));
@@ -176,44 +177,31 @@ void runTSPPD()
   // First variable is always the node "+0"
   problem->addVariable(std::make_shared<Variable>(0, 0, 0, 0));
 
-  std::vector<int64_t> pickupNode;
-  std::vector<int64_t> deliveryNode;
-  pickupNode.push_back(0);
-  deliveryNode.push_back(1);
+  spp::sparse_hash_map<int64_t, int64_t> pickupDeliveryMap;
+  pickupDeliveryMap[0] = 1;
   for (int idx{1}; idx < numVars-1; ++idx)
   {
     if (((idx+1) % 2) == 0)
     {
-      pickupNode.push_back(idx + 1);
-    }
-
-    if (((idx+2) % 2) == 1)
-    {
-      deliveryNode.push_back(idx + 2);
+      pickupDeliveryMap[idx + 1] = idx + 2;
     }
     problem->addVariable(std::make_shared<Variable>(idx, idx, 2, numVars-1));
   }
 
-  std::cout << "Pickup locations: " << std::endl;
-  for (auto pickupLoc : pickupNode)
+  /*
+  std::cout << "Pickup and delivery locations: " << std::endl;
+  for (const auto& locIter : pickupDeliveryMap)
   {
-    std::cout << pickupLoc << " ";
+    std::cout << locIter.first << " -> " << locIter.second << "\n";
   }
-  std::cout << std::endl;
-
-  std::cout << "Delivery locations: " << std::endl;
-  for (auto deliveryLoc : deliveryNode)
-  {
-    std::cout << deliveryLoc << " ";
-  }
-  std::cout << std::endl;
+  */
   std::cout << "Num Vars: " << numVars << " with domain [" << 2 << ", " << numVars-1 << "]\n";
 
   // Last variable is always the node "-0"
   problem->addVariable(std::make_shared<Variable>(numVars-1, numVars-1, 1, 1));
 
   // Create the constraint
-  auto tsppd = std::make_shared<TSPPD>(pickupNode, deliveryNode, costMatrix);
+  auto tsppd = std::make_shared<TSPPD>(pickupDeliveryMap, costMatrix);
   tsppd->setScope(problem->getVariables());
   problem->addConstraint(tsppd);
 

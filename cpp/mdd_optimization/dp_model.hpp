@@ -45,6 +45,20 @@ class SYS_EXPORT_STRUCT DPState {
   /// Returns false otherwise
   virtual bool isMerged() const noexcept { return false; }
 
+  /// Checks (hopefully quickly) if the given element would produce an infeasible
+  /// next state given the current state
+  virtual bool isValueFeasible(int64_t domainElement) const noexcept;
+
+  /// Returns the list of "width" feasible states that can be reached from the current
+  /// DP state using values in [lb, ub].
+  /// It also returns, as last element of the vector, the state representing all
+  /// other states that could have been taken from the current state but discarded
+  /// due to maximum width.
+  /// @note Returns an empty vector if no state is reachible from the current one.
+  /// @note Excludes all states that have a cost greater than or equal to the given incumbent
+  virtual std::vector<DPState::SPtr> next(int64_t lb, int64_t ub, uint64_t width,
+                                          double incumbent) const noexcept;
+
   /// Returns the next state reachable from this state given "domainElement".
   /// Returns self by default.
   /// @note nextDPState is used on some constraints during the bottom-up pass to calculate

@@ -25,6 +25,17 @@ void DPState::mergeState(DPState*) noexcept
   // No-op
 }
 
+bool DPState::isValueFeasible(int64_t domainElement) const noexcept
+{
+  return true;
+}
+
+std::vector<DPState::SPtr> DPState::next(int64_t, int64_t, uint64_t, double) const noexcept
+{
+  std::vector<DPState::SPtr> res;
+  return res;
+}
+
 DPState::SPtr DPState::next(int64_t, DPState*) const noexcept
 {
   return std::make_shared<DPState>();

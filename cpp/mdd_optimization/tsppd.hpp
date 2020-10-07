@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+#include <sparsepp/spp.h>
+
 #include "mdd_optimization/dp_model.hpp"
 #include "mdd_optimization/mdd_constraint.hpp"
 #include "system/system_export_defs.hpp"
@@ -24,11 +26,11 @@ namespace mdd {
  */
 class SYS_EXPORT_STRUCT TSPPDState : public DPState {
  public:
-  using NodeVisitSet = std::vector<int64_t>;
+  using PickupDeliveryPairMap = spp::sparse_hash_map<int64_t, int64_t>;
   using CostMatrix = std::vector<std::vector<int64_t>>;
 
  public:
-  TSPPDState(NodeVisitSet* pickupNodes, NodeVisitSet* deliveryNodes,
+  TSPPDState(PickupDeliveryPairMap* pickupDeliveryMap,
              CostMatrix* costMatrix, bool isDefaultState=false);
   ~TSPPDState() = default;
 
@@ -39,6 +41,16 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   TSPPDState& operator=(TSPPDState&& other);
 
   void mergeState(DPState* other) noexcept override;
+
+  /// Returns the list of "width" feasible states that can be reached from the current
+  /// DP state using values in [lb, ub].
+  /// It also returns, as last element of the vector, the state representing all
+  /// other states that could have been taken from the current state but discarded
+  /// due to maximum width.
+  /// @note Returns an empty vector if no state is reachible from the current one.
+  /// @note Excludes all states that have a cost greater than or equal to the given incumbent
+  std::vector<DPState::SPtr> next(int64_t lb, int64_t ub, uint64_t width,
+                                  double incumbent) const noexcept override;
 
   DPState::SPtr next(int64_t val, DPState* nextDPState=nullptr) const noexcept override;
 
@@ -60,11 +72,8 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   using NodesList = std::vector<int64_t>;
 
  private:
-  /// Pointer to the set of pickup nodes
-  NodeVisitSet* pPickUpNodeList;
-
-  /// Pointer to the set of delivery nodes
-  NodeVisitSet* pDeliveryNodeList;
+  /// Map of pickup-delivery nodes
+  PickupDeliveryPairMap* pPickupDeliveryMap{nullptr};
 
   /// Matrix of costs visiting cities
   CostMatrix* pCostMatrix;
@@ -75,8 +84,17 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   /// Cost of the path up to this state
   double pCost{0.0};
 
+  /// Set of nodes that can be still visited
+  /// from this state on
+  spp::sparse_hash_set<int64_t> pDomain;
+
   /// Path taken up to this point
   NodesList pPath;
+
+  /// Check if the value if feasible according to the current state
+  /// and given incumbent
+  bool isFeasibleValue(int64_t val, double incumbent) const noexcept;
+
 };
 
 class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
@@ -85,8 +103,7 @@ class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
    using SPtr = std::shared_ptr<TSPPD>;
 
  public:
-   TSPPD(const TSPPDState::NodeVisitSet& pickupNodes,
-         const TSPPDState::NodeVisitSet& deliveryNodes,
+   TSPPD(const TSPPDState::PickupDeliveryPairMap& pickupDeliveryMap,
          const TSPPDState::CostMatrix& costMatrix,
          const std::string& name="TSPPD");
 
@@ -113,8 +130,7 @@ class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
 
  private:
    /// Constraint data
-   TSPPDState::NodeVisitSet pPickupNodes;
-   TSPPDState::NodeVisitSet pDeliveryNodes;
+   TSPPDState::PickupDeliveryPairMap pPickupDeliveryMap;
    TSPPDState::CostMatrix pCostMatrix;
 
    /// Initial state for the DP model for the TSPPD constraint
