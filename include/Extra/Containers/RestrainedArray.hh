@@ -65,7 +65,7 @@ namespace Extra::Containers
     __host__ __device__
     T & RestrainedArray<T>::operator[](uint index) const
     {
-        Extra::Utils::Platform::assert(index < size);
+        assert(index < size);
         return storage[index];
     }
 

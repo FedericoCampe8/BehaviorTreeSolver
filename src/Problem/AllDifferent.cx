@@ -30,7 +30,7 @@ AllDifferent::State::State(State::Type type, std::size_t sizeStorage, std::byte 
 __device__
 AllDifferent::State & AllDifferent::State::operator=(AllDifferent::State const & other)
 {
-    Extra::Utils::Platform::assert(sizeStorage == other.sizeStorage);
+    assert(sizeStorage == other.sizeStorage);
     type = other.type;
     selectedValues = other.selectedValues;
     return *this;
@@ -39,7 +39,7 @@ AllDifferent::State & AllDifferent::State::operator=(AllDifferent::State const &
 __device__
 bool AllDifferent::State::operator==(AllDifferent::State const & other) const
 {
-    Extra::Utils::Platform::assert(type == other.type);
+    assert(type == other.type);
     return selectedValues == other.selectedValues;
 }
 

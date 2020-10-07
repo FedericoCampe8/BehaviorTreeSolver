@@ -74,8 +74,8 @@ namespace Extra::Containers
     __host__ __device__
     T &RestrainedVector<T>::operator[](uint index) const
     {
-        Extra::Utils::Platform::assert(size > 0);
-        Extra::Utils::Platform::assert(index < capacity);
+        assert(size > 0);
+        assert(index < capacity);
         return storage[index];
     }
 
@@ -83,7 +83,7 @@ namespace Extra::Containers
     __host__ __device__
     RestrainedVector<T> & RestrainedVector<T>::operator=(RestrainedVector<T> const & other)
     {
-        Extra::Utils::Platform::assert(other.size <= capacity);
+        assert(other.size <= capacity);
         size = other.size;
         Extra::Algorithms::copy(other.begin(), other.end(), begin());
         return *this;
@@ -150,7 +150,7 @@ namespace Extra::Containers
     __host__ __device__
     void RestrainedVector<T>::emplaceBack(Args ... args)
     {
-        Extra::Utils::Platform::assert(size < capacity);
+        assert(size < capacity);
         new (&storage[size]) T(args ...);
         size += 1;
     }
@@ -166,7 +166,7 @@ namespace Extra::Containers
     __host__ __device__
     void RestrainedVector<T>::popBack()
     {
-        Extra::Utils::Platform::assert(size > 0);
+        assert(size > 0);
         size -= 1;
     }
 };

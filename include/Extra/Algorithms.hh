@@ -1,24 +1,22 @@
 #pragma once
 
 #ifdef GPU
+#include <thrust/binary_search.h>
+#include <thrust/copy.h>
 #include <thrust/distance.h>
+#include <thrust/equal.h>
+#include <thrust/find.h>
+#include <thrust/remove.h>
+#include <thrust/sort.h>
 #include <thrust/swap.h>
 #endif
 
-#include <utility>
+#include <algorithm>
+#include <execution>
 #include <iterator>
+#include <utility>
 
 #include <Extra/Utils/Platform.hh>
-
-/*
- * References
- * - Sort: https://www.geeksforgeeks.org/in-place-merge-sort/
- * - Binary search: https://www.geeksforgeeks.org/binary-search/
- * - Copy: https://en.cppreference.com/w/cpp/algorithm/copy
- * - Find: https://en.cppreference.com/w/cpp/algorithm/find
- * - Equal: https://en.cppreference.com/w/cpp/algorithm/equal
- * - Remove if: https://en.cppreference.com/w/cpp/algorithm/remove
- */
 
 namespace Extra::Algorithms
 {
@@ -28,13 +26,7 @@ namespace Extra::Algorithms
     template<typename T>
     __host__ __device__ void sort(T * first, T * last);
     template<typename T>
-    __host__ __device__ void mergeSort(T * array, int l, int r);
-    template<typename T>
-    __host__ __device__ void merge(T * array, int start, int mid, int end);
-    template<typename T>
     __host__ __device__ bool binary_search(T * first, T * last, T const & value);
-    template<typename T>
-    __host__ __device__ bool binarySearch(T * array, int l, int r, T const & x);
     template<typename T>
     __host__ __device__ T * copy(T * first, T * last, T * d_first);
     template<typename T>
@@ -50,11 +42,10 @@ namespace Extra::Algorithms
     __host__ __device__
     int distance(T * first,  T * last)
     {
-        return
 #ifdef __CUDA_ARCH__
-            static_cast<int>(thrust::distance(first,last));
+        return static_cast<int>(thrust::distance(first,last));
 #else
-            static_cast<int>(std::distance(first,last));
+        return static_cast<int>(std::distance(first,last));
 #endif
     }
 
@@ -62,130 +53,44 @@ namespace Extra::Algorithms
     __host__ __device__
     void sort(T * first, T * last)
     {
-        int d = Extra::Algorithms::distance(first,last);
-        if (d > 0)
-        {
-            mergeSort(first, 0, static_cast<unsigned int>(d - 1));
-        }
+#ifdef __CUDA_ARCH__
+        thrust::sort(thrust::seq,first,last);
+#else
+        std::sort(std::execution::seq,first,last);
+#endif
     }
 
     template<typename T>
     __host__ __device__
-    void mergeSort(T * array, int l, int r)
+    bool binary_search(T * first, T * last, T const & value)
     {
-        if (l < r)
-        {
-            // Same as (l + r) / 2, but avoids overflow for large l and r
-            int m = l + (r - l) / 2;
-
-            // Sort first and second halves
-            mergeSort(array, l, m);
-            mergeSort(array, m + 1, r);
-
-            merge(array, l, m, r);
-        }
-    }
-
-    template<typename T>
-    __host__ __device__
-    void merge(T * array, int start, int mid, int end)
-    {
-        int start2 = mid + 1;
-
-        // If the direct merge is already sorted
-        if (array[mid] <= array[start2])
-        {
-            return;
-        }
-
-        // Two pointers to maintain start of both arrays to merge
-        while (start <= mid and start2 <= end)
-        {
-            // If element 1 is in right place
-            if (array[start] <= array[start2])
-            {
-                start++;
-            }
-            else
-            {
-                T value = array[start2];
-                int index = start2;
-
-                // Shift all the elements between element 1 and element 2, right by 1.
-                while (index != start)
-                {
-                    array[index] = array[index - 1];
-                    index--;
-                }
-                array[start] = value;
-
-                // Update all the pointers
-                start++;
-                mid++;
-                start2++;
-            }
-        }
-    }
-
-    template<typename T>
-    __host__ __device__
-    bool binary_search(T * first, T * last,  T const & value)
-    {
-        int d = Extra::Algorithms::distance(first,last);
-        return d > 0 ? binarySearch(first, 0, d - 1, value) : false;
-    }
-
-    template<typename T>
-    __host__ __device__
-    bool binarySearch(T * array, int l, int r, T const & x)
-    {
-        if (r >= l)
-        {
-            int mid = l + (r - l) / 2;
-
-            // If the element is present at the middle itself
-            if (array[mid] == x)
-            {
-                return true;
-            }
-
-            // If element is smaller than mid, then it can only be present in left subarray
-            if (array[mid] > x)
-            {
-                return binarySearch(array, l, mid - 1, x);
-            }
-
-            // Else the element can only be present in right subarray
-            return binarySearch(array, mid + 1, r, x);
-        }
-
-        // We reach here when element is not present in array
-        return false;
+#ifdef __CUDA_ARCH__
+         return thrust::binary_search(thrust::seq,first,last,value);
+#else
+         return std::binary_search(first,last,value);
+#endif
     }
 
     template<typename T>
     __host__ __device__
     T * copy(T * first, T * last, T * d_first)
     {
-        while (first != last)
-        {
-            *d_first++ = *first++;
-        }
-        return d_first;
+#ifdef __CUDA_ARCH__
+        return thrust::copy(thrust::seq,first,last,d_first);
+#else
+        return std::copy(std::execution::seq,first,last,d_first);
+#endif
     }
 
     template<typename T>
     __host__ __device__
     T * find(T * first, T * last, T const & value)
     {
-        for (; first != last; ++first)
-        {
-            if (*first == value)
-            {
-                return first;
-            }
-        }
-        return last;
+#ifdef __CUDA_ARCH__
+        return thrust::find(thrust::seq,first,last,value);
+#else
+        return std::find(std::execution::seq,first,last,value);
+#endif
     }
 
     template<typename T>
@@ -203,29 +108,20 @@ namespace Extra::Algorithms
     __host__ __device__
     bool equal(T * first1, T * last1, T * first2)
     {
-        for (; first1 != last1; ++first1, ++first2)
-        {
-            if (!(*first1 == *first2))
-            {
-                return false;
-            }
-        }
-        return true;
+#ifdef __CUDA_ARCH__
+        return thrust::equal(thrust::seq,first1,last1,first2);
+#else
+        return std::equal(std::execution::seq,first1,last1,first2);
+#endif
     }
 
     template<typename T, typename P>
     T * remove_if (T * first, T * last, P pred)
     {
-        T * result = first;
-        while (first != last)
-        {
-            if (not pred(*first))
-            {
-                *result = *first;
-                ++result;
-            }
-            ++first;
-        }
-        return result;
+#ifdef __CUDA_ARCH__
+        return thrust::remove_if(thrust::seq,first,last1,pred);
+#else
+        return std::remove_if(std::execution::seq,first,last,pred);
+#endif
     }
 };

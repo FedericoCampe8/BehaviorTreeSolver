@@ -8,7 +8,7 @@ set(HEADERS
     include/Extra/Containers/RestrainedArray.hh
     include/Extra/Containers/RestrainedVector.hh
     include/Extra/Extra.hh
-        include/Extra/Algorithms.hh
+    include/Extra/Algorithms.hh
     include/Extra/Utils/Chrono.hh
     include/Extra/Utils/Memory.hh
     include/Extra/Utils/Platform.hh
@@ -20,8 +20,7 @@ set(HEADERS
     include/MDD/Node.hh
     include/Problem/AllDifferent.hh
     include/Problem/State.hh
-    include/Problem/Variable.hh
-        include/Extra/Algorithms.hh)
+    include/Problem/Variable.hh)
 
 # Add sources
 set(SOURCES
@@ -74,11 +73,10 @@ if(${PLATFORM_TYPE} STREQUAL "GPU")
     enable_language(CUDA)
     set(CMAKE_CUDA_ARCHITECTURES OFF)
     set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
-    string(APPEND CMAKE_CUDA_FLAGS " -std c++17 -extended-lambda")
-    string(APPEND CMAKE_CUDA_FLAGS " -arch=compute_52 -code=sm_52")
-    #string(APPEND CMAKE_CUDA_FLAGS " --ptxas-options=-warn-lmem-usage,-warn-spills")
-    string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -G -src-in-ptx")
-    string(APPEND CMAKE_CUDA_FLAGS_RELEASE " -lineinfo -Xptxas -O3")
+    string(APPEND CMAKE_CUDA_FLAGS " -std c++17 -arch=sm_52")
+    string(APPEND CMAKE_CUDA_FLAGS " -Xptxas -v")
+    string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -G")
+    string(APPEND CMAKE_CUDA_FLAGS_RELEASE " -lineinfo")
 
     # Check CUDA and GCC version
     set(CUDA_REQUIRED_VERSION 11)

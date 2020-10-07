@@ -67,13 +67,16 @@ int main(int argc, char ** argv)
     printBuildInfo();
 
 #ifdef GPU
-    //Heap
+    // Heap
     size_t sizeHeap = 100 * 1024 * 1024;
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, sizeHeap);
 
-    //Stack
+    // Stack
     size_t sizeStackThread = 2 * 1024;
     cudaDeviceSetLimit(cudaLimitStackSize, sizeStackThread);
+
+    // Cache
+    cudaDeviceSetCacheConfig( cudaFuncCachePreferL1 );
 #endif
 
     // Variables

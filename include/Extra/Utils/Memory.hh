@@ -13,9 +13,9 @@ namespace Extra::Utils::Memory
         *ptr = std::malloc(size);
 #else
         cudaError_t status = cudaMallocManaged(ptr, size);
-        Extra::Utils::Platform::assert(status == cudaSuccess);
+        assert(status == cudaSuccess);
 #endif
-        Extra::Utils::Platform::assert(*ptr != nullptr);
+        assert(*ptr != nullptr);
     }
 
     __host__ __device__
@@ -33,7 +33,7 @@ namespace Extra::Utils::Memory
         std::free(ptr);
 #else
         cudaError_t status = cudaFree(ptr);
-        Extra::Utils::Platform::assert(status == cudaSuccess);
+        assert(status == cudaSuccess);
 #endif
     }
 }

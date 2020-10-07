@@ -178,8 +178,7 @@ void MDD::topDown()
                 parentState.next(value, workingState);
                 if (workingState->type == State::Type::Regular)
                 {
-                    State *eqState;
-                    eqState = Extra::Algorithms::find(nextStates->begin(), nextStates->end(), *workingState);
+                    State * eqState = Extra::Algorithms::find(nextStates->begin(), nextStates->end(), *workingState);
                     if (eqState != nextStates->end())
                     {
                         uint indexEqState = Extra::Algorithms::distance(nextStates->begin(), eqState);
@@ -188,9 +187,7 @@ void MDD::topDown()
                     else
                     {
                         // Create new state
-                        nextStates->emplaceBack(workingState->type,
-                                                sizeStorageState,
-                                                &storageNextStates[sizeStorageState * nextStates->getSize()]);
+                        nextStates->emplaceBack(workingState->type,sizeStorageState,&storageNextStates[sizeStorageState * nextStates->getSize()]);
                         nextStates->back() = *workingState;
 
                         // Create new node

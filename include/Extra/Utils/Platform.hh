@@ -14,28 +14,3 @@
     #define CALL(gridSize, blockSize, sharedMemorySize, cudaStream, fun, args...) fun(args);
 #endif
 
-
-
-namespace Extra::Utils::Platform
-{
-    __host__ __device__
-    inline void abort()
-    {
-#ifdef __CUDA_ARCH__
-        __trap();
-#else
-        std::abort();
-#endif
-    }
-
-    #undef assert
-    __host__ __device__
-    inline void assert(bool b)
-    {
-#ifndef NDEBUG
-       if(not b)
-           abort();
-#endif
-    }
-}
-
