@@ -1,9 +1,10 @@
 #pragma once
 
-#include <CustomTemplateLibrary/CTL.hh>
+#include <cstddef>
+
+#include <Extra/Extra.hh>
 #include <MDD/Edge.hh>
 #include <MDD/Node.hh>
-#include <Problem/Variable.hh>
 
 class Layer
 {
@@ -11,11 +12,15 @@ class Layer
         uint const size;
         int const minValue;
         int const maxValue;
-        ctl::StaticVector<Node> nodes;
-        ctl::RuntimeArray<ctl::StaticVector<Edge>> edges;
+        Extra::Containers::RestrainedVector<Node> nodes;
+        Edge * const storageEdges;
+        Extra::Containers::RestrainedArray<Extra::Containers::RestrainedVector<Edge>> edges;
 
     public:
-        Layer(uint size, Variable const & var);
+        __device__ Layer(uint size, int minValue, int maxValue);
+        __device__ ~Layer();
+    private:
+        __device__ Edge * getStorageEdges() const;
 
     friend class MDD;
 };

@@ -2,18 +2,20 @@
 
 function printHelp 
 {
-    echo "Usage: ./autoCMake.sh <Platform type> <Build type>"
+    echo "Usage: ./autoCMake.sh <Platform type> <Build type> [--remote]"
     echo "  Platform types:"
-    echo "    -c CPU"
-    echo "    -g GPU"
+    echo "    -c,--cpu      CPU"
+    echo "    -g,--gpu      GPU"
     echo "  Build types:"
-    echo "    -d  Debug"
-    echo "    -r  Release"
-    echo "Example: ./autoCMake.sh -c -d"
+    echo "    -d,--debug    Debug"
+    echo "    -r,--release  Release"
+    echo "Examples:"
+    echo "  ./autoCMake.sh --cpu --release"
+    echo "  ./autoCMake.sh -g -d --remote"
 }
 
 
-if [ "$#" -ne 2 ];
+if [ "$#" -lt 2 ];
 then
     printHelp
     exit 1
@@ -21,23 +23,28 @@ fi
 
 platformType=""
 buildType=""
+hostType="Local"
 
-for arg in "$@" 
+for arg in "$@"
 do
     case "$arg" in
-        -c) 
+        -c|--cpu)
             platformType="CPU"
             ;;
-        -g) 
+        -g|--gpu)
             platformType="GPU"
             ;;
-        -r) 
+        -r|--release)
             buildType="Release"
             ;;
-        -d) 
+        -d|--debug)
             buildType="Debug"
             ;;
-        -h|--help) 
+
+        --remote)
+            hostType="Remote"
+            ;;
+        -h|--help)
             printHelp
             exit 0
             ;;
@@ -56,17 +63,22 @@ then
     exit 1
 fi
 
-if [ -z "platformType" ];
+if [ -z "$buildType" ];
 then
     echo "[ERROR] Missing build type"
     printHelp
     exit 1
 fi
 
-rm -rf ./build &> /dev/null
-mkdir ./build
+buildDir="build"
+if [ "$hostType" == "Remote" ];
+then
+  buildDir="build-remote"
+fi
 
-cd build
+rm -rf ./"$buildDir" &> /dev/null
+mkdir ./"$buildDir"
+cd ./"$buildDir"
 
 cmake \
     -DPLATFORM_TYPE=$platformType \

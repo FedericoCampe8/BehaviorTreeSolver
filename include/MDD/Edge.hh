@@ -1,18 +1,16 @@
 #pragma once
 
-#include <CustomTemplateLibrary/CTL.hh>
+#include <Extra/Utils.hh>
 
 class Edge
 {
     public:
         enum Status {Valid, Invalid};
-
         Status status;
         uint to;
         int  value;
 
     public:
-        Edge(uint to, int value);
-
-        static bool isNotValid(Edge const & edge);
+        __device__ Edge(uint to, int value);
+        __device__ static bool isNotValid(Edge const & edge);
 };

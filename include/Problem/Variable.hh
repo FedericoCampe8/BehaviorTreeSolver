@@ -1,13 +1,16 @@
 #pragma once
 
-#include <CustomTemplateLibrary/CTL.hh>
+#include <Extra/Extra.hh>
 
-class Variable
+namespace Problem
 {
-    public:
-        int const minValue;
-        int const maxValue;
+    class Variable
+    {
+        public:
+            int minValue;
+            int maxValue;
 
-    public:
-        Variable(int minValue, int maxValue);
-};
+        public:
+            Variable(int minValue, int maxValue);
+    };
+}

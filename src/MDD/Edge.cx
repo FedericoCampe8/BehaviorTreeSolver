@@ -1,12 +1,13 @@
 #include <MDD/Edge.hh>
 
+__device__
 Edge::Edge(uint to, int value) :
     status(Valid),
     to(to),
     value(value)
-{
-}
+{}
 
+__device__
 bool Edge::isNotValid(Edge const & edge)
 {
     return edge.status == Status::Invalid;

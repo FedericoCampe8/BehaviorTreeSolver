@@ -1,0 +1,42 @@
+#include <new>
+
+#include <MDD/Layer.hh>
+
+using namespace Extra::Containers;
+using namespace Extra::Utils;
+
+__device__
+Layer::Layer(uint size, int minValue, int maxValue) :
+    size(size),
+    minValue(minValue),
+    maxValue(maxValue),
+    nodes(size),
+    storageEdges(getStorageEdges()),
+    edges(size)
+{
+    uint edgesPerNode = maxValue - minValue + 1;
+    for (uint i = 0; i < size; i += 1)
+    {
+        new (&edges[i]) RestrainedVector<Edge>(edgesPerNode, &storageEdges[edgesPerNode * i]);
+    }
+}
+
+__device__
+Layer::~Layer()
+{
+    Memory::free(storageEdges);
+
+    for (uint i = 0; i < size; i += 1)
+    {
+        delete &edges[i];
+    }
+}
+
+__device__
+Edge * Layer::getStorageEdges() const
+{
+    uint edgesPerNode = maxValue - minValue + 1;
+    size_t edgesMemSize  = size * edgesPerNode * sizeof(Edge);
+    return static_cast<Edge*>(Memory::malloc(edgesMemSize));
+}
+

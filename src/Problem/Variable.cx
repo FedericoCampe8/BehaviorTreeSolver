@@ -1,5 +1,7 @@
 #include <Problem/Variable.hh>
 
+using namespace Problem;
+
 Variable::Variable(int minValue, int maxValue) :
     minValue(minValue),
     maxValue(maxValue)

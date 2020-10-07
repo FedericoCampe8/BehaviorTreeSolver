@@ -1,27 +1,32 @@
 #include <new>
-#include <iostream>
-#include <fstream>
+#include <cstdio>
 
 #include <MDD/MDD.hh>
 
-MDD::MDD(uint width, std::vector<Variable> const & vars) :
+__device__
+MDD::MDD(uint width, uint countVars, Problem::Variable const * const vars) :
     width(width),
-    layers(vars.size() + 1)
+    layers(countVars + 1),
+    IDNextNode(0)
 {
-    for(uint i = 0; i < vars.size() + 1; i += 1)
+    new (&layers[0]) Layer(1, vars[0].minValue, vars[0].maxValue);
+    for(uint i = 1; i < countVars; i += 1)
     {
-        new (&layers[i]) Layer(width, vars[i]);
+        new (&layers[i]) Layer(width, vars[i].minValue, vars[i].maxValue);
     }
+    new (&layers[countVars]) Layer(1,0,0);
 }
 
-void MDD::initialize()
+__device__
+void MDD::initializeSeparation()
 {
-    for(uint indexLayer = 0; indexLayer < layers.size - 1; indexLayer += 1)
+    uint indexLastLater = layers.size - 1;
+    for(uint indexLayer = 0; indexLayer < indexLastLater; indexLayer += 1)
     {
         Layer & layer = layers[indexLayer];
 
         // Add one node
-        layer.nodes.emplaceBack();
+        layer.nodes.emplaceBack(IDNextNode++);
 
         // Add all outgoing edges
         for (int value = layer.minValue; value <= layer.maxValue; value += 1)
@@ -31,82 +36,69 @@ void MDD::initialize()
     };
 
     // Last layer
-    layers.back().nodes.emplaceBack();
+    layers.back().nodes.emplaceBack(IDNextNode++);
 }
 
-void MDD::toGraphViz(std::string const & nameFileGv) const
+__device__
+void MDD::toGraphViz() const
 {
-    std::ofstream fileGv;
-    fileGv.open(nameFileGv, std::ios::out | std::ios::trunc);
-    assert(fileGv.is_open());
-
-    fileGv << "digraph G" << std::endl;
-    fileGv << "{" << std::endl;
-    fileGv << std::endl;
-    fileGv << "  node [shape=circle];" << std::endl;
-
+    printf("digraph G\n");
+    printf("{\n");
+    printf("\n");
+    printf("  node [shape=circle];\n");
     // Nodes
     for (uint indexLayer = 0; indexLayer < layers.size; indexLayer += 1)
     {
-        fileGv << std::endl;
-        fileGv << "  {" << std::endl;
-        fileGv << "      rank = same;" << std::endl;
-
+        printf("\n");
+        printf("  {\n");
+        printf("      rank = same;\n");
         auto const & nodes = layers[indexLayer].nodes;
         for (Node const * node = nodes.begin(); node != nodes.end(); node += 1)
         {
-            fileGv << "      " << node->ID << ";" << std::endl;
+            printf("      %d;\n", node->ID);
         }
-
-        fileGv << "  }" << std::endl;
+        printf("  }\n");
     }
 
     // Edges
-    for (uint indexLayer = 0; indexLayer < layers.size - 1; indexLayer += 1)
+    uint indexLastLater = layers.size - 1;
+    for (uint indexLayer = 0; indexLayer < indexLastLater; indexLayer += 1)
     {
-        fileGv << std::endl;
-
+        printf("\n");
         Layer const & layer = layers[indexLayer];
         Layer const & nextLayer = layers[indexLayer + 1];
         auto const & nodes = layer.nodes;
         auto const & nextNodes = nextLayer.nodes;
-
         for (uint indexNode = 0; indexNode < nodes.getSize(); indexNode += 1)
         {
             uint idParentNode = nodes[indexNode].ID;
-
             auto const & edges = layer.edges[indexNode];
             for(uint indexEdge = 0; indexEdge < edges.getSize(); indexEdge += 1)
             {
                 Edge & edge = edges[indexEdge];
                 uint idChildNode = nextNodes.at(edge.to).ID;
-
-                fileGv << "  " << idParentNode << " -> " << idChildNode << " [label=\"" << edge.value << "\"];" << std::endl;
+                printf("  %d -> %d [label=\"%d\"];\n",idParentNode, idChildNode, edge.value);
             }
         }
     }
-
-    fileGv << std::endl;
-    fileGv << "}" << std::endl;
-    fileGv.close();
-
+    printf("\n");
+    printf("}\n");
 }
 
-
-void MDD::DFS(uint indexLayer, uint indexNode, ctl::StaticVector<int> & labels, bool print) const
+__device__
+void MDD::DFS(uint indexLayer, uint indexNode, Extra::Containers::RestrainedVector<int> & labels, bool print) const
 {
-    if(indexLayer == layers.size - 1)
+    uint indexLastLater = layers.size - 1;
+    if(indexLayer == indexLastLater)
     {
         if (print)
         {
-            std::cout << labels[0];
-
+            printf("%d",labels[0]);
             for (uint i = 1; i < indexLayer; i += 1)
             {
-                std::cout << "," << labels[i];
+                printf(",%d",labels[i]);
             }
-
-            std::cout << std::endl;
+            printf("\n");
         }
     }
     else
@@ -123,6 +115,7 @@ void MDD::DFS(uint indexLayer, uint indexNode, ctl::StaticVector<int> & labels, 
     }
 }
 
+__device__
 uint MDD::getLayersCount() const
 {
     return layers.size;

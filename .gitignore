@@ -1,11 +1,7 @@
 # CLion
 .idea/
-<<<<<<< HEAD
-cmake-build-debug/
-
-=======
 
 # Build
 build/
->>>>>>> 85c8d98f... Initial import from branch mdd
+build-remote/
 

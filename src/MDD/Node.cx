@@ -1,0 +1,6 @@
+#include <MDD/Node.hh>
+
+__device__
+Node::Node(uint ID) :
+    ID(ID)
+{}

@@ -1,11 +1,17 @@
 ## Requirements
+
+### CPU
+An X86_64 CPU and the following software:
 - CMake >= 3.16
-- GCC >= 9.3
+- GCC >= 7
 - TBB >= 2020.1
 
-### Addional requirements for GPU version
-- CUDA SDK >= 10.1
-- nVIDIA GPU with [compute capability](https://en.wikipedia.org/wiki/CUDA#GPUs_supported) >= 3.5
+### GPU 
+An NVIDIA GPU with [compute capability](https://en.wikipedia.org/wiki/CUDA#GPUs_supported) >= 5.2 and the following software:
+- CMake >= 3.16
+- CUDA 11
+- GCC 9
+- TBB >= 2020.1
 
 ## Compilation
 Execute the following commands

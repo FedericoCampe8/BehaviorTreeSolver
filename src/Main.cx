@@ -1,0 +1,101 @@
+#include <cstdio>
+
+#include <Problem/AllDifferent.hh>
+#include <MDD/MDD.hh>
+#include <Problem/Variable.hh>
+#include <Extra/Extra.hh>
+
+using namespace Extra::Containers;
+using namespace Extra::Utils;
+using namespace Problem;
+
+__device__
+MDD * buildMDD(unsigned int width, unsigned int countVars, Variable const * const vars)
+{
+    auto start = Chrono::now();
+    MDD * mdd = new MDD(width, countVars, vars);
+    mdd->topDown<AllDifferent>();
+    auto end = Chrono::now();
+    printf("[INFO] MDD created in %d ms\n", static_cast<uint>(end - start));
+    return mdd;
+}
+
+__device__
+void visitMDD(MDD * mdd, bool print)
+{
+    auto start = Chrono::now();
+    RestrainedVector<int> labels(mdd->getLayersCount());
+    mdd->DFS(0, 0,labels, print);
+    auto end = Chrono::now();
+    printf("[INFO] DFS performed in %d ms\n", static_cast<uint>(end - start));
+}
+
+__device__
+void printMDD(MDD * mdd)
+{
+    mdd->toGraphViz();
+}
+
+__global__
+void doBenchmark(unsigned int width, unsigned int countVars, Variable const * const vars)
+{
+    MDD * mdd = buildMDD(width, countVars, vars);
+    //visitMDD(mdd, true);
+    //printMDD(mdd);
+    delete mdd;
+}
+
+void printBuildInfo() {
+    // Platform
+    printf("Platform type: ");
+#ifdef GPU
+    printf("GPU\n");
+#else
+    printf("CPU\n");
+#endif
+    // Build
+    printf("Build type: ");
+#ifdef NDEBUG
+    printf("Release\n");
+#else
+    printf("Debug\n");
+#endif
+}
+
+int main(int argc, char ** argv)
+{
+    printBuildInfo();
+
+#ifdef GPU
+    //Heap
+    size_t sizeHeap = 100 * 1024 * 1024;
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, sizeHeap);
+
+    //Stack
+    size_t sizeStackThread = 2 * 1024;
+    cudaDeviceSetLimit(cudaLimitStackSize, sizeStackThread);
+#endif
+
+    // Variables
+    unsigned int countVars = std::atoi(argv[1]);
+    std::size_t sizeVars = sizeof(Variable) * countVars;
+    Variable * vars = static_cast<Variable*>(Memory::malloc(sizeVars));
+
+    Variable v(0,static_cast<int>(countVars) - 1);
+    std::fill(vars, vars + countVars, v);
+    printf("[INFO] Variables count %d\n", countVars);
+
+    // Width
+    unsigned int width = AllDifferent::getOptimalLayerWidth(countVars);
+    printf("[INFO] MDD with %d\n", width);
+
+    // Benchmark
+    CALL(1,1,0,0,doBenchmark,width,countVars,vars);
+#ifdef GPU
+    cudaDeviceSynchronize();
+#endif
+
+    Memory::free(vars);
+
+    return EXIT_SUCCESS;
+}

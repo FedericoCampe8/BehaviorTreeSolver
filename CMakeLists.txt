@@ -2,99 +2,105 @@ cmake_minimum_required(VERSION 3.16)
 
 project(mdd-gpu)
 
-# Set build types
-set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Available builds")
-set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Release Debug)
-
-# Set platform types
-set(PLATFORM_TYPE "CPU" CACHE STRING "Available platforms")
-set_property(CACHE PLATFORM_TYPE PROPERTY STRINGS CPU GPU)
-
-# Set GCC, TBB and CUDA minimum version
-set(GCC_MINIMUM_REQUIRED_VERSION 9.3)
-set(CUDA_MINIMUM_REQUIRED_VERSION 10.1)
-
 # Add headers
 set(HEADERS
-    include/CustomTemplateLibrary/CTL.hh
-        include/CustomTemplateLibrary/StaticVector.hh
-    include/CustomTemplateLibrary/Types.hh
-        include/DP/AllDifferent.hh
-    include/MDD/MDD.hh
+    include/Extra/Containers.hh
+    include/Extra/Containers/RestrainedArray.hh
+    include/Extra/Containers/RestrainedVector.hh
+    include/Extra/Extra.hh
+        include/Extra/Algorithms.hh
+    include/Extra/Utils/Chrono.hh
+    include/Extra/Utils/Memory.hh
+    include/Extra/Utils/Platform.hh
+    include/Extra/Utils/Types.hh
+    include/Extra/Utils.hh
     include/MDD/Edge.hh
     include/MDD/Layer.hh
+    include/MDD/MDD.hh
     include/MDD/Node.hh
+    include/Problem/AllDifferent.hh
+    include/Problem/State.hh
     include/Problem/Variable.hh
-        include/DP/State.hh)
+        include/Extra/Algorithms.hh)
 
-#Add sources
+# Add sources
 set(SOURCES
-        src/Main.cc
-        src/MDD/MDD.cc
-        src/MDD/Edge.cc
-        src/MDD/Layer.cc
-        src/MDD/Node.cc
-        src/Problem/Variable.cc
-        src/DP/AllDifferent.cc
-        src/DP/State.cc
-        )
+    src/Main.cx
+    src/MDD/Edge.cx
+    src/MDD/Layer.cx
+    src/MDD/MDD.cx
+    src/MDD/Node.cx
+    src/Problem/AllDifferent.cx
+    src/Problem/State.cx
+    src/Problem/Variable.cx)
 
-#Add include directory
-include_directories("include")
+
+# Add headers
+include_directories(include)
 
 # Print information
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Platform type: ${PLATFORM_TYPE}")
 
-#Set C++ compilation flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -g0 -O3")
-set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_CXX_FLAGS_DEBUG} -g3 -O0")
+# Check TBB
+find_package(TBB 2020.1 REQUIRED)
 
-# CPU
 if(${PLATFORM_TYPE} STREQUAL "CPU")
 
-    # Check GCC version
-    if ((NOT CMAKE_COMPILER_IS_GNUCC) OR (CMAKE_CXX_COMPILER_VERSION VERSION_LESS GCC_MINIMUM_REQUIRED_VERSION))
+    # C++
+    enable_language(CXX)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    string(APPEND CMAKE_CXX_FLAGS " -Wall")
+
+    # Check GCC minimum version
+    set(GCC_MINIMUM_REQUIRED_VERSION 7)
+    if (NOT ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL GCC_MINIMUM_REQUIRED_VERSION)))
         message(FATAL_ERROR "Required GCC >= ${GCC_MINIMUM_REQUIRED_VERSION}")
     endif()
 
-    # Check Intel Threading Building Blocks presence
-    find_package(TBB 2020.1 REQUIRED)
-
-    # Add target executable
-    add_executable(mdd-gpu ${SOURCES} ${HEADERS})
-
-    # Link TBB library
-    target_link_libraries(mdd-gpu ${TBB_IMPORTED_TARGETS})
-
-#GPU
-else()
-
-    # Check CUDA presence
-    find_package(CUDA ${CUDA_MINIMUM_REQUIRED_VERSION} REQUIRED)
-    include_directories(${CUDA_INCLUDE_DIRS})
-
-    # Define the macro GPU
-    add_definitions(-DGPU)
-
-    # Set CUDA compilation flags
-    cuda_select_nvcc_arch_flags(ARCH_FLAGS "Auto")
-    list(APPEND CUDA_NVCC_FLAGS ${ARCH_FLAGS})
-
-    if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-        set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-G")
-        add_definitions(-DTHRUST_DEBUG)
-    else()
-        set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-lineinfo")
-    endif()
-
-    set(CUDA_SEPARABLE_COMPILATION ON)
-
-    # Add target executable
-    cuda_add_executable(mdd-gpu ${SOURCES} ${HEADERS})
-
-    # Link CUDA Runtime library
-    target_link_libraries(mdd-gpu ${CUDA_cudadevrt_LIBRARY})
+    # Compile source files as C++ files
+    set_source_files_properties(${SOURCES} ${HEADERS} PROPERTIES LANGUAGE CXX)
+    set_source_files_properties(${SOURCES} ${HEADERS} PROPERTIES LINKER_LANGUAGE CXX)
+    set_source_files_properties(${SOURCES} ${HEADERS} PROPERTIES COMPILE_FLAGS " -x c++")
 
 endif()
+
+
+if(${PLATFORM_TYPE} STREQUAL "GPU")
+
+    # CUDA
+    enable_language(CUDA)
+    set(CMAKE_CUDA_ARCHITECTURES OFF)
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+    string(APPEND CMAKE_CUDA_FLAGS " -std c++17 -extended-lambda")
+    string(APPEND CMAKE_CUDA_FLAGS " -arch=compute_52 -code=sm_52")
+    #string(APPEND CMAKE_CUDA_FLAGS " --ptxas-options=-warn-lmem-usage,-warn-spills")
+    string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -G -src-in-ptx")
+    string(APPEND CMAKE_CUDA_FLAGS_RELEASE " -lineinfo -Xptxas -O3")
+
+    # Check CUDA and GCC version
+    set(CUDA_REQUIRED_VERSION 11)
+    if (NOT ((CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA") AND (CMAKE_CUDA_COMPILER_VERSION  MATCHES "^${CUDA_REQUIRED_VERSION}*")))
+        message(FATAL_ERROR "Required CUDA ${CUDA_REQUIRED_VERSION}")
+    endif()
+    set(GCC_REQUIRED_VERSION 9)
+    if (NOT ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_CXX_COMPILER_VERSION MATCHES "^${GCC_REQUIRED_VERSION}*")))
+        message(FATAL_ERROR "Required GCC ${GCC_REQUIRED_VERSION}")
+    endif()
+
+    # Compile source files as CUDA files
+    set_source_files_properties(${SOURCES} ${HEADERS} PROPERTIES LANGUAGE CUDA)
+    set_source_files_properties(${SOURCES} ${HEADERS} PROPERTIES LINKER_LANGUAGE CUDA)
+    set_source_files_properties(${SOURCES} ${HEADERS} PROPERTIES COMPILE_FLAGS " -x cu")
+
+    # Define GPU macro
+    add_definitions(-DGPU)
+endif()
+
+# Add target executable
+add_executable(mdd-gpu ${SOURCES} ${HEADERS})
+
+# Link TBB
+target_link_libraries(mdd-gpu ${TBB_IMPORTED_TARGETS})

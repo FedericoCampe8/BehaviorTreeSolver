@@ -1,16 +1,11 @@
 #pragma once
 
-#include <CustomTemplateLibrary/CTL.hh>
+#include <Extra/Extra.hh>
 
 class Node
 {
-
     public:
-        uint ID;
-
-    private:
-        static int nextID;
-
+        uint const ID;
     public:
-        Node();
+        __device__ Node(uint ID);
 };
