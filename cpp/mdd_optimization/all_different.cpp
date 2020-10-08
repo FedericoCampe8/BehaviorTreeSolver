@@ -264,7 +264,7 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
 
     // Find all conflicting values
     std::vector<int64_t> conflictingValues;
-    for (auto val : *tailDomain->getValues())
+    for (auto val : tailDomain->getValues())
     {
       if ( headDomain->isValueInDomain(val) )
       {

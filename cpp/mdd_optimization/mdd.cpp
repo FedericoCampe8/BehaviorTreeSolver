@@ -795,7 +795,7 @@ void MDD::runTopDownProcedure(Node* node, bool isRestricted)
       // For all values of the domain of the current layer
       auto currNode = pNodesPerLayer.at(layerIdx).at(nodeIdx);
       auto currDomain = currNode->getNodeDomain()->getValues();
-      for (auto val : *currDomain)
+      for (auto val : currDomain)
       {
         // Calculate the DP state w.r.t. the given domain value
         auto nextDPState = currNode->getDPState()->next(val);
@@ -859,7 +859,7 @@ void MDD::runFilteringProcedure(Node* node)
     for (int nodeIdx{0}; nodeIdx < pNodesPerLayer.at(layerIdx).size(); ++nodeIdx)
     {
       auto node = pNodesPerLayer.at(layerIdx).at(nodeIdx);
-      node->initializeNodeDomain();
+      // node->initializeNodeDomain();
     }
   }
 

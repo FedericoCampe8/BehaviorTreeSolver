@@ -16,6 +16,7 @@ Node::Node(uint32_t layer, Variable* variable)
   pDefaultDPState(std::make_shared<DPState>())
 {
   pDPState = pDefaultDPState;
+  pNodeDomain = new NodeDomain();
 }
 
 Node::~Node()
@@ -47,7 +48,7 @@ void Node::initializeNodeDomain()
     throw std::runtime_error("Node - getValues: empty pointer to the variable");
   }
 
-  pNodeDomain = new NodeDomain( pVariable->getAvailableValues() );
+  // pNodeDomain = new NodeDomain( pVariable->getAvailableValues() );
 }
 
 void Node::addInEdge(Edge* edge)
@@ -109,6 +110,7 @@ void Node::addOutEdge(Edge* edge)
 
   pOutEdges.push_back(edge);
   pOutEdgeSet.insert(edge->getUniqueId());
+  pNodeDomain->addValue( edge->getValue() );
 
   // Set this node as the head of the given edge
   edge->setTail(this);
@@ -123,6 +125,7 @@ void Node::removeInEdge(uint32_t position)
 void Node::removeOutEdge(uint32_t position)
 {
   auto edge = pOutEdges.at(position);
+  pNodeDomain->removeValue( edge->getValue() );
   removeOutEdgeGivenPtr(edge);
 }
 

@@ -20,19 +20,21 @@ namespace mdd {
 class SYS_EXPORT_CLASS NodeDomain {
 
     public:
-        NodeDomain( std::vector<int64_t> values ) { *pAvailableValues = values; }
+        NodeDomain( ) { }
+        // NodeDomain( std::vector<int64_t>& values ) { pAvailableValues = values; }
 
+        void addValue(int64_t value) { pAvailableValues.push_back(value); }
         bool removeValue(int64_t value);
-        std::vector<int64_t>* getValues() { return pAvailableValues; }
+        std::vector<int64_t>& getValues() { return pAvailableValues; }
         bool isValueInDomain( int64_t value ); 
 
-        int getSize() { return pAvailableValues->size(); }  
+        int getSize() { return pAvailableValues.size(); }  
 
         bool operator==(NodeDomain& other);
 
 
     private:
-        std::vector<int64_t>* pAvailableValues;
+        std::vector<int64_t> pAvailableValues;
  
 };
 

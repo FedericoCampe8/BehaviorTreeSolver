@@ -349,7 +349,7 @@ void Among::enforceConstraintTopDown(Arena* arena,
 
             // Create new node for incoming edge
             auto newNode = arena->buildNode(node->getLayer(), node->getVariable());
-            newNode->initializeNodeDomain();
+            // newNode->initializeNodeDomain();
             nodeByConstraintCount[count] = newNode;
             inEdge->setHead(newNode);
 
@@ -359,25 +359,25 @@ void Among::enforceConstraintTopDown(Arena* arena,
             // const auto& nodeDomain = node->getValues();
             // auto newNodeDomain = newNode->getValuesMutable();
 
-            auto nodeDomain = node->getNodeDomain();
-            auto newNodeDomain = newNode->getNodeDomain();
+            // auto nodeDomain = node->getNodeDomain();
+            // auto newNodeDomain = newNode->getNodeDomain();
 
 
-            // Keep a copy of the values to remove to avoid invalidating iterators
-            std::vector<int64_t> valuesToRemove;
-            for (auto val : *(newNodeDomain->getValues()))
-            {
-              if ( nodeDomain->isValueInDomain(val) == false )
-              {
-                valuesToRemove.push_back(val);
-              }
-            }
+            // // Keep a copy of the values to remove to avoid invalidating iterators
+            // std::vector<int64_t> valuesToRemove;
+            // for (auto val : *(newNodeDomain->getValues()))
+            // {
+            //   if ( nodeDomain->isValueInDomain(val) == false )
+            //   {
+            //     valuesToRemove.push_back(val);
+            //   }
+            // }
 
 
-            for (auto val : valuesToRemove)
-            {
-              newNodeDomain->removeValue( val );
-            }
+            // for (auto val : valuesToRemove)
+            // {
+            //   newNodeDomain->removeValue( val );
+            // }
 
             // Copy outgoing edges for new node
             for (auto outEdge : node->getOutEdges())
