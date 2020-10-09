@@ -198,6 +198,26 @@ DPState::SPtr AllDifferent::getInitialDPState() const noexcept
   return pInitialDPState;
 }
 
+std::vector<int> AllDifferent::getConstraintValuesForPath(const std::vector<Edge*>& path) const
+{
+    std::vector<int> usedValues;
+    for (auto edgeInPath : path)
+    {
+      // For each edge in the path
+      for (auto var : getScope())
+      {
+        // Check if the variables in the scope of this constraints
+        // are at the tail of the current edge
+        if (var->getId() == edgeInPath->getTail()->getVariable()->getId() )
+        {
+           usedValues.push_back( edgeInPath->getValue() );
+           break;
+        }
+      }
+    }
+
+    return usedValues;
+}
 
 void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation,
                                      std::vector<Node*>& newNodesList) const
@@ -279,12 +299,11 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
 #ifdef DEBUG
     std::cout << "check edges (num) " << node->getOutEdges().size() << std::endl;
 #endif
-
+  
+    Edge* conflictingEdge = nullptr;
     for (auto edge : node->getOutEdges())
     {
       // If outgoing edge is in conflicting values find its position
-      bool foundConflictingEdge{false};
-      int64_t conflictingValue;
       for (int idx{0}; idx < static_cast<int>(conflictingValues.size()); ++idx)
       {
         if (conflictingValues.at(idx) == edge->getValue())
@@ -293,14 +312,12 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
 #ifdef DEBUG
           std::cout << "Found a conflicting edge " << edge->getValue() << std::endl;
 #endif
-
-          conflictingValue = edge->getValue();
-          foundConflictingEdge = true;
+          conflictingEdge = edge;
           break;
         }
       }
 
-      if (foundConflictingEdge)
+      if (conflictingEdge != nullptr)
       {
         // BUG FIX: the domain of newNode was initialized with the full domain of the variable:
         //      newNode->initializeNodeDomain();
@@ -316,14 +333,14 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
         // assert(iterValueNotGood != newReducedDomain.end());
         // newReducedDomain.erase(iterValueNotGood);
 
-        bool result = newReducedDomain.removeValue(conflictingValue);
+        bool result = newReducedDomain.removeValue(conflictingEdge->getValue());
         assert( result == true );
 
         // BUG FIX: before creating a new node, check if the domain/values that would go into
         // the newNode is already present in another node on the same level.
         // If so, simply connect the edges
         Node* mappedNode{nullptr};
-        for (auto newNode : newNodesList)
+        for (auto newNode : mddRepresentation[nextNode->getLayer()])
         {
           // Note: the following works only on ordered list of values.
           // TODO move from lists to sets/bitsets/ranges
@@ -355,6 +372,21 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
           // auto newAvailableValues = newNode->getValuesMutable();
           // *newAvailableValues = newReducedDomain;
 
+          // All paths should lead to the same values being used
+          std::vector<int> usedValues;
+          if (node->getInEdges().size() > 0) {
+              Node::IncomingPathList pathList = node->getIncomingPaths();
+              std::vector< Node::EdgeList > paths = pathList[ node->getInEdges()[0]->getUniqueId() ];
+              usedValues = getConstraintValuesForPath( paths[0] );
+          }
+          usedValues.push_back( conflictingEdge->getValue() );
+
+          for (auto outEdge: nextNode->getOutEdges()) {
+            if (std::count(usedValues.begin(), usedValues.end(), outEdge->getValue()) == 0) {
+                arena->buildEdge(newNode, outEdge->getHead(), outEdge->getDomainLowerBound(), outEdge->getDomainUpperBound());
+            }
+          }
+
           auto newDomain = newNode->getNodeDomain();
 
           // If new node has no available values,
@@ -374,21 +406,6 @@ void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
             // Note: the head on the edge is set automatically
             newNode->addInEdge(edge);
 
-            // Copy outgoing edges from next node to splitting node
-            for (auto outEdge : nextNode->getOutEdges())
-            {
-              // Add an outgoing edge ONLY IF its correspondent label can be taken from the
-              // domain of the curren node
-              const auto outValue = outEdge->getValue();
-              if ( newDomain->isValueInDomain( outValue) )
-              {
-                // Build the edge.
-                // Note: the constructor will automatically set the pointers to the nodes
-                arena->buildEdge(newNode, outEdge->getHead(),
-                                 outEdge->getDomainLowerBound(),
-                                 outEdge->getDomainUpperBound());
-              }
-            }
           }
         }
 

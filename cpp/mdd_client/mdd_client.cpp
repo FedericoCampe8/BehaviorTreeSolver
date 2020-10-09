@@ -187,18 +187,18 @@ void runMDDOpt()
   int32_t maxVars{3};
   for (int idx{0}; idx < maxVars; ++idx)
   {
-    problem->addVariable(std::make_shared<Variable>(idx, idx, 4, 5));
+    problem->addVariable(std::make_shared<Variable>(idx, idx, 2, 5));
   }
 
   // Create the constraint
   auto allDiff = std::make_shared<AllDifferent>();
   allDiff->setScope(problem->getVariables());
-  //problem->addConstraint(allDiff);
+  problem->addConstraint(allDiff);
 
   auto among = std::make_shared<Among>();
   among->setScope(problem->getVariables());
   among->setParameters({5}, 1, 1);
-  problem->addConstraint(among);
+  // problem->addConstraint(among);
 
   // Create the MDD
   int32_t width{std::numeric_limits<int32_t>::max()};
@@ -214,7 +214,7 @@ void runMDDOpt()
 
   timer.reset();
   timer.start();
-  auto solution = mdd.maximize();
+  auto solution = mdd.minimize();
   for (int idx = 0; idx < solution.size(); idx++)
   {
       auto edge = solution[idx];

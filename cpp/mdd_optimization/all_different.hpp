@@ -94,6 +94,9 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
    void enforceConstraintForNode(Node* node, Arena* arena,
                           std::vector<std::vector<Node*>>& mddRepresentation,
                           std::vector<Node*>& newNodesList) const;
+
+   std::vector<int> getConstraintValuesForPath(const std::vector<Edge*>& path) const;
+
 };
 
 
