@@ -30,10 +30,41 @@ bool DPState::isValueFeasible(int64_t domainElement) const noexcept
   return true;
 }
 
+void DPState::resetState() noexcept
+{
+}
+
+DPState* DPState::clone() const noexcept
+{
+  return nullptr;
+}
+
+void DPState::updateState(DPState*, int64_t)
+{
+}
+
+double DPState::getCostPerValue(int64_t value)
+{
+  return std::numeric_limits<double>::max();
+}
+
+std::vector<std::pair<double, int64_t>> DPState::getCostListPerValue(int64_t, int64_t, double)
+{
+  std::vector<std::pair<double, int64_t>> vals;
+  return vals;
+}
+
 std::vector<DPState::SPtr> DPState::next(int64_t, int64_t, uint64_t, double) const noexcept
 {
   std::vector<DPState::SPtr> res;
   return res;
+}
+
+DPState::ReplacementNodeList DPState::next(int64_t, int64_t, double,
+                                           std::vector<DPState::UPtr>*) const noexcept
+{
+  ReplacementNodeList rnl;
+  return rnl;
 }
 
 DPState::SPtr DPState::next(int64_t, DPState*) const noexcept
@@ -46,14 +77,9 @@ double DPState::cost(int64_t domainElement, DPState*) const noexcept
   return static_cast<double>(domainElement);
 }
 
-const std::vector<int64_t>& DPState::cumulativePath() const noexcept
-{
-  return pMockPath;
-}
-
 double DPState::cumulativeCost() const noexcept
 {
-  return std::numeric_limits<double>::max();
+  return pCost;
 }
 
 bool DPState::isInfeasible() const noexcept

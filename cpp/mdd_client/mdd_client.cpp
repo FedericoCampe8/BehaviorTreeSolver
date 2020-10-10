@@ -21,6 +21,9 @@
 #include "mdd_optimization/mdd.hpp"
 #include "mdd_optimization/mdd_optimizer.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
+#include "mdd_optimization/td_compiler.hpp"
+#include "mdd_optimization/td_optimizer.hpp"
+#include "mdd_optimization/top_down_mdd.hpp"
 #include "mdd_optimization/tsppd.hpp"
 #include "mdd_optimization/variable.hpp"
 #include "tools/timer.hpp"
@@ -142,7 +145,7 @@ void runTSPPD()
 {
   using namespace mdd;
 
-  std::string instancePath{"../cpp/mdd_client/data/grubhub-15-0.json"};
+  std::string instancePath{"../cpp/mdd_client/data/grubhub-15-9.json"};
   std::ifstream datafile(instancePath);
   std::string dataString((std::istreambuf_iterator<char>(datafile)),
                          (std::istreambuf_iterator<char>()));
@@ -174,6 +177,37 @@ void runTSPPD()
   auto problem = std::make_shared<MDDProblem>();
   problem->setMinimization();
 
+  /*
+  /////// ALL DIFFERENT ///////
+  numVars = 5;
+  for (int idx{0}; idx < numVars; ++idx)
+  {
+    problem->addVariable(std::make_shared<Variable>(idx, idx, 1, numVars));
+  }
+
+  spp::sparse_hash_set<int64_t> allDiffVals;
+  for (int64_t val{1}; val <= numVars; ++val)
+  {
+    allDiffVals.insert(val);
+  }
+  auto allDiff = std::make_shared<AllDifferent>(allDiffVals);
+  allDiff->setScope(problem->getVariables());
+  problem->addConstraint(allDiff);
+
+  tools::Timer timerAllDiff;
+  int32_t widthAllDiff{2};
+  TDMDDOptimizer allDiffOptimizer(problem);
+  allDiffOptimizer.runOptimization(widthAllDiff, 60000);
+  allDiffOptimizer.setMaxNumSolutions(3);
+  std::cout << "Wallclock time build (msec.): " << timerAllDiff.getWallClockTimeMsec() << std::endl;
+  allDiffOptimizer.printMDD("topdown_mdd");
+  return;
+  /////////////////////////////
+   */
+
+
+
+
   // First variable is always the node "+0"
   problem->addVariable(std::make_shared<Variable>(0, 0, 0, 0));
 
@@ -185,6 +219,7 @@ void runTSPPD()
     {
       pickupDeliveryMap[idx + 1] = idx + 2;
     }
+
     problem->addVariable(std::make_shared<Variable>(idx, idx, 2, numVars-1));
   }
 
@@ -195,7 +230,7 @@ void runTSPPD()
     std::cout << locIter.first << " -> " << locIter.second << "\n";
   }
   */
-  std::cout << "Num Vars: " << numVars << " with domain [" << 2 << ", " << numVars-1 << "]\n";
+  std::cout << "Num Vars: " << numVars << " with domain [" << 2 << ", " << numVars - 1 << "]\n";
 
   // Last variable is always the node "-0"
   problem->addVariable(std::make_shared<Variable>(numVars-1, numVars-1, 1, 1));
@@ -205,14 +240,25 @@ void runTSPPD()
   tsppd->setScope(problem->getVariables());
   problem->addConstraint(tsppd);
 
+  tools::Timer timerMDD;
+  int32_t width{2};
+  uint64_t timeoutMsec{60000};
+  TDMDDOptimizer tdOptimizer(problem);
+  tdOptimizer.runOptimization(width, timeoutMsec);
+  tdOptimizer.setMaxNumSolutions(10000000);
+  //TDCompiler tdCompiler(problem, width);
+  //tdCompiler.compileMDD();
+  std::cout << "Wallclock time build (msec.): " << timerMDD.getWallClockTimeMsec() << std::endl;
+  tdOptimizer.printMDD("topdown_mdd");
+  return;
+
   // Create the optimizer
   MDDOptimizer optimizer(problem);
-  int32_t width{2};
 
   // Run optimization
   tools::Timer timer;
-  uint64_t timeoutMsec{40000};
-  optimizer.runOptimization(width, timeoutMsec);
+  uint64_t timeoutMsecOpt{40000};
+  optimizer.runOptimization(width, timeoutMsecOpt);
   std::cout << "Wallclock time Branch and Bound optimization (msec.): " <<
           timer.getWallClockTimeMsec() << std::endl;
 

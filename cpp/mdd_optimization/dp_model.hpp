@@ -7,8 +7,10 @@
 #pragma once
 
 #include <cstdint>  // for uint32_t
+#include <limits>   // for std::numeric_limits
 #include <memory>   // for std::shared_ptr
 #include <string>
+#include <utility>  // for std::pair
 #include <vector>
 
 #include "system/system_export_defs.hpp"
@@ -20,6 +22,9 @@ namespace mdd {
  */
 class SYS_EXPORT_STRUCT DPState {
  public:
+  using ReplacementNodeList = std::vector<std::pair<uint32_t, int64_t>>;
+
+  using UPtr = std::unique_ptr<DPState>;
   using SPtr = std::shared_ptr<DPState>;
 
  public:
@@ -38,6 +43,22 @@ class SYS_EXPORT_STRUCT DPState {
   /// Returns whether or not this state is used on top-down or bottom-up filtering
   bool isStateSetForTopDownFiltering() const noexcept { return pTopDownFiltering; }
 
+  /**
+   * \brief reset this state to the default state
+   */
+  virtual void resetState() noexcept;
+
+  /**
+   * \brief clones this states and returns a pointer to the clone.
+   */
+  virtual DPState* clone() const noexcept;
+
+  /**
+   * \brief returns the path values (edges) up to this state.
+   * \note this DOES NOT work for merged nodes.
+   */
+  const std::vector<int64_t>& cumulativePath() const noexcept { return pPath; }
+
   /// Merges "other" into this DP State
   virtual void mergeState(DPState* other) noexcept;
 
@@ -49,6 +70,26 @@ class SYS_EXPORT_STRUCT DPState {
   /// next state given the current state
   virtual bool isValueFeasible(int64_t domainElement) const noexcept;
 
+  /**
+   * \brief updates this state to the next state in the DP transition function
+   *        obtained by applying "val" to "state"
+   */
+  virtual void updateState(DPState* state, int64_t val);
+
+  /**
+   * \brief returns the cost of taking the given value.
+   * \note return +INF if the value is inducing a non-admissible state
+   */
+  virtual double getCostPerValue(int64_t value);
+
+  /**
+   * \brief returns the list of pairs <cost, value> that can be obtains
+   *        from this state when following an edge with value in [lb, ub].
+   * \note values that are higher than or equal the given incumbet are discarded.
+   */
+  virtual std::vector<std::pair<double, int64_t>> getCostListPerValue(
+          int64_t lb, int64_t ub, double incumbent);
+
   /// Returns the list of "width" feasible states that can be reached from the current
   /// DP state using values in [lb, ub].
   /// It also returns, as last element of the vector, the state representing all
@@ -58,6 +99,16 @@ class SYS_EXPORT_STRUCT DPState {
   /// @note Excludes all states that have a cost greater than or equal to the given incumbent
   virtual std::vector<DPState::SPtr> next(int64_t lb, int64_t ub, uint64_t width,
                                           double incumbent) const noexcept;
+
+  /**
+   * \brief Updates the list "nextStateList" feasible states that can be reached from the current
+   *        DP state using values in [lb, ub].
+   *        It excludes states that have a value higher or equal to the given incumbent.
+   *        Returns the list of pairs <index_of_replaced_state, edge_value>.
+   *        The index of replaced node is the index on the input vector "nextStateList".
+   */
+  virtual ReplacementNodeList next(int64_t lb, int64_t ub, double incumbent,
+                                   std::vector<DPState::UPtr>* nextStateList) const noexcept;
 
   /// Returns the next state reachable from this state given "domainElement".
   /// Returns self by default.
@@ -73,18 +124,20 @@ class SYS_EXPORT_STRUCT DPState {
   /// the previous state arriving to the current state is known
   virtual double cost(int64_t domainElement, DPState* fromState=nullptr) const noexcept;
 
-  /// Returns the path values (edges) up to this state.
-  /// @note this DOES NOT work for merged nodes
-  virtual const std::vector<int64_t>& cumulativePath() const noexcept;
-
   /// Returns the cumulative cost up to this state
   virtual double cumulativeCost() const noexcept;
 
   /// Returns whether or not this
   virtual bool isInfeasible() const noexcept;
 
-  // Returns a string representing this state
+  /// Returns a string representing this state
   virtual std::string toString() const noexcept;
+
+  /// Set state a non-default according to given flag
+  void setNonDefaultState(bool isDefault=false) noexcept { pIsDefault = isDefault; }
+
+  /// Returns whether or not this is a default state
+  bool isDefaultState() const noexcept { return pIsDefault; }
 
   /// Returns true if this is equal to "other".
   /// Returns false otherwise
@@ -94,6 +147,12 @@ class SYS_EXPORT_STRUCT DPState {
   /// Flag indicating whether or not this state works on top-down or bottom-up filtering
   bool pTopDownFiltering{true};
 
+  /// Cumulative path found up to this state
+  std::vector<int64_t> pPath;
+
+  /// Cost of the path up to this state, i.e., cumulative cost
+  double pCost{std::numeric_limits<double>::max()};
+
  private:
    static uint32_t kNextID;
 
@@ -101,8 +160,8 @@ class SYS_EXPORT_STRUCT DPState {
    /// Unique identifier for this variable
    uint32_t pStateId{0};
 
-   // Path up to this point
-   std::vector<int64_t> pMockPath;
+   /// Flag indicating default (or not) state
+   bool pIsDefault{true};
 };
 
 }  // namespace mdd

@@ -61,6 +61,9 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
 
    /// Returns the initial state of the DP transformation chain
    virtual DPState::SPtr getInitialDPState() const noexcept = 0;
+
+   /// Returns the initial state of the DP transformation chain as a raw pointer
+   virtual DPState* getInitialDPStateRaw() noexcept = 0;
 };
 
 }  // namespace mdd

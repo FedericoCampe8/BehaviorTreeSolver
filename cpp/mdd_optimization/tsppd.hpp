@@ -42,34 +42,41 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
 
   void mergeState(DPState* other) noexcept override;
 
-  /// Returns the list of "width" feasible states that can be reached from the current
-  /// DP state using values in [lb, ub].
-  /// It also returns, as last element of the vector, the state representing all
-  /// other states that could have been taken from the current state but discarded
-  /// due to maximum width.
-  /// @note Returns an empty vector if no state is reachible from the current one.
-  /// @note Excludes all states that have a cost greater than or equal to the given incumbent
-  std::vector<DPState::SPtr> next(int64_t lb, int64_t ub, uint64_t width,
-                                  double incumbent) const noexcept override;
+  /**
+   * \brief reset this state to the default state
+   */
+  void resetState() noexcept override;
 
-  DPState::SPtr next(int64_t val, DPState* nextDPState=nullptr) const noexcept override;
+  /**
+   * \brief clones this states and returns a pointer to the clone.
+   */
+  DPState* clone() const noexcept override;
 
-  double cost(int64_t val, DPState* fromState=nullptr) const noexcept override;
+  /**
+   * \brief updates this state to the next state in the DP transition function
+   *        obtained by applying "val" to "state"
+   */
+  void updateState(DPState* state, int64_t val) override;
 
-  const std::vector<int64_t>& cumulativePath() const noexcept override;
+  /**
+   * \brief returns the cost of taking the given value.
+   * \note return +INF if the value is inducing a non-admissible state
+   */
+  double getCostPerValue(int64_t value) override;
 
-  double cumulativeCost() const noexcept override;
+  /**
+   * \brief returns the list of pairs <cost, value> that can be obtains
+   *        from this state when following an edge with value in [lb, ub].
+   * \note values that are higher than or equal the given incumbet are discarded.
+   */
+  std::vector<std::pair<double, int64_t>> getCostListPerValue(
+          int64_t lb, int64_t ub, double incumbent) override;
 
   bool isInfeasible() const noexcept override;
 
   std::string toString() const noexcept override;
 
-  bool isEqual(const DPState* other) const noexcept override;
-
   bool isMerged() const noexcept override { return false; }
-
- private:
-  using NodesList = std::vector<int64_t>;
 
  private:
   /// Map of pickup-delivery nodes
@@ -81,15 +88,9 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   /// Last node visited, i.e., this state
   mutable int64_t pLastNodeVisited{-1};
 
-  /// Cost of the path up to this state
-  double pCost{0.0};
-
   /// Set of nodes that can be still visited
   /// from this state on
   spp::sparse_hash_set<int64_t> pDomain;
-
-  /// Path taken up to this point
-  NodesList pPath;
 
   /// Check if the value if feasible according to the current state
   /// and given incumbent
@@ -124,6 +125,11 @@ class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
 
    /// Returns the initial DP state
    DPState::SPtr getInitialDPState() const noexcept override;
+
+   /**
+    * \brief returns the initial state of the DP transformation chain as a raw pointer.
+    */
+   DPState* getInitialDPStateRaw() noexcept override;
 
    /// Check feasibility of AllDifferent over the variables in its scope
    bool isFeasible() const noexcept override { return true; }

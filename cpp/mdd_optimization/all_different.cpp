@@ -9,19 +9,37 @@
 
 namespace mdd {
 
-AllDifferentState::AllDifferentState()
-: DPState()
+AllDifferentState::AllDifferentState(const ValuesSet& valSet, bool isDefaultState)
+: DPState(),
+  pStartValueSet(&valSet)
 {
+  if (isDefaultState)
+  {
+    pCost = 0.0;
+
+    // Initialize the set of value that can still
+    // be taken as AllDifferent values
+    pDomain = *pStartValueSet;
+  }
 }
 
 AllDifferentState::AllDifferentState(const AllDifferentState& other)
 {
+  pCost = other.pCost;
+  pPath = other.pPath;
+  pStartValueSet = other.pStartValueSet;
+  pDomain = other.pDomain;
   pStatesList = other.pStatesList;
 }
 
 AllDifferentState::AllDifferentState(AllDifferentState&& other)
 {
+  pCost = other.pCost;
+  pPath = std::move(other.pPath);
+  pStartValueSet = other.pStartValueSet;
+  pDomain = std::move(other.pDomain);
   pStatesList = std::move(other.pStatesList);
+  other.pStartValueSet = nullptr;
 }
 
 AllDifferentState& AllDifferentState::operator=(const AllDifferentState& other)
@@ -31,6 +49,10 @@ AllDifferentState& AllDifferentState::operator=(const AllDifferentState& other)
     return *this;
   }
 
+  pCost = other.pCost;
+  pPath = other.pPath;
+  pStartValueSet = other.pStartValueSet;
+  pDomain = other.pDomain;
   pStatesList = other.pStatesList;
   return *this;
 }
@@ -42,68 +64,97 @@ AllDifferentState& AllDifferentState::operator=(AllDifferentState&& other)
     return *this;
   }
 
+  pCost = other.pCost;
+  pPath = std::move(other.pPath);
+  pStartValueSet = other.pStartValueSet;
+  pDomain = std::move(other.pDomain);
   pStatesList = std::move(other.pStatesList);
+  other.pStartValueSet = nullptr;
   return *this;
 }
 
-bool AllDifferentState::isEqual(const DPState* other) const noexcept
+void AllDifferentState::resetState() noexcept
 {
-  auto otherDPState = reinterpret_cast<const AllDifferentState*>(other);
+  pCost = 0.0;
 
-  // Check if "other" is contained in this states
-  if (pStatesList.size() < otherDPState->pStatesList.size())
+  pDomain.clear();
+  pDomain = *pStartValueSet;
+
+  // Clear cumulative path
+  pPath.clear();
+
+  // Set this state as default state
+  this->setNonDefaultState(true);
+}
+
+DPState* AllDifferentState::clone() const noexcept
+{
+  return new AllDifferentState(*this);
+}
+
+void AllDifferentState::updateState(DPState* state, int64_t val)
+{
+  // Replace the state (override its internal data)
+  auto fromState = reinterpret_cast<AllDifferentState*>(state);
+  pCost = fromState->pCost;
+  pCost += val;
+
+  pPath = fromState->pPath;
+  pPath.push_back(val);
+  pDomain = fromState->pDomain;
+
+  // Remove the current value from the list of possible values that can be taken
+  pDomain.erase(val);
+}
+
+double AllDifferentState::getCostPerValue(int64_t value)
+{
+  if (pDomain.find(value) == pDomain.end())
   {
-    // Return, there is at least one state in "other" that this DP doesn't have
-    return false;
+    return std::numeric_limits<double>::max();
   }
 
-  // Check that all states in "other" are contained in this state
-  const auto& otherList = otherDPState->pStatesList;
-  for (const auto& otherSubList : otherList)
+  return static_cast<double>(value);
+}
+
+std::vector<std::pair<double, int64_t>> AllDifferentState::getCostListPerValue(
+        int64_t lb, int64_t ub, double incumbent)
+{
+  // Instead of evaluating [lb, ub] values, evaluate only the values that can
+  // be reached from this state
+  std::vector<std::pair<double, int64_t>> costList;
+  for (auto val : pDomain)
   {
-    // Check if this subSet is contained in the other state subset list
-    if (std::find(pStatesList.begin(), pStatesList.end(), otherSubList) == pStatesList.end())
+    if (val < lb || val > ub)
     {
-      // State not found
-      return false;
+      // Skip values that are not part of the range of admissible values
+      continue;
     }
+
+    // Note that values in the domain are either:
+    // - pickup nodes: always valid nodes, the domain contains only the pickup
+    //                 locations that have not being visited already
+    // - delivery nodes: always valid nodes, the domain contains only the deliveries
+    //                   for pickup nodes that have been already visited
+    // Keep track of the best values found so far
+    auto costVal{pCost};
+    costVal += val;
+    if (costVal >= incumbent)
+    {
+      // Skip states that lead to a cost higher than the incumbent,
+      // i.e., apply pruning
+      continue;
+    }
+
+    costList.emplace_back(costVal, val);
   }
 
-  // All states are present
-  return true;
+  return costList;
 }
 
 bool AllDifferentState::isInfeasible() const noexcept
 {
   return pStatesList.empty();
-}
-
-DPState::SPtr AllDifferentState::next(int64_t domainElement, DPState*) const noexcept
-{
-  auto state = std::make_shared<AllDifferentState>();
-  if (pStatesList.empty())
-  {
-    state->pStatesList.resize(1);
-    state->pStatesList.back().insert(domainElement);
-  }
-  else
-  {
-    for (const auto& subSet : pStatesList)
-    {
-      // Add the new element to all the subset compatible with it
-      if (std::find(subSet.begin(), subSet.end(), domainElement) == subSet.end())
-      {
-        state->pStatesList.push_back(subSet);
-        state->pStatesList.back().insert(domainElement);
-      }
-    }
-  }
-  return state;
-}
-
-double AllDifferentState::cost(int64_t domainElement, DPState*) const noexcept
-{
-  return static_cast<double>(domainElement);
 }
 
 void AllDifferentState::mergeState(DPState* other) noexcept
@@ -151,9 +202,10 @@ std::string AllDifferentState::toString() const noexcept
   return out;
 }
 
-AllDifferent::AllDifferent(const std::string& name)
+AllDifferent::AllDifferent(const AllDifferentState::ValuesSet& allDiffValues,
+                           const std::string& name)
 : MDDConstraint(mdd::ConstraintType::kAllDifferent, name),
-  pInitialDPState(std::make_shared<AllDifferentState>())
+  pValSet(allDiffValues)
 {
 }
 
@@ -195,9 +247,8 @@ Node* AllDifferent::mergeNodes(const std::vector<Node*>& nodesList, Arena* arena
 
 DPState::SPtr AllDifferent::getInitialDPState() const noexcept
 {
-  return pInitialDPState;
+  return nullptr;
 }
-
 
 void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation,
                                      std::vector<Node*>& newNodesList) const
@@ -209,6 +260,11 @@ void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*
           enforceConstraintForNode(node, arena, mddRepresentation, newNodesList);
         }
     }
+}
+
+DPState* AllDifferent::getInitialDPStateRaw() noexcept
+{
+  return new AllDifferentState(pValSet, true);
 }
 
 

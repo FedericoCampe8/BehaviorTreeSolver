@@ -37,7 +37,7 @@ JobShopState::JobShopState(const JobShopState& other)
   pMachineCostMap = other.pMachineCostMap;
   pTaskSpecMap = other.pTaskSpecMap;
   pCost = other.pCost;
-  pGlobalSchedule = other.pGlobalSchedule;
+  pPath = other.pPath;
 }
 
 JobShopState::JobShopState(JobShopState&& other)
@@ -46,7 +46,7 @@ JobShopState::JobShopState(JobShopState&& other)
   pMachineCostMap = std::move(other.pMachineCostMap);
   pTaskSpecMap = other.pTaskSpecMap;
   pCost = other.pCost;
-  pGlobalSchedule = std::move(other.pGlobalSchedule);
+  pPath = std::move(other.pPath);
 
   other.pTaskSpecMap = nullptr;
   other.pCost = 0.0;
@@ -63,7 +63,7 @@ JobShopState& JobShopState::operator=(const JobShopState& other)
   pMachineCostMap = other.pMachineCostMap;
   pTaskSpecMap = other.pTaskSpecMap;
   pCost = other.pCost;
-  pGlobalSchedule = other.pGlobalSchedule;
+  pPath = other.pPath;
 
   return *this;
 }
@@ -79,7 +79,7 @@ JobShopState& JobShopState::operator=(JobShopState&& other)
   pMachineCostMap = std::move(other.pMachineCostMap);
   pTaskSpecMap = other.pTaskSpecMap;
   pCost = other.pCost;
-  pGlobalSchedule = std::move(other.pGlobalSchedule);
+  pPath = std::move(other.pPath);
 
   other.pTaskSpecMap = nullptr;
   other.pCost = 0.0;
@@ -196,8 +196,8 @@ DPState::SPtr JobShopState::next(int64_t newTaskId, DPState*) const noexcept
           state->pMachineCostMap[reqMachine] : pCost;
 
   // Update the global task schedule
-  state->pGlobalSchedule = pGlobalSchedule;
-  state->pGlobalSchedule.push_back(newTaskId);
+  state->pPath = pPath;
+  state->pPath.push_back(newTaskId);
 
   // Return the new state
   return state;
@@ -212,16 +212,6 @@ double JobShopState::cost(int64_t newTaskId, DPState*) const noexcept
   return static_cast<double>(pMachineCostMap[reqMachine] + duration);
 }
 
-const std::vector<int64_t>& JobShopState::cumulativePath() const noexcept
-{
-  return pGlobalSchedule;
-}
-
-double JobShopState::cumulativeCost() const noexcept
-{
-  return pCost;
-}
-
 void JobShopState::mergeState(DPState*) noexcept
 {
   // No merge is possible
@@ -231,12 +221,12 @@ void JobShopState::mergeState(DPState*) noexcept
 std::string JobShopState::toString() const noexcept
 {
   std::string out{"{"};
-  if (pGlobalSchedule.empty())
+  if (pPath.empty())
   {
     out += "}";
     return out;
   }
-  for (auto val : pGlobalSchedule)
+  for (auto val : pPath)
   {
     out += std::to_string(val) + ", ";
   }

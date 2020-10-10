@@ -17,13 +17,14 @@ TSPPDState::TSPPDState(PickupDeliveryPairMap* pickupDeliveryMap,
 {
   if (isDefaultState)
   {
+    pCost = 0.0;
     pLastNodeVisited = 0;
 
     // Initialize the set of nodes that can still
     // be visited from this state on.
     // Since this is the first/default state,
     // only pick-up nodes can be taken
-    for (const auto& locIter : *pickupDeliveryMap)
+    for (const auto& locIter : *pPickupDeliveryMap)
     {
       pDomain.insert(locIter.first);
     }
@@ -86,22 +87,6 @@ TSPPDState& TSPPDState::operator=(TSPPDState&& other)
   return *this;
 }
 
-bool TSPPDState::isEqual(const DPState* other) const noexcept
-{
-  auto otherState = reinterpret_cast<const TSPPDState*>(other);
-  assert(otherState != nullptr);
-
-  // Check if both have the same set of nodes still to explore
-  if (pDomain == otherState->pDomain)
-  {
-    // Return true only if last node on the path is the same
-    // on both states
-    // TODO check if state equality should be defined in terms of costs
-    return pPath.back() == otherState->pPath.back();
-  }
-  return false;
-}
-
 bool TSPPDState::isInfeasible() const noexcept
 {
   // Easy check for an infeasible state: the path is empty
@@ -130,11 +115,74 @@ bool TSPPDState::isFeasibleValue(int64_t val, double incumbent) const noexcept
   return true;
 }
 
-std::vector<DPState::SPtr> TSPPDState::next(int64_t lb, int64_t ub, uint64_t width,
-                                            double incumbent) const noexcept
+void TSPPDState::resetState() noexcept
 {
-  std::vector<DPState::SPtr> statesList;
+  pCost = 0.0;
+  pLastNodeVisited = 0;
 
+  // Initialize the set of nodes that can still
+  // be visited from this state on.
+  // Since this is the first/default state,
+  // only pick-up nodes can be taken
+  pDomain.clear();
+  for (const auto& locIter : *pPickupDeliveryMap)
+  {
+    pDomain.insert(locIter.first);
+  }
+
+  // Clear cumulative path
+  pPath.clear();
+
+  // Set this state as default state
+  this->setNonDefaultState(true);
+}
+
+DPState* TSPPDState::clone() const noexcept
+{
+  return new TSPPDState(*this);
+}
+
+void TSPPDState::updateState(DPState* state, int64_t val)
+{
+  // Replace the state (override its internal data)
+  auto fromState = reinterpret_cast<TSPPDState*>(state);
+
+  pCost = fromState->pCost;
+  pCost += fromState->pPath.empty() ?
+          pCostMatrix->at(0).at(val) :
+          pCostMatrix->at(fromState->pPath.back()).at(val);
+
+  pPath = fromState->pPath;
+  pPath.push_back(val);
+  pDomain = fromState->pDomain;
+
+  // Remove the current value from the list of possible nodes that can be taken
+  pDomain.erase(val);
+
+  // Check if the current node is a pick-up node.
+  // If so, add the correspondent delivery node
+  if (pPickupDeliveryMap->find(val) != pPickupDeliveryMap->end())
+  {
+    pDomain.insert(pPickupDeliveryMap->at(val));
+  }
+}
+
+double TSPPDState::getCostPerValue(int64_t value)
+{
+  if (pDomain.find(value) == pDomain.end())
+  {
+    return std::numeric_limits<double>::max();
+  }
+
+  auto costVal{pCost};
+  return pPath.empty() ?
+          pCostMatrix->at(0).at(value) :
+          pCostMatrix->at(pPath.back()).at(value);
+}
+
+std::vector<std::pair<double, int64_t>> TSPPDState::getCostListPerValue(
+        int64_t lb, int64_t ub, double incumbent)
+{
   // Instead of evaluating [lb, ub] values, evaluate only the values that can
   // be reached from this state
   std::vector<std::pair<double, int64_t>> costList;
@@ -151,163 +199,27 @@ std::vector<DPState::SPtr> TSPPDState::next(int64_t lb, int64_t ub, uint64_t wid
     //                 locations that have not being visited already
     // - delivery nodes: always valid nodes, the domain contains only the deliveries
     //                   for pickup nodes that have been already visited
-    if (isFeasibleValue(val, incumbent))
+    // Keep track of the best values found so far
+    auto costVal{pCost};
+    costVal += pPath.empty() ?
+            pCostMatrix->at(0).at(val) :
+            pCostMatrix->at(pPath.back()).at(val);
+    if (costVal >= incumbent)
     {
-      // Keep track of the best values found so far
-      auto costVal{pCost};
-      costVal += pPath.empty() ?
-              pCostMatrix->at(0).at(val) :
-              pCostMatrix->at(pPath.back()).at(val);
-      costList.emplace_back(costVal, val);
+      // Skip states that lead to a cost higher than the incumbent,
+      // i.e., apply pruning
+      continue;
     }
+
+    costList.emplace_back(costVal, val);
   }
 
-  if (costList.empty())
-  {
-    return statesList;
-  }
-
-  // "costList" contains the list of all values that can lead to admissible new states.
-  // Sort the list to return the best states
-  std::sort(costList.begin(), costList.end());
-  for (int idx{0}; idx < static_cast<int>(costList.size()); ++idx)
-  {
-    // Create "width" new states
-    const auto& cost = costList.at(idx);
-    if (idx < width)
-    {
-      statesList.push_back(std::make_shared<TSPPDState>(pPickupDeliveryMap, pCostMatrix));
-      auto newState = reinterpret_cast<TSPPDState*>(statesList.back().get());
-      newState->pCost = cost.first;
-      newState->pPath = pPath;
-      newState->pPath.push_back(cost.second);
-      newState->pDomain = pDomain;
-
-      // Remove the current value from the list of possible domains that can be taken
-      newState->pDomain.erase(cost.second);
-
-      // Check if the current node is a pick-up node.
-      // If so, add the correspondent delivery node
-      if (pPickupDeliveryMap->find(cost.second) != pPickupDeliveryMap->end())
-      {
-        newState->pDomain.insert(pPickupDeliveryMap->at(cost.second));
-      }
-    }
-    else
-    {
-      // Done
-      break;
-    }
-  }
-
-  // Add the last state grouping all other states that are not taken (if any)
-  if (costList.size() > width)
-  {
-    // Group all the remaining states into a single one and push it at the back
-    // of the list as the "complement" state.
-    // The optimizer will re-build the MDD up to the node.
-    // However, the new node won't have all the outgoing edges but only the subset
-    // of edges that are not part of the
-    statesList.push_back(std::make_shared<TSPPDState>(pPickupDeliveryMap, pCostMatrix));
-    auto newState = reinterpret_cast<TSPPDState*>(statesList.back().get());
-
-    // The cost is set to be the lowest of the costs that can be reached from this state
-    newState->pCost = pCost;
-
-    // The path to the node remains the same (the parent path)
-    // but the domain now removes nodes just visited
-    newState->pPath = pPath;
-    newState->pDomain = pDomain;
-    for (int idx{0}; idx < static_cast<int>(costList.size()); ++idx)
-    {
-      if (idx < width)
-      {
-        newState->pDomain.erase(costList.at(idx).second);
-      }
-      else
-      {
-        break;
-      }
-    }
-  }
-  else
-  {
-    // No more states to add to the list, add a default nullptr.
-    // Note that a final nullptr state is also added if the width is greater than
-    // the actual number of reachable states
-    statesList.push_back(nullptr);
-  }
-
-  return statesList;
-}
-
-DPState::SPtr TSPPDState::next(int64_t val, DPState*) const noexcept
-{
-  auto state = std::make_shared<TSPPDState>(pPickupDeliveryMap, pCostMatrix);
-  if (pPath.empty())
-  {
-    state->pPath.push_back(val);
-    state->pCost = pCost + (pCostMatrix->at(0)).at(val);
-  }
-  else
-  {
-    if (pPickupDeliveryMap->find(val) != pPickupDeliveryMap->end())
-    {
-      // "val" is a pickup node, if not already visited, visit it
-      if (std::find(pPath.begin(), pPath.end(), val) == pPath.end())
-      {
-        state->pPath = pPath;
-        state->pPath.push_back(val);
-        state->pCost = pCost + (pCostMatrix->at(pPath.back())).at(val);
-      }
-    }
-    else
-    {
-      // "val" is a delivery node, check if the correspondent pickup
-      // has been visited already
-      int64_t pickup{-1};
-      for (const auto& it : *pPickupDeliveryMap)
-      {
-        if (it.second == val)
-        {
-          pickup = it.first;
-          break;
-        }
-      }
-      assert(pickup > -1);
-
-      if (std::find(pPath.begin(), pPath.end(), pickup) != pPath.end() &&
-              std::find(pPath.begin(), pPath.end(), val) == pPath.end())
-      {
-        state->pPath = pPath;
-        state->pPath.push_back(val);
-        state->pCost = pCost + (pCostMatrix->at(pPath.back())).at(val);
-      }
-    }
-  }
-
-  return state;
-}
-
-double TSPPDState::cost(int64_t val, DPState*) const noexcept
-{
-  return pPath.empty() ?
-          static_cast<double>((pCostMatrix->at(0)).at(val)) :
-          static_cast<double>((pCostMatrix->at(pPath.back())).at(val));
-}
-
-const std::vector<int64_t>& TSPPDState::cumulativePath() const noexcept
-{
-  return pPath;
-}
-
-double TSPPDState::cumulativeCost() const noexcept
-{
-  return pCost;
+  return costList;
 }
 
 void TSPPDState::mergeState(DPState* other) noexcept
 {
+  assert(false);
   auto otherDPState = reinterpret_cast<const TSPPDState*>(other);
   if (this->pCost <= otherDPState->pCost)
   {
@@ -388,6 +300,11 @@ Node* TSPPD::mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const
 DPState::SPtr TSPPD::getInitialDPState() const noexcept
 {
   return pInitialDPState;
+}
+
+DPState* TSPPD::getInitialDPStateRaw() noexcept
+{
+  return new TSPPDState(&pPickupDeliveryMap, &pCostMatrix, true);
 }
 
 void TSPPD::enforceConstraint(Arena* arena,

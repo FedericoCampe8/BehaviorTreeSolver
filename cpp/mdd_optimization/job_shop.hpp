@@ -56,10 +56,6 @@ class SYS_EXPORT_STRUCT JobShopState : public DPState {
 
   double cost(int64_t newTaskId, DPState* fromState=nullptr) const noexcept override;
 
-  const std::vector<int64_t>& cumulativePath() const noexcept override;
-
-  double cumulativeCost() const noexcept override;
-
   bool isInfeasible() const noexcept override;
 
   std::string toString() const noexcept override;
@@ -83,9 +79,6 @@ class SYS_EXPORT_STRUCT JobShopState : public DPState {
 
   /// Task specification map
   TaskSpecMap* pTaskSpecMap{nullptr};
-
-  /// Cost of the makespan to this state
-  double pCost{0.0};
 
   /// Scheduled tasks up to this state
   std::vector<int64_t> pGlobalSchedule;
@@ -118,6 +111,9 @@ class SYS_EXPORT_CLASS JobShop : public MDDConstraint {
 
    /// Returns the initial DP state
    DPState::SPtr getInitialDPState() const noexcept override;
+
+   /// Returns the initial state of the DP transformation chain as a raw pointer
+   DPState* getInitialDPStateRaw() noexcept override { return nullptr; }
 
    /// Check feasibility of AllDifferent over the variables in its scope
    bool isFeasible() const noexcept override { return true; }

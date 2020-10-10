@@ -136,6 +136,9 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
    /// Returns the initial DP state
    DPState::SPtr getInitialDPState() const noexcept override;
 
+   /// Returns the initial state of the DP transformation chain as a raw pointer
+   DPState* getInitialDPStateRaw() noexcept override { return nullptr; }
+
    /// Check feasibility of Among over the variables in its scope
    bool isFeasible() const noexcept override { return true; }
 

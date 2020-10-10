@@ -24,7 +24,10 @@ namespace mdd {
  */
 class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
  public:
-  AllDifferentState();
+  using ValuesSet = spp::sparse_hash_set<int64_t>;
+
+ public:
+  AllDifferentState(const ValuesSet& valSet, bool isDefaultState=false);
   ~AllDifferentState() = default;
 
   AllDifferentState(const AllDifferentState& other);
@@ -35,24 +38,49 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
 
   void mergeState(DPState* other) noexcept override;
 
-  DPState::SPtr next(int64_t domainElement, DPState* nextDPState=nullptr) const noexcept override;
+  /**
+   * \brief reset this state to the default state
+   */
+  void resetState() noexcept override;
 
-  double cost(int64_t domainElement, DPState* fromState=nullptr) const noexcept override;
+  /**
+   * \brief clones this states and returns a pointer to the clone.
+   */
+  DPState* clone() const noexcept override;
+
+  /**
+   * \brief updates this state to the next state in the DP transition function
+   *        obtained by applying "val" to "state"
+   */
+  void updateState(DPState* state, int64_t val) override;
+
+  /**
+   * \brief returns the cost of taking the given value.
+   * \note return +INF if the value is inducing a non-admissible state
+   */
+  double getCostPerValue(int64_t value) override;
+
+  /**
+   * \brief returns the list of pairs <cost, value> that can be obtains
+   *        from this state when following an edge with value in [lb, ub].
+   * \note values that are higher than or equal the given incumbet are discarded.
+   */
+  std::vector<std::pair<double, int64_t>> getCostListPerValue(
+          int64_t lb, int64_t ub, double incumbent) override;
 
   bool isInfeasible() const noexcept override;
 
   std::string toString() const noexcept override;
 
-  bool isEqual(const DPState* other) const noexcept override;
-
   bool isMerged() const noexcept override { return pStatesList.size() > 1; }
 
  private:
-  using ValuesSet = spp::sparse_hash_set<int64_t>;
+  /// State representation:
+  /// the set of values that can still be used
+  spp::sparse_hash_set<int64_t> pDomain;
 
- private:
-  // Actual state representation
-  //spp::sparse_hash_set<int64_t> pElementList;
+  /// Original set of values
+  const ValuesSet* pStartValueSet{nullptr};
 
   /// List of DP states.
   /// If the MDD is exact, there will always be one value set per DP.
@@ -66,7 +94,8 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
    using SPtr = std::shared_ptr<AllDifferent>;
 
  public:
-   AllDifferent(const std::string& name="AllDifferent");
+   AllDifferent(const AllDifferentState::ValuesSet& allDiffValues,
+                const std::string& name="AllDifferent");
 
    /// Enforces this constraint on the given MDD node
    void enforceConstraint(Arena* arena,
@@ -87,7 +116,16 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
    /// Check feasibility of AllDifferent over the variables in its scope
    bool isFeasible() const noexcept override { return true; }
 
+
+   /**
+    * \brief returns the initial state of the DP transformation chain as a raw pointer.
+    */
+   DPState* getInitialDPStateRaw() noexcept override;
+
  private:
+   /// Set of values for the AllDifferent constraint
+   AllDifferentState::ValuesSet pValSet;
+
    /// Initial state for the DP model for the AllDifferent constraint
    AllDifferentState::SPtr pInitialDPState{nullptr};
    void enforceConstraintForNode(Node* node, Arena* arena,
