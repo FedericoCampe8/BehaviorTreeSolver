@@ -83,6 +83,12 @@ class SYS_EXPORT_CLASS TopDownMDD {
   uint32_t getMaxWidth() const noexcept { return pMaxWidth; };
 
   /**
+   * \brief store all leaf nodes currently present in the MDD.
+   * \note store only the nodes (states) with value lower than the given incumbent.
+   */
+  void storeLeafNodes(double incumbent);
+
+  /**
    * \brief returns true if the MDD has some stored states.
    *        Returns false otherwise.
    */
@@ -129,14 +135,9 @@ class SYS_EXPORT_CLASS TopDownMDD {
   uint32_t getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const;
 
   /**
-   * \brief returns the edge that is on layer "layerIdx" and
-   *        having "tailIdx" as tail node for "layerIdx".
-   */
-  MDDTDEdge* getEdgeOnTailMutable(uint32_t layerIdx, uint32_t tailIdx) const;
-
-  /**
-   * \brief returns the edge that is on layer "layerIdx" and
+   * \brief returns the active edge that is on layer "layerIdx" and
    *        having "headIdx" as head node for "layerIdx".
+   *        If there is no active edge, returns nullptr.
    */
   MDDTDEdge* getEdgeOnHeadMutable(uint32_t layerIdx, uint32_t headIdx) const;
 
@@ -253,6 +254,11 @@ class SYS_EXPORT_CLASS TopDownMDD {
 
   /// Returns the next state from the history using a "best first" heuristic
   DPState::UPtr getStateFromHistory();
+
+  /// Returns true if the given state is a leaf state.
+  /// Returns false otherwise.
+  /// A leaf node is a node that is reachable and doesn't have active outgoing edges
+  bool isLeafState(uint32_t layerIdx, uint32_t nodeIdx) const;
 };
 
 }  // namespace mdd

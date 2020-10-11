@@ -4,7 +4,7 @@
 #include <iostream>
 #include <stdexcept>  // for std::exception
 
-#define STRICT_CHECKS
+// #define STRICT_CHECKS
 
 namespace mdd {
 

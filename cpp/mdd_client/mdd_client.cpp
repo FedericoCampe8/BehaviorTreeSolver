@@ -242,10 +242,10 @@ void runTSPPD()
 
   tools::Timer timerMDD;
   int32_t width{2};
-  uint64_t timeoutMsec{60000};
+  uint64_t timeoutMsec{600000};
   TDMDDOptimizer tdOptimizer(problem);
   tdOptimizer.runOptimization(width, timeoutMsec);
-  tdOptimizer.setMaxNumSolutions(10000000);
+  tdOptimizer.setMaxNumSolutions(100000000);
   //TDCompiler tdCompiler(problem, width);
   //tdCompiler.compileMDD();
   std::cout << "Wallclock time build (msec.): " << timerMDD.getWallClockTimeMsec() << std::endl;

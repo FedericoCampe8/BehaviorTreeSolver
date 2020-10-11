@@ -92,10 +92,15 @@ bool TDCompiler::compileMDD()
         // Enable the edges to connect the current layer to the next one
         const auto idxHeadNodeToReplace = repState.first;
         const auto edgeValue = repState.second;
-        assert(pMDDGraph->getEdgeOnHeadMutable(lidx, idxHeadNodeToReplace) != nullptr);
 
-        const auto currTailEdge = pMDDGraph->getEdgeOnHeadMutable(lidx, idxHeadNodeToReplace)->tail;
-        pMDDGraph->disableEdge(lidx, currTailEdge, idxHeadNodeToReplace);
+        // Note: the edge can be nullptr if there is no current active edge incoming to the state
+        auto currEdge = pMDDGraph->getEdgeOnHeadMutable(lidx, idxHeadNodeToReplace);
+        if (currEdge != nullptr)
+        {
+          // Disable the current active edge (if any)
+          const auto currTailEdge = currEdge->tail;
+          pMDDGraph->disableEdge(lidx, currTailEdge, idxHeadNodeToReplace);
+        }
 
         // Enable the edge on layer "lidx" from node "nidx" to node " idxNodeReplaced"
         pMDDGraph->enableEdge(lidx, nidx, idxHeadNodeToReplace);
@@ -163,6 +168,10 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
     // Replace the current state and keep track of:
     // 1) the value to assign to the edge; and
     // 2) what state was replaced (to disable the corresponding incoming edge)
+    // Note: in general they might be multiple incoming edges however:
+    //  a) if the state is default, no incoming edge is active; or
+    //  b) if the state is not default, only one incoming edge is active
+    //     (the one leading to the state)
     const auto newEdgeValue = costList.at(repPtr).second;
     replacedStates.push_back({defaultStateIdx, newEdgeValue});
 
@@ -195,6 +204,10 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
         // Replace the current state and keep track of:
         // 1) the value to assign to the edge; and
         // 2) what state was replaced (to disable the corresponding incoming edge)
+        // Note: in general they might be multiple incoming edges however:
+        //  a) if the state is default, no incoming edge is active; or
+        //  b) if the state is not default, only one incoming edge is active
+        //     (the one leading to the state)
         const auto newEdgeValue = costList.at(repPtr).second;
         replacedStates.push_back({idx, newEdgeValue});
 
@@ -213,6 +226,11 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
 
 bool TDCompiler::rebuildMDDFromQueue()
 {
+  // Store all the nodes in the MDD that are leaf nodes,
+  // i.e., not part of the path to the tail node but still on the MDD
+  // and not replaced, i.e., not in the queue of stored stated
+  pMDDGraph->storeLeafNodes(getIncumbent());
+
   // Check if the MDD can be recompiled.
   // The MDD can be recompiled if there is at least
   // one state stored in the queue of states

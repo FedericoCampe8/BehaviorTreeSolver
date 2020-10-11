@@ -131,6 +131,66 @@ void TopDownMDD::allocateStates(MDDConstraint::SPtr con)
   pReplacedStatesMatrix[pNumLayers] = std::move(tailRepStateList);
 }
 
+bool TopDownMDD::isLeafState(uint32_t layerIdx, uint32_t nodeIdx) const
+{
+  bool hasOutgoingEdges{false};
+  for (const auto& outEdge : pLayerEdgeList.at(layerIdx))
+  {
+    if (outEdge->tail == nodeIdx && outEdge->isActive)
+    {
+      hasOutgoingEdges = true;
+      break;
+    }
+  }
+
+  if (!hasOutgoingEdges)
+  {
+    // The node doesn't have outgoing edges, check if it can be reached
+    if (layerIdx == 0)
+    {
+      // Root nodes cannot have incoming edges, return asap
+      return true;
+    }
+    else
+    {
+      // Check if the edge can be reached
+      for (const auto& inEdge : pLayerEdgeList.at(layerIdx - 1))
+      {
+        if (inEdge->head == nodeIdx && inEdge->isActive)
+        {
+          // Edge can be reached and it doesn't have outgoing edges, return asap
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+void TopDownMDD::storeLeafNodes(double incumbent)
+{
+  for (uint32_t lidx{1}; lidx < static_cast<uint32_t>(pMDDStateMatrix.size() - 1); ++lidx)
+  {
+    for (uint32_t sidx{0}; sidx < pMDDStateMatrix.at(lidx).size(); ++sidx)
+    {
+      if (isLeafState(lidx, sidx))
+      {
+        // Copy the state and store it into the queue
+        auto clonedState =pMDDStateMatrix.at(lidx).at(sidx)->clone();
+        assert(clonedState != nullptr);
+
+        // Store the cloned state into the list of replacement states
+        // if the cost of the cloned state is less than the incumbent
+        if (clonedState->cumulativeCost() < incumbent)
+        {
+          pReplacedStatesMatrix.at(lidx).push_back(DPState::UPtr(clonedState));
+        }
+      }
+    }
+  }
+}
+
 bool TopDownMDD::hasStoredStates() const noexcept
 {
   for (auto& it : pReplacedStatesMatrix)
@@ -267,18 +327,6 @@ uint32_t TopDownMDD::getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const
   */
 }
 
-MDDTDEdge* TopDownMDD::getEdgeOnTailMutable(uint32_t layerIdx, uint32_t tailIdx) const
-{
-  for (const auto& edge : pLayerEdgeList.at(layerIdx))
-  {
-    if (edge->tail == tailIdx)
-    {
-      return edge.get();
-    }
-  }
-  return nullptr;
-}
-
 void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* currState, int64_t val,
                               bool storeDiscardedStates, double incumbent)
 {
@@ -329,7 +377,7 @@ MDDTDEdge* TopDownMDD::getEdgeOnHeadMutable(uint32_t layerIdx, uint32_t headIdx)
 {
   for (const auto& edge : pLayerEdgeList.at(layerIdx))
   {
-    if (edge->head == headIdx)
+    if (edge->head == headIdx && edge->isActive)
     {
       return edge.get();
     }
