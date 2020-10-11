@@ -167,7 +167,8 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
     replacedStates.push_back({defaultStateIdx, newEdgeValue});
 
     // Replace the state in the MDD
-    pMDDGraph->replaceState(nextLayerIdx, defaultStateIdx, currState, newEdgeValue);
+    pMDDGraph->replaceState(nextLayerIdx, defaultStateIdx, currState, newEdgeValue, false,
+                            getIncumbent());
 
     // Move to next state
     ++repPtr;
@@ -178,7 +179,6 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
 
   // Then override non-default states if there are any new states in "costList"
   // left to consider
-  const bool storeDiscardedStates{true};
   if (repPtr < costListSize)
   {
     for (uint32_t idx{0}; idx < width; ++idx)
@@ -199,7 +199,7 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
         replacedStates.push_back({idx, newEdgeValue});
 
         // Replace the state in the MDD
-        pMDDGraph->replaceState(nextLayerIdx, idx, currState, newEdgeValue, storeDiscardedStates);
+        pMDDGraph->replaceState(nextLayerIdx, idx, currState, newEdgeValue, true, getIncumbent());
 
         // Move to next state
         ++repPtr;

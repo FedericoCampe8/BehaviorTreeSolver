@@ -89,7 +89,9 @@ void AllDifferentState::resetState() noexcept
 
 DPState* AllDifferentState::clone() const noexcept
 {
-  return new AllDifferentState(*this);
+  auto other = new AllDifferentState(*this);
+  DPState::copyBaseDPState(other);
+  return other;
 }
 
 void AllDifferentState::updateState(DPState* state, int64_t val)
@@ -103,7 +105,8 @@ void AllDifferentState::updateState(DPState* state, int64_t val)
   pPath.push_back(val);
   pDomain = fromState->pDomain;
 
-  // Remove the current value from the list of possible values that can be taken
+  // Remove the current value from the list of
+  // possible values that can be taken
   pDomain.erase(val);
 }
 

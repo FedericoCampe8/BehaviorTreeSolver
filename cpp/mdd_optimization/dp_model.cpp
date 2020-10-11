@@ -54,6 +54,13 @@ std::vector<std::pair<double, int64_t>> DPState::getCostListPerValue(int64_t, in
   return vals;
 }
 
+void DPState::copyBaseDPState(DPState* other) const
+{
+  other->pCost = pCost;
+  other->pPath = pPath;
+  other->pIsDefault = pIsDefault;
+}
+
 std::vector<DPState::SPtr> DPState::next(int64_t, int64_t, uint64_t, double) const noexcept
 {
   std::vector<DPState::SPtr> res;

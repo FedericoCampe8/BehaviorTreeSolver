@@ -98,6 +98,7 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
 
     if (pNumSolutionsCtr >= pNumMaxSolutions)
     {
+      std::cout << "Reached the maximum number of solutions, exit" << std::endl;
       break;
     }
   }  // while improvements
@@ -105,10 +106,12 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
 
 void TDMDDOptimizer::updateSolutionCost(double cost)
 {
+  // Increase the total number of solutions found
+  ++pNumSolutionsCtr;
+
   const auto oldBestCostForPrint = pBestCost;
   if (cost <= pBestCost)
   {
-    ++pNumSolutionsCtr;
     pBestCost = cost;
 
     // If more solutions are needed, allow to find solutions with the same cost

@@ -249,6 +249,7 @@ void runTSPPD()
   //TDCompiler tdCompiler(problem, width);
   //tdCompiler.compileMDD();
   std::cout << "Wallclock time build (msec.): " << timerMDD.getWallClockTimeMsec() << std::endl;
+  std::cout << "Number of solutions found " << tdOptimizer.getNumSolutions() << std::endl;
   tdOptimizer.printMDD("topdown_mdd");
   return;
 

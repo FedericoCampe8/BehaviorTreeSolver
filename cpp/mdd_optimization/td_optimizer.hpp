@@ -49,6 +49,11 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
   double getBestCost() const noexcept { return pBestCost; }
 
   /**
+   * \breif returns the number of solutions found so far.
+   */
+  uint64_t getNumSolutions() const noexcept { return pNumSolutionsCtr; }
+
+  /**
    * \brief Prints a JPEG representation of this MDD to the given file name.dot.
    *        The file can be read by graphviz.
    *        For more information, visit https://graphviz.org/about/

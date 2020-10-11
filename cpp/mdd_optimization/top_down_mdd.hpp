@@ -126,10 +126,7 @@ class SYS_EXPORT_CLASS TopDownMDD {
    * \brief returns the index of the first default state on the given level.
    *        If no default states are present, the index is equal to width
    */
-  uint32_t getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const
-  {
-    return pStartDefaultStateIdxOnLevel.at(layerIdx);
-  }
+  uint32_t getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const;
 
   /**
    * \brief returns the edge that is on layer "layerIdx" and
@@ -153,9 +150,10 @@ class SYS_EXPORT_CLASS TopDownMDD {
    *        obtained by considering an edge with value "val" from the state "currState".
    * \note discarded states can be stored in a queue of states to be used later in branch & bound
    *       search strategies.
+   * \note store states only if their cost is lower than the incumbent.
    */
   void replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* currState, int64_t val,
-                    bool storeDiscardedStates=false);
+                    bool storeDiscardedStates, double incumbent);
 
   /**
    * \brief disable the edge at given layer with specified tail and head.

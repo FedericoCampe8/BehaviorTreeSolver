@@ -153,6 +153,11 @@ class SYS_EXPORT_STRUCT DPState {
   /// Cost of the path up to this state, i.e., cumulative cost
   double pCost{std::numeric_limits<double>::max()};
 
+  /**
+   * \brief copy over the base state.
+   */
+  void copyBaseDPState(DPState* other) const;
+
  private:
    static uint32_t kNextID;
 

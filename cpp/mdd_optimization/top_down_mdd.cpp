@@ -172,11 +172,11 @@ void TopDownMDD::rebuildMDDFromStoredStates()
 
 DPState::UPtr TopDownMDD::getStateFromHistory()
 {
-
+  // Start a counter to avoid looping forever
   uint32_t totLayersCtr{0};
 
   // Consider next layer
-  pHistoryStateLayerPtr = (pHistoryStateLayerPtr + 1) % pNumLayers;
+  pHistoryStateLayerPtr = (pHistoryStateLayerPtr + 1) % (pNumLayers + 1);
   pHistoryStateLayerPtr = (pHistoryStateLayerPtr == 0) ? 1 : pHistoryStateLayerPtr;
   while (totLayersCtr++ < static_cast<uint32_t>(pReplacedStatesMatrix.size()))
   {
@@ -204,7 +204,7 @@ DPState::UPtr TopDownMDD::getStateFromHistory()
     }
 
     // Go to next layer
-    pHistoryStateLayerPtr = (pHistoryStateLayerPtr + 1) % pNumLayers;
+    pHistoryStateLayerPtr = (pHistoryStateLayerPtr + 1) % (pNumLayers + 1);
     pHistoryStateLayerPtr = (pHistoryStateLayerPtr == 0) ? 1 : pHistoryStateLayerPtr;
   }
 
@@ -247,6 +247,26 @@ void TopDownMDD::resetGraph(bool resetStatesQueue)
   }
 }
 
+uint32_t TopDownMDD::getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const
+{
+  return pStartDefaultStateIdxOnLevel.at(layerIdx);
+
+  // The following also works but it might be slightly slower for
+  // a large number of states
+  /*
+  uint32_t idx{0};
+  for (const auto& state : pMDDStateMatrix.at(layerIdx))
+  {
+    if (state->isDefaultState())
+    {
+      return idx;
+    }
+    ++idx;
+  }
+  return pMaxWidth;
+  */
+}
+
 MDDTDEdge* TopDownMDD::getEdgeOnTailMutable(uint32_t layerIdx, uint32_t tailIdx) const
 {
   for (const auto& edge : pLayerEdgeList.at(layerIdx))
@@ -260,7 +280,7 @@ MDDTDEdge* TopDownMDD::getEdgeOnTailMutable(uint32_t layerIdx, uint32_t tailIdx)
 }
 
 void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* currState, int64_t val,
-                              bool storeDiscardedStates)
+                              bool storeDiscardedStates, double incumbent)
 {
   assert(currState != nullptr);
 
@@ -280,7 +300,11 @@ void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* curr
     assert(clonedState != nullptr);
 
     // Store the cloned state into the list of replacement states
-    pReplacedStatesMatrix.at(layerIdx).push_back(DPState::UPtr(clonedState));
+    // if the cost of the cloned state is less than the incumbent
+    if (clonedState->cumulativeCost() < incumbent)
+    {
+      pReplacedStatesMatrix.at(layerIdx).push_back(DPState::UPtr(clonedState));
+    }
   }
 
   // Replace the state

@@ -139,7 +139,9 @@ void TSPPDState::resetState() noexcept
 
 DPState* TSPPDState::clone() const noexcept
 {
-  return new TSPPDState(*this);
+  auto other = new TSPPDState(*this);
+  DPState::copyBaseDPState(other);
+  return other;
 }
 
 void TSPPDState::updateState(DPState* state, int64_t val)
