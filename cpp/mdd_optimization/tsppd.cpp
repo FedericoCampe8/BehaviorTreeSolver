@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <stdexcept>  // for std::invalid_argument
+#include <sstream>
 #include <utility>    // for std::move
 
 namespace mdd {
@@ -115,6 +116,25 @@ bool TSPPDState::isFeasibleValue(int64_t val, double incumbent) const noexcept
   return true;
 }
 
+bool TSPPDState::isEqual(const DPState* other) const noexcept
+{
+  // A state is equivalent to another if:
+  // 1) path have same length; and
+  // 2) last node is the same; and
+  // 3) n-1 nodes on each path (of length n) are permutations of each other
+  auto otherCast = reinterpret_cast<const TSPPDState*>(other);
+  if ((pPath.size() != otherCast->pPath.size()) ||
+          (pPath.back() != otherCast->pPath.back()))
+  {
+    return false;
+  }
+
+  // Check for permutations
+  spp::sparse_hash_set<int64_t> perm1(pPath.begin(), pPath.end());
+  spp::sparse_hash_set<int64_t> perm2(otherCast->pPath.begin(), otherCast->pPath.end());
+  return perm1 == perm2;
+}
+
 void TSPPDState::resetState() noexcept
 {
   pCost = 0.0;
@@ -144,19 +164,19 @@ DPState* TSPPDState::clone() const noexcept
   return other;
 }
 
-void TSPPDState::updateState(DPState* state, int64_t val)
+void TSPPDState::updateState(DPState* fromState, int64_t val)
 {
   // Replace the state (override its internal data)
-  auto fromState = reinterpret_cast<TSPPDState*>(state);
+  auto fromStateCast = reinterpret_cast<TSPPDState*>(fromState);
 
-  pCost = fromState->pCost;
-  pCost += fromState->pPath.empty() ?
+  pCost = fromStateCast->pCost;
+  pCost += fromStateCast->pPath.empty() ?
           pCostMatrix->at(0).at(val) :
-          pCostMatrix->at(fromState->pPath.back()).at(val);
+          pCostMatrix->at(fromStateCast->pPath.back()).at(val);
 
-  pPath = fromState->pPath;
+  pPath = fromStateCast->pPath;
   pPath.push_back(val);
-  pDomain = fromState->pDomain;
+  pDomain = fromStateCast->pDomain;
 
   // Remove the current value from the list of possible nodes that can be taken
   pDomain.erase(val);
@@ -235,20 +255,23 @@ void TSPPDState::mergeState(DPState* other) noexcept
 
 std::string TSPPDState::toString() const noexcept
 {
-  std::string out{"{"};
-  if (pPath.empty())
+  std::stringstream ss;
+  ss << "State ID: " << getUniqueId() << '\n';
+  ss << "Cost: " << pCost << '\n';
+  ss << "Path: ";
+  for (auto v : pPath)
   {
-    out += "}";
-    return out;
+    ss << v << ", ";
   }
-  for (auto val : pPath)
+  ss << '\n';
+
+  ss << "Domain: ";
+  for (auto v : pDomain)
   {
-    out += std::to_string(val) + ", ";
+    ss << v << ", ";
   }
-  out.pop_back();
-  out.pop_back();
-  out += "}, ";
-  return out;
+  ss << '\n';
+  return ss.str();
 }
 
 TSPPD::TSPPD(const TSPPDState::PickupDeliveryPairMap& pickupDeliveryMap,

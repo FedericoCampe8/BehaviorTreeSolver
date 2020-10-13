@@ -8,11 +8,22 @@
 
 namespace mdd {
 
+MDDTDEdge::MDDTDEdge()
+: isActive(false),
+  layer(-1),
+  tail(-1),
+  head(-1)
+{
+  valuesList.push_back(std::numeric_limits<int64_t>::max());
+}
+
 MDDTDEdge::MDDTDEdge(int32_t tailLayer, int32_t tailIdx, int32_t headIdx)
-: layer(tailLayer),
+: isActive(false),
+  layer(tailLayer),
   tail(tailIdx),
   head(headIdx)
 {
+  valuesList.push_back(std::numeric_limits<int64_t>::max());
 }
 
 TopDownMDD::TopDownMDD(MDDProblem::SPtr problem, uint32_t width)
@@ -177,7 +188,7 @@ void TopDownMDD::storeLeafNodes(double incumbent)
       if (isLeafState(lidx, sidx))
       {
         // Copy the state and store it into the queue
-        auto clonedState =pMDDStateMatrix.at(lidx).at(sidx)->clone();
+        auto clonedState = pMDDStateMatrix.at(lidx).at(sidx)->clone();
         assert(clonedState != nullptr);
 
         // Store the cloned state into the list of replacement states
@@ -185,10 +196,53 @@ void TopDownMDD::storeLeafNodes(double incumbent)
         if (clonedState->cumulativeCost() < incumbent)
         {
           pReplacedStatesMatrix.at(lidx).push_back(DPState::UPtr(clonedState));
+          pHistoryQueueSize++;
         }
       }
     }
   }
+}
+
+void TopDownMDD::buildAndStoreState(uint32_t layerIdx, DPState* fromState, int64_t val)
+{
+  // Before cloning a state, check if it can be merged with one from
+  // the previous level
+  /*
+  if (layerIdx > 1)
+  {
+    const auto& layerStateList = pReplacedStatesMatrix.at(layerIdx - 1);
+    for (const auto& state : layerStateList)
+    {
+      if (state->isEqual(fromState))
+      {
+        // If an equivalent state is found, keep only one,
+        // i.e., keep the one with lower cost
+        if (state->cumulativeCost() > fromState->cumulativeCost())
+        {
+          *state = *fromState;
+        }
+
+        // Do not store equivalent states
+        return;
+      }
+    }
+  }
+  */
+  auto clonedState = fromState->clone();
+  clonedState->updateState(fromState, val);
+
+  //std::cout << "Build and store state - add to queue: " << std::endl;
+  //std::cout << clonedState->toString() << std::endl;
+  //std::cout << "----------\n";
+  //getchar();
+
+  pReplacedStatesMatrix.at(layerIdx).push_back(DPState::UPtr(clonedState));
+  pHistoryQueueSize++;
+}
+
+uint64_t TopDownMDD::getNumStoredStates() const noexcept
+{
+  return pHistoryQueueSize;
 }
 
 bool TopDownMDD::hasStoredStates() const noexcept
@@ -203,10 +257,10 @@ bool TopDownMDD::hasStoredStates() const noexcept
   return false;
 }
 
-void TopDownMDD::rebuildMDDFromStoredStates()
+void TopDownMDD::rebuildMDDFromStoredStates(double incumbent)
 {
   // Get the state to use to re-build the MDD
-  auto state = getStateFromHistory();
+  auto state = getStateFromHistory(incumbent);
   assert(state != nullptr);
 
   const auto& path = state->cumulativePath();
@@ -230,7 +284,7 @@ void TopDownMDD::rebuildMDDFromStoredStates()
   }
 }
 
-DPState::UPtr TopDownMDD::getStateFromHistory()
+DPState::UPtr TopDownMDD::getStateFromHistory(double incumbent)
 {
   // Start a counter to avoid looping forever
   uint32_t totLayersCtr{0};
@@ -243,24 +297,40 @@ DPState::UPtr TopDownMDD::getStateFromHistory()
     auto& nodesQueueList = pReplacedStatesMatrix[pHistoryStateLayerPtr];
     if (!nodesQueueList.empty())
     {
-      // Get and return the best node in the list
-      auto bestIt = nodesQueueList.begin();
-      double bestCost{std::numeric_limits<double>::max()};
-      for (auto it = nodesQueueList.begin(); it != nodesQueueList.end(); ++it)
+
+      // First remove all non-admissible states
+      for (int idx{static_cast<int>(nodesQueueList.size()) - 1}; idx >= 0; --idx)
       {
-        if ((*it)->cumulativeCost() < bestCost)
+        if (nodesQueueList.at(idx)->cumulativeCost() > incumbent)
         {
-          bestCost = (*it)->cumulativeCost();
-          bestIt = it;
+          nodesQueueList.erase(nodesQueueList.begin() + idx);
+          --pHistoryQueueSize;
         }
       }
 
-      // Remove and return the best state
-      auto stateToReturn = std::move(*bestIt);
-      nodesQueueList.erase(bestIt);
+      // If there are still elements in the queue
+      // Find the minimum element
+      int bestIdx{-1};
+      double bestCost{std::numeric_limits<double>::max()};
+      for (int idx{0}; idx < nodesQueueList.size(); ++idx)
+      {
+        if (nodesQueueList.at(idx)->cumulativeCost() < bestCost)
+        {
+          bestIdx = idx;
+          bestCost = nodesQueueList.at(idx)->cumulativeCost();
+        }
+      }
 
-      // Return the pointer to the state
-      return std::move(stateToReturn);
+      if (bestIdx >= 0)
+      {
+        // Remove and return the best state
+        auto stateToReturn = std::move(*(nodesQueueList.begin() + bestIdx));
+        nodesQueueList.erase(nodesQueueList.begin() + bestIdx);
+        --pHistoryQueueSize;
+
+        // Return the pointer to the state
+        return std::move(stateToReturn);
+      }
     }
 
     // Go to next layer
@@ -327,10 +397,10 @@ uint32_t TopDownMDD::getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const
   */
 }
 
-void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* currState, int64_t val,
+void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* fromState, int64_t val,
                               bool storeDiscardedStates, double incumbent)
 {
-  assert(currState != nullptr);
+  assert(fromState != nullptr);
 
   auto stateToReplace = getNodeState(layerIdx, nodeIdx);
   if(stateToReplace->isDefaultState())
@@ -343,20 +413,53 @@ void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* curr
   // Update the state and set it as non-default
   if (storeDiscardedStates)
   {
-    // Copy the state and store it into the queue
-    auto clonedState = stateToReplace->clone();
-    assert(clonedState != nullptr);
-
-    // Store the cloned state into the list of replacement states
-    // if the cost of the cloned state is less than the incumbent
-    if (clonedState->cumulativeCost() < incumbent)
+    // Before storing or cloning the state, check if it can be merged or it is equivalent
+    // to a previous stored state
+    bool foundEquivalentState{false};
+    /*
+    if (layerIdx > 1)
     {
-      pReplacedStatesMatrix.at(layerIdx).push_back(DPState::UPtr(clonedState));
+      const auto& layerStateList = pReplacedStatesMatrix.at(layerIdx - 1);
+      for (const auto& state : layerStateList)
+      {
+        if (state->isEqual(stateToReplace))
+        {
+          // If an equivalent state is found, keep only one,
+          // i.e., keep the one with lower cost
+          if (state->cumulativeCost() > stateToReplace->cumulativeCost())
+          {
+            *state = *stateToReplace;
+          }
+
+          // Do not store equivalent states
+          foundEquivalentState = true;
+          break;
+        }
+      }
+    }
+    */
+    // Copy the state and store it into the queue
+    if (!foundEquivalentState)
+    {
+      auto clonedState = stateToReplace->clone();
+      assert(clonedState != nullptr);
+
+      if (clonedState->cumulativeCost() < incumbent)
+      {
+
+        //std::cout << "Replace state - add to queue: " << std::endl;
+        //std::cout << clonedState->toString() << std::endl;
+        //std::cout << "----------\n";
+        //getchar();
+
+        pReplacedStatesMatrix.at(layerIdx).push_back(DPState::UPtr(clonedState));
+        pHistoryQueueSize++;
+      }
     }
   }
 
   // Replace the state
-  stateToReplace->updateState(currState, val);
+  stateToReplace->updateState(fromState, val);
   stateToReplace->setNonDefaultState();
 }
 

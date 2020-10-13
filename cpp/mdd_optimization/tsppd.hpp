@@ -43,6 +43,12 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   void mergeState(DPState* other) noexcept override;
 
   /**
+   * \brief returns true if "other" is equivalent (i.e., only one can be kept) to
+   *        this state. Returns false otherwise.
+   */
+  bool isEqual(const DPState* other) const noexcept override;
+
+  /**
    * \brief reset this state to the default state
    */
   void resetState() noexcept override;
@@ -56,7 +62,7 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
    * \brief updates this state to the next state in the DP transition function
    *        obtained by applying "val" to "state"
    */
-  void updateState(DPState* state, int64_t val) override;
+  void updateState(DPState* fromState, int64_t val) override;
 
   /**
    * \brief returns the cost of taking the given value.

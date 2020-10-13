@@ -44,6 +44,12 @@ class SYS_EXPORT_STRUCT DPState {
   bool isStateSetForTopDownFiltering() const noexcept { return pTopDownFiltering; }
 
   /**
+   * \brief returns true if "other" is equivalent (i.e., only one can be kept) to
+   *        this state. Returns false otherwise.
+   */
+  virtual bool isEqual(const DPState* other) const noexcept;
+
+  /**
    * \brief reset this state to the default state
    */
   virtual void resetState() noexcept;
@@ -138,10 +144,6 @@ class SYS_EXPORT_STRUCT DPState {
 
   /// Returns whether or not this is a default state
   bool isDefaultState() const noexcept { return pIsDefault; }
-
-  /// Returns true if this is equal to "other".
-  /// Returns false otherwise
-  virtual bool isEqual(const DPState* other) const noexcept;
 
  protected:
   /// Flag indicating whether or not this state works on top-down or bottom-up filtering

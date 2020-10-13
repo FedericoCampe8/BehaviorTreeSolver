@@ -66,6 +66,8 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
       break;
     }
 
+    //std::cout << "QUEUE SIZE: " << pCompiler->getMDDMutable()->getNumStoredStates() << std::endl;
+
     // Rebuild the MDD using the sorted queued states
     if (!pCompiler->rebuildMDDFromQueue())
     {

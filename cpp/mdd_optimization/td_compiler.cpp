@@ -93,7 +93,8 @@ bool TDCompiler::compileMDD()
         const auto idxHeadNodeToReplace = repState.first;
         const auto edgeValue = repState.second;
 
-        // Note: the edge can be nullptr if there is no current active edge incoming to the state
+        // Note: the edge can be nullptr if there is no current active edge
+        // incoming to the state
         auto currEdge = pMDDGraph->getEdgeOnHeadMutable(lidx, idxHeadNodeToReplace);
         if (currEdge != nullptr)
         {
@@ -165,6 +166,12 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
       break;
     }
 
+    if (costList.at(repPtr).first >= getIncumbent())
+    {
+      // Exclude costs greater than the current incumbent
+      break;
+    }
+
     // Replace the current state and keep track of:
     // 1) the value to assign to the edge; and
     // 2) what state was replaced (to disable the corresponding incoming edge)
@@ -198,6 +205,12 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
         break;
       }
 
+      if (costList.at(repPtr).first >= getIncumbent())
+      {
+        // Exclude costs greater than the current incumbent
+        break;
+      }
+
       // Try to replace the current state with one having a lower cost
       if (nextStateList->at(idx)->cumulativeCost() > costList.at(repPtr).first)
       {
@@ -220,6 +233,26 @@ DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
     }
   }
 
+  // Check if there are some possible states left that didn't replace
+  // the current states
+  if (repPtr < costListSize)
+  {
+    // If so, store these states in the queue to pick them up later on
+    // when doing branch & bound (otherwise these state will be discarded forever)
+    while (repPtr < costListSize)
+    {
+      if (costList.at(repPtr).first >= getIncumbent())
+      {
+        ++repPtr;
+        continue;
+      }
+      pMDDGraph->buildAndStoreState(nextLayerIdx, currState, costList.at(repPtr).second);
+
+      // Get next state and repeat
+      ++repPtr;
+    }
+  }
+
   // Return the replacement list
   return replacedStates;
 }
@@ -229,7 +262,8 @@ bool TDCompiler::rebuildMDDFromQueue()
   // Store all the nodes in the MDD that are leaf nodes,
   // i.e., not part of the path to the tail node but still on the MDD
   // and not replaced, i.e., not in the queue of stored stated
-  pMDDGraph->storeLeafNodes(getIncumbent());
+  // TODO double-check if this is required
+  // pMDDGraph->storeLeafNodes(getIncumbent());
 
   // Check if the MDD can be recompiled.
   // The MDD can be recompiled if there is at least
@@ -244,7 +278,7 @@ bool TDCompiler::rebuildMDDFromQueue()
   pMDDGraph->resetGraph(resetStatesQueue);
 
   // Build the MDD from the queued states
-  pMDDGraph->rebuildMDDFromStoredStates();
+  pMDDGraph->rebuildMDDFromStoredStates(getIncumbent());
 
   // Return success
   return true;

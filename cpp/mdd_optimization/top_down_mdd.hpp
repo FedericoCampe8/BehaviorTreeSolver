@@ -24,11 +24,20 @@
 
 namespace mdd {
 
+/**
+ * \brief class encapsulating an edge of the MDD.
+ *        An edge can be active (i.e., connecting two edges)
+ *        or not and it can have one or more domain values.
+ *        If the edge has more than one value, it is a "parallel" edge.
+ */
 struct SYS_EXPORT_STRUCT MDDTDEdge {
   using UPtr = std::unique_ptr<MDDTDEdge>;
 
-  MDDTDEdge() = default;
+  MDDTDEdge();
   MDDTDEdge(int32_t tailLayer, int32_t tailIdx=-1, int32_t headIdx=-1);
+
+  /// Returns whether or not this is a parallel edge
+  bool isParallel() const noexcept { return valuesList.size() > 1; }
 
   /// Flag indicating whether or not this edge is active
   bool isActive{false};
@@ -42,8 +51,10 @@ struct SYS_EXPORT_STRUCT MDDTDEdge {
   /// Head node index
   int32_t head{-1};
 
-  /// Value on this edge
   int64_t value{std::numeric_limits<int64_t>::max()};
+
+  /// List of values on this edge
+  std::vector<int64_t> valuesList;
 };
 
 /**
@@ -89,15 +100,28 @@ class SYS_EXPORT_CLASS TopDownMDD {
   void storeLeafNodes(double incumbent);
 
   /**
+   * \brief builds and store a state for future use during branch & bound optimization.
+   *        This method builds a state to be used in layer "layerIdx" and it builds it
+   *        by applying "val" on "fromState" using the DP transition function
+   */
+  void buildAndStoreState(uint32_t layerIdx, DPState* fromState, int64_t val);
+
+  /**
    * \brief returns true if the MDD has some stored states.
    *        Returns false otherwise.
    */
   bool hasStoredStates() const noexcept;
 
   /**
-   * \brief rebuilds the MDD from one of the states in the queue.
+   * \brief returns the sum of all states stored in the history queue/register.
    */
-  void rebuildMDDFromStoredStates();
+  uint64_t getNumStoredStates() const noexcept;
+
+  /**
+   * \brief rebuilds the MDD from one of the states in the queue.
+   * \note rebuilds only trees from states lower than the incumbent.
+   */
+  void rebuildMDDFromStoredStates(double incumbent);
 
   /**
    * \brief resets all the MDD as if it was just built
@@ -153,7 +177,7 @@ class SYS_EXPORT_CLASS TopDownMDD {
    *       search strategies.
    * \note store states only if their cost is lower than the incumbent.
    */
-  void replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* currState, int64_t val,
+  void replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* fromState, int64_t val,
                     bool storeDiscardedStates, double incumbent);
 
   /**
@@ -214,6 +238,9 @@ class SYS_EXPORT_CLASS TopDownMDD {
   ///       is never replaced
   uint32_t pHistoryStateLayerPtr{1};
 
+  /// Size of the history queue
+  uint64_t pHistoryQueueSize{0};
+
   /// Collection of edges in the MDD.
   /// Edges are stored "per-layer".
   /// For example, layer zero contains all edges that have
@@ -253,7 +280,7 @@ class SYS_EXPORT_CLASS TopDownMDD {
   }
 
   /// Returns the next state from the history using a "best first" heuristic
-  DPState::UPtr getStateFromHistory();
+  DPState::UPtr getStateFromHistory(double incumbent);
 
   /// Returns true if the given state is a leaf state.
   /// Returns false otherwise.

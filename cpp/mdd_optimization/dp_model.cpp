@@ -101,7 +101,7 @@ std::string DPState::toString() const noexcept
 
 bool DPState::isEqual(const DPState*) const noexcept
 {
-  return true;
+  return false;
 }
 
 }  // namespace mdd
