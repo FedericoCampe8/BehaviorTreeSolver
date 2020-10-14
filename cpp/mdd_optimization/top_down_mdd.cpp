@@ -26,6 +26,14 @@ MDDTDEdge::MDDTDEdge(int32_t tailLayer, int32_t tailIdx, int32_t headIdx)
   valuesList.push_back(std::numeric_limits<int64_t>::max());
 }
 
+std::string MDDTDEdge::toString() const noexcept
+{
+  std::string info{""};
+  info += "edge (" + std::to_string(layer) + "): " +
+          std::to_string(tail) + " -> " + std::to_string(head);
+  return info;
+}
+
 TopDownMDD::TopDownMDD(MDDProblem::SPtr problem, uint32_t width)
 : pProblem(problem),
   pMaxWidth(width)
@@ -35,11 +43,21 @@ TopDownMDD::TopDownMDD(MDDProblem::SPtr problem, uint32_t width)
     throw std::invalid_argument("TopDownMDD - empty pointer to the problem instance");
   }
 
+  if (getConstraintsList().size() != 1)
+  {
+    throw std::invalid_argument("TopDownMDD - invalid model: invalid number of constraints");
+  }
+
   // Set the number of layers of this MDD which corresponds to the
-  // number of variables
+  // number of variables.
+  // Each layer has a set of edges and a set of nodes.
+  // Edges fully connect the nodes on that layer with the nodes
+  // on the next layer starting from the root node
   pNumLayers = static_cast<uint32_t>(getVariablesList().size());
   for (uint32_t lidx{0}; lidx < pNumLayers+1; ++lidx)
   {
+    // Set the position of the first default node on the current layer.
+    // At the beginning, all nodes will be default nodes
     pStartDefaultStateIdxOnLevel[lidx] = 0;
   }
 
@@ -47,10 +65,6 @@ TopDownMDD::TopDownMDD(MDDProblem::SPtr problem, uint32_t width)
   allocateEdges();
 
   // Allocate all states: one state for each node
-  if (getConstraintsList().size() != 1)
-  {
-    throw std::invalid_argument("TopDownMDD - invalid model: invalid number of constraints");
-  }
   allocateStates(getConstraintsList().at(0));
 }
 
@@ -59,23 +73,26 @@ void TopDownMDD::allocateEdges()
   pLayerEdgeList.reserve(pNumLayers);
   for (uint32_t lidx{0}; lidx < pNumLayers; ++lidx)
   {
-    // Compute the max number of edges on each layer
+    // Compute the max number of edges on each layer.
+    // This corresponds to width^2 since layers are fully connected
     uint64_t maxNumEdges{pMaxWidth * pMaxWidth};
-    if (lidx == 0)
+    if (lidx == 0 || (lidx == pNumLayers - 1))
     {
-      // First layer has only one node
+      // First and last layer have only one node
       maxNumEdges = pMaxWidth;
     }
 
+    // For each layer, prepare a list of edges
     EdgeList edgeList;
     edgeList.reserve(maxNumEdges);
     for (uint64_t eidx{0}; eidx < maxNumEdges; ++eidx)
     {
 
       int32_t tailIdx{1};
+      int32_t headIdx = static_cast<int32_t>(eidx % pMaxWidth);
       if (lidx == 0)
       {
-        // All edges in the first layer have the same tail, i.e., the root)
+        // All edges in the first layer have the same tail, i.e., the root
         tailIdx = 0;
       }
       else
@@ -83,13 +100,12 @@ void TopDownMDD::allocateEdges()
         tailIdx = (eidx == 0 ? 0 : eidx / pMaxWidth);
       }
 
-      int32_t headIdx = static_cast<int32_t>(eidx % pMaxWidth);
-      if (lidx == (pNumLayers - 1))
+      if (lidx == pNumLayers - 1)
       {
-        // All heads on the last layer point to the same node, i.e., the tail
-        headIdx = 0;
+           // All edges in the last layer have the same head, i.e., the tail node
+           headIdx = 0;
+           tailIdx = eidx;
       }
-
       edgeList.push_back(std::make_unique<MDDTDEdge>(lidx, tailIdx, headIdx));
     }
     pLayerEdgeList.push_back(std::move(edgeList));
@@ -103,22 +119,17 @@ void TopDownMDD::allocateStates(MDDConstraint::SPtr con)
     throw std::invalid_argument("TopDownMDD - allocateStates: empty pointer to the constraint");
   }
 
-  // Reserve the memory for the layers plus the root
+  // The number of nodes is equal to the number of layers plus one (the tail node)
   pMDDStateMatrix.reserve(pNumLayers + 1);
 
-  // Add the root state
+  // Add the (only) root state
   StateList rootStateList;
   pMDDStateMatrix.push_back(std::move(rootStateList));
   pMDDStateMatrix.front().push_back(DPState::UPtr(con->getInitialDPStateRaw()));
-
-  // Add replacement on root state
-  std::vector<DPState::UPtr> rootRepStateList;
-  pReplacedStatesMatrix[0] = std::move(rootRepStateList);
-  for (uint32_t lidx{0}; lidx < pNumLayers - 1; ++lidx)
+  for (uint32_t lidx{1}; lidx < pNumLayers; ++lidx)
   {
     StateList stateList;
     stateList.reserve(pMaxWidth);
-
     for (uint32_t widx{0}; widx < pMaxWidth; ++widx)
     {
       stateList.push_back(DPState::UPtr(con->getInitialDPStateRaw()));
@@ -126,20 +137,12 @@ void TopDownMDD::allocateStates(MDDConstraint::SPtr con)
 
     // Add state for current layer
     pMDDStateMatrix.push_back(std::move(stateList));
-
-    // Add replacement states for current layer
-    std::vector<DPState::UPtr> repStateList;
-    pReplacedStatesMatrix[lidx+1] = std::move(repStateList);
   }
 
-  // Add tail node
+  // Add (only) tail node
   StateList tailStateList;
   pMDDStateMatrix.push_back(std::move(tailStateList));
   pMDDStateMatrix.back().push_back(DPState::UPtr(con->getInitialDPStateRaw()));
-
-  // Add replacement state on tail node
-  std::vector<DPState::UPtr> tailRepStateList;
-  pReplacedStatesMatrix[pNumLayers] = std::move(tailRepStateList);
 }
 
 bool TopDownMDD::isLeafState(uint32_t layerIdx, uint32_t nodeIdx) const
@@ -154,24 +157,29 @@ bool TopDownMDD::isLeafState(uint32_t layerIdx, uint32_t nodeIdx) const
     }
   }
 
-  if (!hasOutgoingEdges)
+  if (hasOutgoingEdges)
   {
-    // The node doesn't have outgoing edges, check if it can be reached
-    if (layerIdx == 0)
+    // If the node has at least one outgoing edge,
+    // it means the node it is not a leaf state, return asap
+    return false;
+  }
+
+  // The node doesn't have outgoing edges, check if it can be reached
+  if (layerIdx == 0)
+  {
+    // Root nodes cannot have incoming edges, return asap
+    return true;
+  }
+  else
+  {
+    // Check if the edge can be reached by checking all incoming edges
+    // and verifying that there is at least one active edge into the node
+    for (const auto& inEdge : pLayerEdgeList.at(layerIdx - 1))
     {
-      // Root nodes cannot have incoming edges, return asap
-      return true;
-    }
-    else
-    {
-      // Check if the edge can be reached
-      for (const auto& inEdge : pLayerEdgeList.at(layerIdx - 1))
+      if (inEdge->head == nodeIdx && inEdge->isActive)
       {
-        if (inEdge->head == nodeIdx && inEdge->isActive)
-        {
-          // Edge can be reached and it doesn't have outgoing edges, return asap
-          return true;
-        }
+        // Edge can be reached and it doesn't have outgoing edges, return asap
+        return true;
       }
     }
   }
@@ -179,90 +187,11 @@ bool TopDownMDD::isLeafState(uint32_t layerIdx, uint32_t nodeIdx) const
   return false;
 }
 
-void TopDownMDD::storeLeafNodes(double incumbent)
+void TopDownMDD::rebuildMDDFromState(DPState::UPtr state)
 {
-  for (uint32_t lidx{1}; lidx < static_cast<uint32_t>(pMDDStateMatrix.size() - 1); ++lidx)
-  {
-    for (uint32_t sidx{0}; sidx < pMDDStateMatrix.at(lidx).size(); ++sidx)
-    {
-      if (isLeafState(lidx, sidx))
-      {
-        // Copy the state and store it into the queue
-        auto clonedState = pMDDStateMatrix.at(lidx).at(sidx)->clone();
-        assert(clonedState != nullptr);
-
-        // Store the cloned state into the list of replacement states
-        // if the cost of the cloned state is less than the incumbent
-        if (clonedState->cumulativeCost() < incumbent)
-        {
-          pReplacedStatesMatrix.at(lidx).push_back(DPState::UPtr(clonedState));
-          pHistoryQueueSize++;
-        }
-      }
-    }
-  }
-}
-
-void TopDownMDD::buildAndStoreState(uint32_t layerIdx, DPState* fromState, int64_t val)
-{
-  // Before cloning a state, check if it can be merged with one from
-  // the previous level
-  /*
-  if (layerIdx > 1)
-  {
-    const auto& layerStateList = pReplacedStatesMatrix.at(layerIdx - 1);
-    for (const auto& state : layerStateList)
-    {
-      if (state->isEqual(fromState))
-      {
-        // If an equivalent state is found, keep only one,
-        // i.e., keep the one with lower cost
-        if (state->cumulativeCost() > fromState->cumulativeCost())
-        {
-          *state = *fromState;
-        }
-
-        // Do not store equivalent states
-        return;
-      }
-    }
-  }
-  */
-  auto clonedState = fromState->clone();
-  clonedState->updateState(fromState, val);
-
-  //std::cout << "Build and store state - add to queue: " << std::endl;
-  //std::cout << clonedState->toString() << std::endl;
-  //std::cout << "----------\n";
-  //getchar();
-
-  pReplacedStatesMatrix.at(layerIdx).push_back(DPState::UPtr(clonedState));
-  pHistoryQueueSize++;
-}
-
-uint64_t TopDownMDD::getNumStoredStates() const noexcept
-{
-  return pHistoryQueueSize;
-}
-
-bool TopDownMDD::hasStoredStates() const noexcept
-{
-  for (auto& it : pReplacedStatesMatrix)
-  {
-    if (!it.second.empty())
-    {
-      return true;
-    }
-  }
-  return false;
-}
-
-void TopDownMDD::rebuildMDDFromStoredStates(double incumbent)
-{
-  // Get the state to use to re-build the MDD
-  auto state = getStateFromHistory(incumbent);
   assert(state != nullptr);
 
+  // Get the path up to the state
   const auto& path = state->cumulativePath();
 
   // The first node is the root node
@@ -272,7 +201,7 @@ void TopDownMDD::rebuildMDDFromStoredStates(double incumbent)
     // Each value represents an arc directed from the previous node
     // to the following node using the left path in the MDD
     pLayerEdgeList.at(layerIdx).at(0)->isActive = true;
-    pLayerEdgeList.at(layerIdx).at(0)->value = path.at(layerIdx);
+    pLayerEdgeList.at(layerIdx).at(0)->valuesList[0] = path.at(layerIdx);
 
     auto nextNode = getNodeState(layerIdx + 1, 0);
     nextNode->updateState(tailNode, path.at(layerIdx));
@@ -284,64 +213,7 @@ void TopDownMDD::rebuildMDDFromStoredStates(double incumbent)
   }
 }
 
-DPState::UPtr TopDownMDD::getStateFromHistory(double incumbent)
-{
-  // Start a counter to avoid looping forever
-  uint32_t totLayersCtr{0};
-
-  // Consider next layer
-  pHistoryStateLayerPtr = (pHistoryStateLayerPtr + 1) % (pNumLayers + 1);
-  pHistoryStateLayerPtr = (pHistoryStateLayerPtr == 0) ? 1 : pHistoryStateLayerPtr;
-  while (totLayersCtr++ < static_cast<uint32_t>(pReplacedStatesMatrix.size()))
-  {
-    auto& nodesQueueList = pReplacedStatesMatrix[pHistoryStateLayerPtr];
-    if (!nodesQueueList.empty())
-    {
-
-      // First remove all non-admissible states
-      for (int idx{static_cast<int>(nodesQueueList.size()) - 1}; idx >= 0; --idx)
-      {
-        if (nodesQueueList.at(idx)->cumulativeCost() > incumbent)
-        {
-          nodesQueueList.erase(nodesQueueList.begin() + idx);
-          --pHistoryQueueSize;
-        }
-      }
-
-      // If there are still elements in the queue
-      // Find the minimum element
-      int bestIdx{-1};
-      double bestCost{std::numeric_limits<double>::max()};
-      for (int idx{0}; idx < nodesQueueList.size(); ++idx)
-      {
-        if (nodesQueueList.at(idx)->cumulativeCost() < bestCost)
-        {
-          bestIdx = idx;
-          bestCost = nodesQueueList.at(idx)->cumulativeCost();
-        }
-      }
-
-      if (bestIdx >= 0)
-      {
-        // Remove and return the best state
-        auto stateToReturn = std::move(*(nodesQueueList.begin() + bestIdx));
-        nodesQueueList.erase(nodesQueueList.begin() + bestIdx);
-        --pHistoryQueueSize;
-
-        // Return the pointer to the state
-        return std::move(stateToReturn);
-      }
-    }
-
-    // Go to next layer
-    pHistoryStateLayerPtr = (pHistoryStateLayerPtr + 1) % (pNumLayers + 1);
-    pHistoryStateLayerPtr = (pHistoryStateLayerPtr == 0) ? 1 : pHistoryStateLayerPtr;
-  }
-
-  return nullptr;
-}
-
-void TopDownMDD::resetGraph(bool resetStatesQueue)
+void TopDownMDD::resetGraph()
 {
   // Deactivate all edges
   for (const auto& edgeList : pLayerEdgeList)
@@ -349,6 +221,8 @@ void TopDownMDD::resetGraph(bool resetStatesQueue)
     for (auto& edge : edgeList)
     {
       edge->isActive = false;
+      edge->valuesList.clear();
+      edge->valuesList.push_back(std::numeric_limits<int64_t>::max());
     }
   }
 
@@ -359,49 +233,36 @@ void TopDownMDD::resetGraph(bool resetStatesQueue)
     {
       // Reset the state and make sure it is set as a default state
       state->resetState();
-      state->setNonDefaultState(true);
+      state->setDefaultState();
     }
   }
 
+  // Reset counter on first default state
   for (auto& it : pStartDefaultStateIdxOnLevel)
   {
     it.second = 0;
   }
+}
 
-  if (resetStatesQueue)
+MDDTDEdge* TopDownMDD::getEdgeMutable(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx) const
+{
+  for (const auto& edge : pLayerEdgeList.at(layerIdx))
   {
-    for (auto& it : pReplacedStatesMatrix)
+    if (edge->tail == tailIdx && edge->head == headIdx)
     {
-      it.second.clear();
+      return edge.get();
     }
   }
+  return nullptr;
 }
 
 uint32_t TopDownMDD::getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const
 {
   return pStartDefaultStateIdxOnLevel.at(layerIdx);
-
-  // The following also works but it might be slightly slower for
-  // a large number of states
-  /*
-  uint32_t idx{0};
-  for (const auto& state : pMDDStateMatrix.at(layerIdx))
-  {
-    if (state->isDefaultState())
-    {
-      return idx;
-    }
-    ++idx;
-  }
-  return pMaxWidth;
-  */
 }
 
-void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* fromState, int64_t val,
-                              bool storeDiscardedStates, double incumbent)
+DPState::UPtr TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState::UPtr state)
 {
-  assert(fromState != nullptr);
-
   auto stateToReplace = getNodeState(layerIdx, nodeIdx);
   if(stateToReplace->isDefaultState())
   {
@@ -410,57 +271,11 @@ void TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* from
     pStartDefaultStateIdxOnLevel[layerIdx]++;
   }
 
-  // Update the state and set it as non-default
-  if (storeDiscardedStates)
-  {
-    // Before storing or cloning the state, check if it can be merged or it is equivalent
-    // to a previous stored state
-    bool foundEquivalentState{false};
-    /*
-    if (layerIdx > 1)
-    {
-      const auto& layerStateList = pReplacedStatesMatrix.at(layerIdx - 1);
-      for (const auto& state : layerStateList)
-      {
-        if (state->isEqual(stateToReplace))
-        {
-          // If an equivalent state is found, keep only one,
-          // i.e., keep the one with lower cost
-          if (state->cumulativeCost() > stateToReplace->cumulativeCost())
-          {
-            *state = *stateToReplace;
-          }
-
-          // Do not store equivalent states
-          foundEquivalentState = true;
-          break;
-        }
-      }
-    }
-    */
-    // Copy the state and store it into the queue
-    if (!foundEquivalentState)
-    {
-      auto clonedState = stateToReplace->clone();
-      assert(clonedState != nullptr);
-
-      if (clonedState->cumulativeCost() < incumbent)
-      {
-
-        //std::cout << "Replace state - add to queue: " << std::endl;
-        //std::cout << clonedState->toString() << std::endl;
-        //std::cout << "----------\n";
-        //getchar();
-
-        pReplacedStatesMatrix.at(layerIdx).push_back(DPState::UPtr(clonedState));
-        pHistoryQueueSize++;
-      }
-    }
-  }
-
-  // Replace the state
-  stateToReplace->updateState(fromState, val);
-  stateToReplace->setNonDefaultState();
+  // Keep track of the state to replace
+  auto oldState = std::move(pMDDStateMatrix[layerIdx][nodeIdx]);
+  pMDDStateMatrix[layerIdx][nodeIdx] = std::move(state);
+  pMDDStateMatrix[layerIdx][nodeIdx]->setNonDefaultState();
+  return std::move(oldState);
 }
 
 std::vector<MDDTDEdge*> TopDownMDD::getActiveEdgesOnLayer(uint32_t layerIdx) const
@@ -476,19 +291,20 @@ std::vector<MDDTDEdge*> TopDownMDD::getActiveEdgesOnLayer(uint32_t layerIdx) con
   return edgeList;
 }
 
-MDDTDEdge* TopDownMDD::getEdgeOnHeadMutable(uint32_t layerIdx, uint32_t headIdx) const
+std::vector<MDDTDEdge*> TopDownMDD::getEdgeOnHeadMutable(uint32_t layerIdx, uint32_t headIdx) const
 {
+  std::vector<MDDTDEdge*> edgeList;
   for (const auto& edge : pLayerEdgeList.at(layerIdx))
   {
     if (edge->head == headIdx && edge->isActive)
     {
-      return edge.get();
+      edgeList.push_back(edge.get());
     }
   }
-  return nullptr;
+  return edgeList;
 }
 
-void TopDownMDD::disableEdge(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx)
+void TopDownMDD::disableEdge(uint32_t layerIdx, uint32_t tailIdx, uint32_t headIdx)
 {
   for (const auto& edge : pLayerEdgeList.at(layerIdx))
   {
@@ -501,7 +317,7 @@ void TopDownMDD::disableEdge(uint32_t layerIdx,  uint32_t tailIdx, uint32_t head
   assert(false);
 }
 
-void TopDownMDD::enableEdge(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx)
+void TopDownMDD::enableEdge(uint32_t layerIdx, uint32_t tailIdx, uint32_t headIdx)
 {
   for (const auto& edge : pLayerEdgeList.at(layerIdx))
   {
@@ -514,13 +330,13 @@ void TopDownMDD::enableEdge(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headI
   assert(false);
 }
 
-void TopDownMDD::setEdgeValue(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx, int64_t val)
+void TopDownMDD::setEdgeValue(uint32_t layerIdx, uint32_t tailIdx, uint32_t headIdx, int64_t val)
 {
   for (const auto& edge : pLayerEdgeList.at(layerIdx))
   {
     if (edge->tail == tailIdx && edge->head == headIdx)
     {
-      edge->value = val;
+      edge->valuesList[0] = val;
       return;
     }
   }
@@ -579,7 +395,17 @@ void TopDownMDD::printMDD(const std::string& outFileName) const
       headPrefix += std::to_string(edge->layer + 1) + "_" + std::to_string(edge->head);
 
       std::string newEdge = tailPrefix + " -> " + headPrefix;
-      newEdge += std::string("[label=") + "\"" + std::to_string(edge->value)  +  "\"]\n";
+
+      // Create edge label
+      std::string edgeLabel{""};
+      for (auto val : edge->valuesList)
+      {
+        edgeLabel += std::to_string(val) + ", ";
+      }
+      edgeLabel.pop_back();
+      edgeLabel.pop_back();
+
+      newEdge += std::string("[label=") + "\"" + edgeLabel +  "\"]\n";
       ppMDD += "\t" + newEdge;
     }
   }

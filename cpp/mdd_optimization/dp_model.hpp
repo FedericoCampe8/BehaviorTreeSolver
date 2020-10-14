@@ -44,6 +44,27 @@ class SYS_EXPORT_STRUCT DPState {
   bool isStateSetForTopDownFiltering() const noexcept { return pTopDownFiltering; }
 
   /**
+   * \brief forces the cumulative cost to the given value.
+   */
+  void forceCumulativeCost(double cost) noexcept { pCost = cost; };
+
+  /**
+   * \brief returns the cumulative cost.
+   */
+  double cumulativeCost() const noexcept { return pCost; }
+
+  /**
+   * \brief forces the cumulative path to the given value.
+   */
+  void forceCumulativePath(const std::vector<int64_t>& path) noexcept { pPath = path; }
+
+  /**
+   * \brief returns the path values (edges) up to this state.
+   * \note this DOES NOT work for merged nodes.
+   */
+  const std::vector<int64_t>& cumulativePath() const noexcept { return pPath; }
+
+  /**
    * \brief returns true if "other" is equivalent (i.e., only one can be kept) to
    *        this state. Returns false otherwise.
    */
@@ -58,12 +79,6 @@ class SYS_EXPORT_STRUCT DPState {
    * \brief clones this states and returns a pointer to the clone.
    */
   virtual DPState* clone() const noexcept;
-
-  /**
-   * \brief returns the path values (edges) up to this state.
-   * \note this DOES NOT work for merged nodes.
-   */
-  const std::vector<int64_t>& cumulativePath() const noexcept { return pPath; }
 
   /// Merges "other" into this DP State
   virtual void mergeState(DPState* other) noexcept;
@@ -80,7 +95,7 @@ class SYS_EXPORT_STRUCT DPState {
    * \brief updates this state to the next state in the DP transition function
    *        obtained by applying "val" to "state"
    */
-  virtual void updateState(DPState* state, int64_t val);
+  virtual void updateState(const DPState* state, int64_t val);
 
   /**
    * \brief returns the cost of taking the given value.
@@ -95,6 +110,17 @@ class SYS_EXPORT_STRUCT DPState {
    */
   virtual std::vector<std::pair<double, int64_t>> getCostListPerValue(
           int64_t lb, int64_t ub, double incumbent);
+
+  /**
+   * \brief returns the list of "width" states (if any) reachable from the current state.
+   */
+  virtual std::vector<DPState::UPtr> nextStateList(int64_t lb, int64_t ub, double incumbent) const;
+
+  /**
+   * \brief returns the index of the state in the input list that can be merged
+   *        with this state.
+   */
+  virtual uint32_t stateSelectForMerge(const std::vector<DPState::UPtr>& statesList) const;
 
   /// Returns the list of "width" feasible states that can be reached from the current
   /// DP state using values in [lb, ub].
@@ -130,17 +156,17 @@ class SYS_EXPORT_STRUCT DPState {
   /// the previous state arriving to the current state is known
   virtual double cost(int64_t domainElement, DPState* fromState=nullptr) const noexcept;
 
-  /// Returns the cumulative cost up to this state
-  virtual double cumulativeCost() const noexcept;
-
   /// Returns whether or not this
   virtual bool isInfeasible() const noexcept;
 
   /// Returns a string representing this state
   virtual std::string toString() const noexcept;
 
-  /// Set state a non-default according to given flag
+  /// Set state as non-default according to given flag
   void setNonDefaultState(bool isDefault=false) noexcept { pIsDefault = isDefault; }
+
+  /// Set state as default state
+  void setDefaultState() noexcept { pIsDefault = true; }
 
   /// Returns whether or not this is a default state
   bool isDefaultState() const noexcept { return pIsDefault; }

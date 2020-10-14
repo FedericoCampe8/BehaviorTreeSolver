@@ -25,6 +25,14 @@ namespace mdd {
  */
 class SYS_EXPORT_CLASS TDCompiler {
  public:
+  /**
+   * \brief compilation mode for the top-down compiler.
+   */
+  enum class CompilationMode {
+    Relaxed = 1,
+    Restricted
+  };
+
   using UPtr = std::unique_ptr<TDCompiler>;
   using SPtr = std::shared_ptr<TDCompiler>;
 
@@ -35,19 +43,12 @@ class SYS_EXPORT_CLASS TDCompiler {
    * \brief compiles the MDD.
    * \return true if the MDD allows solutions, returns false otherwise.
    */
-  bool compileMDD();
+  bool compileMDD(CompilationMode compilationMode);
 
   /**
    * \brief sets the incumbent.
    */
   void setIncumbent(double incumbent) noexcept { pIncumbent = incumbent; }
-
-  /**
-   * \brief recompiles the MDD from the queue of stored states
-   *        accumulated during previous compilations.
-   * \arg[out] true if the MDD can be rebuild, false otherwise
-   */
-  bool rebuildMDDFromQueue();
 
   /**
    * \brief returns the compiled MDD.
@@ -68,16 +69,43 @@ class SYS_EXPORT_CLASS TDCompiler {
 
   double pIncumbent{std::numeric_limits<double>::max()};
 
-  /// Returns the incumbent, i.e., the cost of the best solution found so far
+  /**
+   * \brief builds the MDD using top-down compilation.
+   */
+  bool buildMDD(CompilationMode compilationMode);
+
+  /**
+   * \brief returns the incumbent, i.e., the cost of the best solution found so far.
+   */
   double getIncumbent() const noexcept { return pIncumbent; };
 
   /**
-   * \brief given the current state, lower and upper bounds of the variable at that state,
-   *        and the list of state on next layer, calculates the state that will be replaced
-   *        and be part of the next layer's states.
+   * \brief given the current node, replace all states on next layer with
+   *        the states that are obtained by "currNode" using its function "next".
+   *        States are replaced only if their cost is lower than current cost (heuristic).
+   * \return the list of edges that should be activated due to state replacement.
+   *         For each edge, there is a Boolean flag: if true, every current active edge leading
+   *         to that node should be deactivated (the state has been completely replaced).
+   *         If false, any active edge should remain active and a new active edge should be added
+   *         (the state is shared).
    */
-  DPState::ReplacementNodeList calculateNextLayerStates(uint32_t currLayer, uint32_t currNode,
-                                                        int64_t lb, int64_t ub);
+  std::vector<std::pair<MDDTDEdge*, bool>> restrictNextLayerStatesFromNode(uint32_t currLayer,
+                                                                           uint32_t currNode,
+                                                                           int64_t lb, int64_t ub);
+
+  /**
+   * \brief given the current node, merge all states on next layer with
+   *        the states that are obtained by "currNode" using its function "next".
+   *        States are replaced only if their cost is lower than current cost (heuristic).
+   * \return the list of edges that should be activated due to state replacement.
+   *         For each edge, there is a Boolean flag: if true, every current active edge leading
+   *         to that node should be deactivated (the state has been completely replaced).
+   *         If false, any active edge should remain active and a new active edge should be added
+   *         (the state is shared).
+   */
+  std::vector<std::pair<MDDTDEdge*, bool>> relaxNextLayerStatesFromNode(uint32_t currLayer,
+                                                                        uint32_t currNode,
+                                                                        int64_t lb, int64_t ub);
 };
 
 }  // namespace mdd

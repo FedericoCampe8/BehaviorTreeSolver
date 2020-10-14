@@ -8,7 +8,10 @@
 #include <sparsepp/spp.h>
 
 namespace {
-constexpr uint32_t kLayerZero{0};
+bool cmpStateList(const std::unique_ptr<mdd::DPState>& a, const std::unique_ptr<mdd::DPState>& b)
+{
+  return a->cumulativeCost() < b->cumulativeCost();
+}
 }  // namespace
 
 namespace mdd {
@@ -21,22 +24,39 @@ TDCompiler::TDCompiler(MDDProblem::SPtr problem, uint32_t width)
     throw std::invalid_argument("TDCompiler: empty pointer to the problem instance");
   }
 
-  // Initialize the MDD
+  // Initialize the MDD.
+  // TODO evaluate performance of storing two MDDs:
+  // 1) MDD for relaxed compilation;
+  // 2) MDD for restricted compilation
   pMDDGraph = std::make_unique<TopDownMDD>(pProblem, width);
 }
 
-bool TDCompiler::compileMDD()
+bool TDCompiler::compileMDD(CompilationMode compilationMode)
 {
   // Start from the root node and build the MDD Top-Down.
   // Building the MDD means replacing the states on the nodes AND
   // activating the edge connections between nodes.
   // Note: the root node state has been already set to the default state
   // when building the MDD
+  return buildMDD(compilationMode);
+}
+
+bool TDCompiler::buildMDD(CompilationMode compilationMode)
+{
   const auto numLayers = pMDDGraph->getNumLayers();
   for (uint32_t lidx{0}; lidx < numLayers; ++lidx)
   {
+    // Use a flag to skip layers that were previously built.
+    // This can happen, for example, when running Top-Down on an MDD
+    // that has been built from a state rather than from the root,
+    // e.g., during branch and
     bool layerHasSuccessors{false};
+
+    // Get the variable associated with the current layer.
+    // Note: the variable is on the tail of the edge on the current layer
     auto var = pMDDGraph->getVariablePerLayer(lidx);
+
+    // Go over each node on the current layer and calculate next layer's nodes
     for (uint32_t nidx{0}; nidx < pMDDGraph->getMaxWidth(); ++nidx)
     {
       if (lidx == 0 && nidx > 0)
@@ -66,48 +86,64 @@ bool TDCompiler::compileMDD()
         const auto defaultStateIdx = pMDDGraph->getIndexOfFirstDefaultStateOnLayer(lidx + 1);
         if (defaultStateIdx > 0)
         {
-          // Break, proceed with next layer
+          // Break and proceed with next layer
           layerHasSuccessors = true;
           break;
         }
       }
 
-      // Compute all next states from current node and filter only
-      // the "best" states.
-      // "Best" states are selected with the heuristic implemented
-      // in the DP constraint
-      auto replacedStates = calculateNextLayerStates(lidx, nidx,
-                                                     var->getLowerBound(),
-                                                     var->getUpperBound());
-
-      // For each replaced state:
-      // I)   disable current arc;
-      // II)  enable arc with tail equal to "nidx"
-      // III) set the value on the arc to be equal to the replaced value
-      for (const auto& repState : replacedStates)
+      // Compute all next states from current node and filter only the "best" states.
+      // Note: the original restricted algorithm, given layer i, first creates all 'k' states
+      // for layer i+1; then it shrinks them to 'w' according to a selection heuristic.
+      // In what follows, we create only the states that will be part of layer i+1.
+      // In other words, instead of computing all 'k' states, the algorithm selects the 'w'
+      // best states at each iteration and overrides them
+      std::vector<std::pair<MDDTDEdge*, bool>> newActiveEdgeList;
+      if (compilationMode == CompilationMode::Relaxed)
       {
+        // Compute all next states from current node and merge the states.
+        // Note: the original relaxed algorithm, given layer i, first creates all 'k' states
+        // for layer i+1; then it shrinks them to 'w' according to a merge heuristic.
+        // In what follows, we create only the states that will be part of layer i+1.
+        // In other words, instead of computing all 'k' states, the algorithm
+        // compute 'k'costs used by the heuristic, selects the 'w' best costs, and creates
+        // only those
+        newActiveEdgeList = relaxNextLayerStatesFromNode(lidx, nidx,
+                                                         var->getLowerBound(),
+                                                         var->getUpperBound());
+
+      }
+      else if (compilationMode == CompilationMode::Restricted)
+      {
+        // Compute all next states from current node and filter only the "best" states.
+        // Note: the original restricted algorithm, given layer i, first creates all 'k' states
+        // for layer i+1; then it shrinks them to 'w' according to a selection heuristic.
+        // In what follows, we create only the states that will be part of layer i+1.
+        // In other words, instead of computing all 'k' states, the algorithm selects the 'w'
+        // best states at each iteration and overrides them
+        newActiveEdgeList = restrictNextLayerStatesFromNode(lidx, nidx,
+                                                            var->getLowerBound(),
+                                                            var->getUpperBound());
+      }
+
+      // All edges have "nidx" as tail node and lead to a node on layer "lidx+1"
+      for (const auto& edgePair : newActiveEdgeList)
+      {
+        assert(edgePair.first->tail == nidx);
+
         // This layer has at least one successor on the next layer
         layerHasSuccessors = true;
-
-        // Enable the edges to connect the current layer to the next one
-        const auto idxHeadNodeToReplace = repState.first;
-        const auto edgeValue = repState.second;
-
-        // Note: the edge can be nullptr if there is no current active edge
-        // incoming to the state
-        auto currEdge = pMDDGraph->getEdgeOnHeadMutable(lidx, idxHeadNodeToReplace);
-        if (currEdge != nullptr)
+        if (edgePair.second)
         {
-          // Disable the current active edge (if any)
-          const auto currTailEdge = currEdge->tail;
-          pMDDGraph->disableEdge(lidx, currTailEdge, idxHeadNodeToReplace);
+          // Deactivate all current layers and active given layer
+          for (auto edge : pMDDGraph->getEdgeOnHeadMutable(lidx, edgePair.first->head))
+          {
+            edge->isActive = false;
+          }
         }
 
-        // Enable the edge on layer "lidx" from node "nidx" to node " idxNodeReplaced"
-        pMDDGraph->enableEdge(lidx, nidx, idxHeadNodeToReplace);
-
-        // Set value on the newly enabled edge
-        pMDDGraph->setEdgeValue(lidx, nidx, idxHeadNodeToReplace, edgeValue);
+        // Activate given layer
+        edgePair.first->isActive = true;
       }
     }
 
@@ -120,169 +156,256 @@ bool TDCompiler::compileMDD()
   return true;
 }
 
-DPState::ReplacementNodeList TDCompiler::calculateNextLayerStates(
+std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFromNode(
         uint32_t currLayer, uint32_t currNode, int64_t lb, int64_t ub)
 {
+  std::vector<std::pair<MDDTDEdge*, bool>> newConnections;
+
+  // Get the start node
   auto currState = pMDDGraph->getNodeState(currLayer, currNode);
   assert(currState != nullptr);
 
-  const auto nextLayerIdx = currLayer + 1;
+  // Get the list of next states to override (since only "width" states are allowed)
+  const auto nextLayer = currLayer + 1;
+  TopDownMDD::StateList* nextStateList = pMDDGraph->getStateListMutable(nextLayer);
 
-  // Get the list of next states
-  TopDownMDD::StateList* nextStateList = pMDDGraph->getStateListMutable(nextLayerIdx);
+  // Get the list of best "width" next states reachable from the current state
+  // according to the heuristic implemented in the DP model
+  auto stateList = currState->nextStateList(lb, ub, getIncumbent());
 
-  // Get all the values reachable from the current state
-  auto costList = currState->getCostListPerValue(lb, ub, getIncumbent());
+  // Check whether or not to use next states
+  const auto width = static_cast<uint32_t>(nextStateList->size());
+  std::sort(stateList.begin(), stateList.end(), cmpStateList);
 
-  // Keep track of the replaced states and values
-  DPState::ReplacementNodeList replacedStates;
-  if (costList.empty())
-  {
-    // No values can change the current states.
-    // Return asap
-    return replacedStates;
-  }
-
-  // "costList" contains the list of all values that can lead to admissible new states.
-  // Sort the list to return the best states
-  std::sort(costList.begin(), costList.end());
-
-  // Heuristic: replace in a new state ONLY IF the new state has a cost lower than
-  // the current states in the layer.
-  // Therefore, calculate the minimum value on the current list of states
-  const uint32_t width = static_cast<uint32_t>(nextStateList->size());
-
-  // States are sorted: start from the lowest cost state
+  // First replace all default states
   uint32_t repPtr{0};
-
-  // First replace all default states (before overriding non-default states)
-  const auto costListSize = static_cast<uint32_t>(costList.size());
-  auto defaultStateIdx = pMDDGraph->getIndexOfFirstDefaultStateOnLayer(nextLayerIdx);
+  auto defaultStateIdx = pMDDGraph->getIndexOfFirstDefaultStateOnLayer(nextLayer);
   while (defaultStateIdx < width)
   {
-    if (repPtr >= costListSize)
+    if (repPtr >= static_cast<uint32_t>(stateList.size()))
     {
       // No more replaceable states, break
       break;
     }
-
-    if (costList.at(repPtr).first >= getIncumbent())
-    {
-      // Exclude costs greater than the current incumbent
-      break;
-    }
-
-    // Replace the current state and keep track of:
-    // 1) the value to assign to the edge; and
-    // 2) what state was replaced (to disable the corresponding incoming edge)
-    // Note: in general they might be multiple incoming edges however:
-    //  a) if the state is default, no incoming edge is active; or
-    //  b) if the state is not default, only one incoming edge is active
-    //     (the one leading to the state)
-    const auto newEdgeValue = costList.at(repPtr).second;
-    replacedStates.push_back({defaultStateIdx, newEdgeValue});
+    assert(stateList.at(repPtr)->cumulativeCost() <= getIncumbent());
 
     // Replace the state in the MDD
-    pMDDGraph->replaceState(nextLayerIdx, defaultStateIdx, currState, newEdgeValue, false,
-                            getIncumbent());
+    const auto val = stateList.at(repPtr)->cumulativePath().back();
+    pMDDGraph->replaceState(nextLayer, defaultStateIdx, std::move(stateList[repPtr]));
+
+    // Activate a new edge
+    auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, defaultStateIdx);
+    edge->valuesList[0] = val;
+    newConnections.emplace_back(edge, true);
 
     // Move to next state
     ++repPtr;
 
     // Update index to next default state
-    defaultStateIdx = pMDDGraph->getIndexOfFirstDefaultStateOnLayer(nextLayerIdx);
+    defaultStateIdx = pMDDGraph->getIndexOfFirstDefaultStateOnLayer(nextLayer);
   }
 
-  // Then override non-default states if there are any new states in "costList"
-  // left to consider
-  if (repPtr < costListSize)
+  // If there are still nodes left, then override non-default states
+  while(repPtr < static_cast<uint32_t>(stateList.size()))
   {
+    // Here all default states are replaced.
+    // Therefore, start replacing nodes from the beginning (wrapping around)
     for (uint32_t idx{0}; idx < width; ++idx)
     {
-      if (repPtr >= costListSize)
+      assert(!nextStateList->at(idx)->isDefaultState());
+
+      // Check whether or not merge same state
+      auto currState = stateList.at(repPtr).get();
+      if (nextStateList->at(idx)->isEqual(currState))
       {
-        // No more replaceable states, break
+        // If two states are equal, they can be merged,
+        // i.e., the correspondent edge can be activated.
+        // Note: two nodes can be equal but have a different cost.
+        // The cost is set to the lower of the two, following
+        // the heuristic of keeping low costs nodes only at each layer
+        if (nextStateList->at(idx)->cumulativeCost() > currState->cumulativeCost())
+        {
+          nextStateList->at(idx)->forceCumulativeCost(currState->cumulativeCost());
+        }
+
+        // Merge a new edge
+        auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, idx);
+        assert(edge != nullptr);
+
+        if (!edge->hasValueSet())
+        {
+          edge->valuesList[0] = currState->cumulativePath().back();
+        }
+        else
+        {
+          edge->valuesList.push_back(currState->cumulativePath().back());
+        }
+        newConnections.emplace_back(edge, false);
+
         break;
       }
 
-      if (costList.at(repPtr).first >= getIncumbent())
+      // Check if new cost is lower than the current one.
+      // If so, replace the state.
+      // This is equivalent to the original restricted algorithm
+      // where states are first all created and then pruned to keep
+      // the width contained.
+      // Here, instead of pruning, states are overridden
+      if (nextStateList->at(idx)->cumulativeCost() > currState->cumulativeCost())
       {
-        // Exclude costs greater than the current incumbent
-        break;
-      }
-
-      // Try to replace the current state with one having a lower cost
-      if (nextStateList->at(idx)->cumulativeCost() > costList.at(repPtr).first)
-      {
-        // Replace the current state and keep track of:
-        // 1) the value to assign to the edge; and
-        // 2) what state was replaced (to disable the corresponding incoming edge)
-        // Note: in general they might be multiple incoming edges however:
-        //  a) if the state is default, no incoming edge is active; or
-        //  b) if the state is not default, only one incoming edge is active
-        //     (the one leading to the state)
-        const auto newEdgeValue = costList.at(repPtr).second;
-        replacedStates.push_back({idx, newEdgeValue});
-
+        // The state is overridden by the new one
         // Replace the state in the MDD
-        pMDDGraph->replaceState(nextLayerIdx, idx, currState, newEdgeValue, true, getIncumbent());
+        const auto val = stateList[repPtr]->cumulativePath().back();
+        pMDDGraph->replaceState(nextLayer, idx, std::move(stateList[repPtr]));
 
-        // Move to next state
-        ++repPtr;
+        // Activate a new edge
+        auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, idx);
+        edge->valuesList[0] = val;
+        newConnections.emplace_back(edge, true);
+
+        break;
       }
     }
+
+    // Check next state
+    ++repPtr;
   }
 
-  // Check if there are some possible states left that didn't replace
-  // the current states
-  if (repPtr < costListSize)
-  {
-    // If so, store these states in the queue to pick them up later on
-    // when doing branch & bound (otherwise these state will be discarded forever)
-    while (repPtr < costListSize)
-    {
-      if (costList.at(repPtr).first >= getIncumbent())
-      {
-        ++repPtr;
-        continue;
-      }
-      pMDDGraph->buildAndStoreState(nextLayerIdx, currState, costList.at(repPtr).second);
-
-      // Get next state and repeat
-      ++repPtr;
-    }
-  }
-
-  // Return the replacement list
-  return replacedStates;
+  return newConnections;
 }
 
-bool TDCompiler::rebuildMDDFromQueue()
+std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNode(
+        uint32_t currLayer, uint32_t currNode, int64_t lb, int64_t ub)
 {
-  // Store all the nodes in the MDD that are leaf nodes,
-  // i.e., not part of the path to the tail node but still on the MDD
-  // and not replaced, i.e., not in the queue of stored stated
-  // TODO double-check if this is required
-  // pMDDGraph->storeLeafNodes(getIncumbent());
+  std::vector<std::pair<MDDTDEdge*, bool>> newConnections;
 
-  // Check if the MDD can be recompiled.
-  // The MDD can be recompiled if there is at least
-  // one state stored in the queue of states
-  if (!pMDDGraph->hasStoredStates())
+  // Get the start node
+  auto currState = pMDDGraph->getNodeState(currLayer, currNode);
+  assert(currState != nullptr);
+
+  // Get the list of next states to override (since only "width" states are allowed)
+  const auto nextLayer = currLayer + 1;
+  TopDownMDD::StateList* nextStateList = pMDDGraph->getStateListMutable(nextLayer);
+
+  // Get the list of best "width" next states reachable from the current state
+  // according to the heuristic implemented in the DP model
+  auto stateList = currState->nextStateList(lb, ub,  getIncumbent());
+
+  // Check whether or not to use next states
+  const auto width = static_cast<uint32_t>(nextStateList->size());
+  std::sort(stateList.begin(), stateList.end(), cmpStateList);
+
+  // First replace all default states
+  uint32_t repPtr{0};
+  auto defaultStateIdx = pMDDGraph->getIndexOfFirstDefaultStateOnLayer(nextLayer);
+  while (defaultStateIdx < width)
   {
-    return false;
+    if (repPtr >= static_cast<uint32_t>(stateList.size()))
+    {
+      // No more replaceable states, break
+      break;
+    }
+    assert(stateList.at(repPtr)->cumulativeCost() <= getIncumbent());
+
+    // Replace the state in the MDD
+    const auto val = stateList.at(repPtr)->cumulativePath().back();
+    pMDDGraph->replaceState(nextLayer, defaultStateIdx, std::move(stateList[repPtr]));
+
+    // Activate a new edge
+    auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, defaultStateIdx);
+    edge->valuesList[0] = val;
+    newConnections.emplace_back(edge, true);
+
+    // Move to next state
+    ++repPtr;
+
+    // Update index to next default state
+    defaultStateIdx = pMDDGraph->getIndexOfFirstDefaultStateOnLayer(nextLayer);
   }
 
-  // Reset all MDD
-  const bool resetStatesQueue{false};
-  pMDDGraph->resetGraph(resetStatesQueue);
+  // If there are still nodes left, then override non-default states
+  while(repPtr < static_cast<uint32_t>(stateList.size()))
+  {
+    auto currState = stateList.at(repPtr).get();
 
-  // Build the MDD from the queued states
-  pMDDGraph->rebuildMDDFromStoredStates(getIncumbent());
+    // Check first if one of the states already present is equivalent
+    // to the current state
+    bool foundEquivalent{false};
+    for (uint32_t idx{0}; idx < width; ++idx)
+    {
+      assert(!nextStateList->at(idx)->isDefaultState());
+      if (nextStateList->at(idx)->isEqual(currState))
+      {
+        // If two states are equal, they can be merged,
+        // i.e., the correspondent edge can be activated.
+        // Note: two nodes can be equal but have a different cost.
+        // The cost is set to the lower of the two, following
+        // the heuristic of keeping low costs nodes only at each layer
+        if (nextStateList->at(idx)->cumulativeCost() > currState->cumulativeCost())
+        {
+          nextStateList->at(idx)->forceCumulativeCost(currState->cumulativeCost());
+        }
 
-  // Return success
-  return true;
+        // Merge a new edge
+        auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, idx);
+        assert(edge != nullptr);
+
+        if (!edge->hasValueSet())
+        {
+          edge->valuesList[0] = currState->cumulativePath().back();
+        }
+        else
+        {
+          edge->valuesList.push_back(currState->cumulativePath().back());
+        }
+
+        newConnections.emplace_back(edge, false);
+        foundEquivalent = true;
+
+        break;
+      }
+    }
+
+    if (foundEquivalent)
+    {
+      // Found an equivalent state, continue checking next state
+      ++repPtr;
+      continue;
+    }
+
+    // Pick one of the state to merge the current one into
+    auto stateIdx = currState->stateSelectForMerge(*nextStateList);
+
+    // Merge the state
+    const auto val = currState->cumulativePath().back();
+    (*nextStateList)[stateIdx]->mergeState(currState);
+
+    auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, stateIdx);
+    if (!edge->hasValueSet())
+    {
+      edge->valuesList[0] = val;
+    }
+    else
+    {
+      edge->valuesList.push_back(val);
+    }
+    newConnections.emplace_back(edge, false);
+
+    // Continue with next state
+    ++repPtr;
+  }
+
+  return newConnections;
 }
+
+
+
+
+
+
+
+
+
 
 
 #ifdef OLDCODE

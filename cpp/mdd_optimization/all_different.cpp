@@ -94,10 +94,10 @@ DPState* AllDifferentState::clone() const noexcept
   return other;
 }
 
-void AllDifferentState::updateState(DPState* state, int64_t val)
+void AllDifferentState::updateState(const DPState* state, int64_t val)
 {
   // Replace the state (override its internal data)
-  auto fromState = reinterpret_cast<AllDifferentState*>(state);
+  auto fromState = reinterpret_cast<const AllDifferentState*>(state);
   pCost = fromState->pCost;
   pCost += val;
 

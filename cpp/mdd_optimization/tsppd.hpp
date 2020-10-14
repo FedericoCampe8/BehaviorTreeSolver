@@ -62,7 +62,7 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
    * \brief updates this state to the next state in the DP transition function
    *        obtained by applying "val" to "state"
    */
-  void updateState(DPState* fromState, int64_t val) override;
+  void updateState(const DPState* fromState, int64_t val) override;
 
   /**
    * \brief returns the cost of taking the given value.
@@ -77,6 +77,18 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
    */
   std::vector<std::pair<double, int64_t>> getCostListPerValue(
           int64_t lb, int64_t ub, double incumbent) override;
+
+  /**
+   * \brief returns the list of "width" states (if any) reachable from the current state.
+   * \note discard states that have a cost greater than the given incumbent.
+   */
+  std::vector<DPState::UPtr> nextStateList(int64_t lb, int64_t ub, double incumbent) const override;
+
+  /**
+   * \brief returns the index of the state in the input list that can be merged
+   *        with this state.
+   */
+  uint32_t stateSelectForMerge(const std::vector<DPState::UPtr>& statesList) const override;
 
   bool isInfeasible() const noexcept override;
 

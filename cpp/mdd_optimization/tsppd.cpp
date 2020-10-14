@@ -3,6 +3,7 @@
 #include <algorithm>  // for std::find
 #include <cassert>
 #include <iostream>
+#include <limits>     // for std::numeric_limits
 #include <stdexcept>  // for std::invalid_argument
 #include <sstream>
 #include <utility>    // for std::move
@@ -118,21 +119,8 @@ bool TSPPDState::isFeasibleValue(int64_t val, double incumbent) const noexcept
 
 bool TSPPDState::isEqual(const DPState* other) const noexcept
 {
-  // A state is equivalent to another if:
-  // 1) path have same length; and
-  // 2) last node is the same; and
-  // 3) n-1 nodes on each path (of length n) are permutations of each other
-  auto otherCast = reinterpret_cast<const TSPPDState*>(other);
-  if ((pPath.size() != otherCast->pPath.size()) ||
-          (pPath.back() != otherCast->pPath.back()))
-  {
-    return false;
-  }
-
-  // Check for permutations
-  spp::sparse_hash_set<int64_t> perm1(pPath.begin(), pPath.end());
-  spp::sparse_hash_set<int64_t> perm2(otherCast->pPath.begin(), otherCast->pPath.end());
-  return perm1 == perm2;
+  // A state is equivalent to another if the set of next reachable nodes is the same
+  return pDomain == reinterpret_cast<const TSPPDState*>(other)->pDomain;
 }
 
 void TSPPDState::resetState() noexcept
@@ -164,10 +152,10 @@ DPState* TSPPDState::clone() const noexcept
   return other;
 }
 
-void TSPPDState::updateState(DPState* fromState, int64_t val)
+void TSPPDState::updateState(const DPState* fromState, int64_t val)
 {
   // Replace the state (override its internal data)
-  auto fromStateCast = reinterpret_cast<TSPPDState*>(fromState);
+  auto fromStateCast = reinterpret_cast<const TSPPDState*>(fromState);
 
   pCost = fromStateCast->pCost;
   pCost += fromStateCast->pPath.empty() ?
@@ -191,11 +179,6 @@ void TSPPDState::updateState(DPState* fromState, int64_t val)
 
 double TSPPDState::getCostPerValue(int64_t value)
 {
-  if (pDomain.find(value) == pDomain.end())
-  {
-    return std::numeric_limits<double>::max();
-  }
-
   auto costVal{pCost};
   return pPath.empty() ?
           pCostMatrix->at(0).at(value) :
@@ -239,18 +222,76 @@ std::vector<std::pair<double, int64_t>> TSPPDState::getCostListPerValue(
   return costList;
 }
 
-void TSPPDState::mergeState(DPState* other) noexcept
+std::vector<DPState::UPtr> TSPPDState::nextStateList(int64_t lb, int64_t ub, double incumbent) const
 {
-  assert(false);
-  auto otherDPState = reinterpret_cast<const TSPPDState*>(other);
-  if (this->pCost <= otherDPState->pCost)
+  std::vector<DPState::UPtr> outStateList;
+
+  // Instead of evaluating [lb, ub] values, evaluate only the values that can
+  // be reached from this state
+  for (auto val : pDomain)
   {
-    return;
+    if (val < lb || val > ub)
+    {
+      // Skip values that are not part of the range of admissible values
+      continue;
+    }
+
+    // Note that values in the domain are either:
+    // - pickup nodes: always valid nodes, the domain contains only the pickup
+    //                 locations that have not being visited already
+    // - delivery nodes: always valid nodes, the domain contains only the deliveries
+    //                   for pickup nodes that have been already visited
+    // Keep track of the best values found so far
+    auto costVal{pCost};
+    costVal += pPath.empty() ?
+            pCostMatrix->at(0).at(val) :
+            pCostMatrix->at(pPath.back()).at(val);
+    if (costVal >= incumbent)
+    {
+      // Skip states that lead to a cost higher than the incumbent,
+      // i.e., apply pruning
+      continue;
+    }
+
+    // Here there is a value that can lead to a valid next state.
+    // The state is a clone of this state where "val" is applied to it.
+    // Note: for this DP model, two states built with different values
+    // will never be equivalent
+    auto nextState = this->clone();
+    nextState->updateState(this, val);
+    outStateList.emplace_back(nextState);
   }
 
-  this->pCost = otherDPState->pCost;
-  pPath = otherDPState->pPath;
-  pDomain = otherDPState->pDomain;
+  return std::move(outStateList);
+}
+
+uint32_t TSPPDState::stateSelectForMerge(const std::vector<DPState::UPtr>& statesList) const
+{
+  assert(!statesList.empty());
+
+  // Select the state with cumulative cost closer to this state
+  uint32_t mergeIdx{0};
+  double diff{std::numeric_limits<double>::max()};
+  for (uint32_t idx{0}; idx < static_cast<uint32_t>(statesList.size()); ++idx)
+  {
+    const auto absVal = std::abs(this->pCost - statesList.at(idx)->cumulativeCost());
+    if (absVal < diff)
+    {
+      diff = absVal;
+      mergeIdx = idx;
+    }
+  }
+  return mergeIdx;
+}
+
+void TSPPDState::mergeState(DPState* other) noexcept
+{
+  auto otherState = reinterpret_cast<const TSPPDState*>(other);
+  pCost = std::min<double>(pCost, otherState->pCost);
+  for (auto node : otherState->pDomain)
+  {
+    pDomain.insert(node);
+  }
 }
 
 std::string TSPPDState::toString() const noexcept

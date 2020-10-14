@@ -87,8 +87,8 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
 
   /// Runs DFS to find the minimum value on the MDD starting from
   /// the given node
-  void dfsRec(TopDownMDD* mddGraph, double& bestCost, const uint32_t currLayer,
-              const int32_t currHead, double cost=0.0);
+  void dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<int64_t>& path, double& bestCost,
+              const uint32_t currLayer, double cost=0.0);
 };
 
 }  // namespace mdd

@@ -36,8 +36,24 @@ struct SYS_EXPORT_STRUCT MDDTDEdge {
   MDDTDEdge();
   MDDTDEdge(int32_t tailLayer, int32_t tailIdx=-1, int32_t headIdx=-1);
 
-  /// Returns whether or not this is a parallel edge
+  /**
+   * \brief returns whether or not this is a parallel edge.
+   */
   bool isParallel() const noexcept { return valuesList.size() > 1; }
+
+  /**
+   * \brief returns true if the first value on this edge is set.
+   *        Returns false otherwise.
+   */
+  bool hasValueSet() const noexcept
+  {
+    return valuesList.at(0) < std::numeric_limits<int64_t>::max();
+  }
+
+  /**
+   * \brief returns a string description of this edge.
+   */
+  std::string toString() const noexcept;
 
   /// Flag indicating whether or not this edge is active
   bool isActive{false};
@@ -50,8 +66,6 @@ struct SYS_EXPORT_STRUCT MDDTDEdge {
 
   /// Head node index
   int32_t head{-1};
-
-  int64_t value{std::numeric_limits<int64_t>::max()};
 
   /// List of values on this edge
   std::vector<int64_t> valuesList;
@@ -68,7 +82,7 @@ struct SYS_EXPORT_STRUCT MDDTDEdge {
  */
 class SYS_EXPORT_CLASS TopDownMDD {
  public:
-  /// List of state of a given layer
+  /// List of all the state on a given layer
   using StateList = std::vector<DPState::UPtr>;
 
   using UPtr = std::unique_ptr<TopDownMDD>;
@@ -94,39 +108,14 @@ class SYS_EXPORT_CLASS TopDownMDD {
   uint32_t getMaxWidth() const noexcept { return pMaxWidth; };
 
   /**
-   * \brief store all leaf nodes currently present in the MDD.
-   * \note store only the nodes (states) with value lower than the given incumbent.
+   * \brief rebuilds the MDD from the given state and up to the given state.
    */
-  void storeLeafNodes(double incumbent);
+  void rebuildMDDFromState(DPState::UPtr state);
 
   /**
-   * \brief builds and store a state for future use during branch & bound optimization.
-   *        This method builds a state to be used in layer "layerIdx" and it builds it
-   *        by applying "val" on "fromState" using the DP transition function
+   * \brief resets all the MDD as if it was just built.
    */
-  void buildAndStoreState(uint32_t layerIdx, DPState* fromState, int64_t val);
-
-  /**
-   * \brief returns true if the MDD has some stored states.
-   *        Returns false otherwise.
-   */
-  bool hasStoredStates() const noexcept;
-
-  /**
-   * \brief returns the sum of all states stored in the history queue/register.
-   */
-  uint64_t getNumStoredStates() const noexcept;
-
-  /**
-   * \brief rebuilds the MDD from one of the states in the queue.
-   * \note rebuilds only trees from states lower than the incumbent.
-   */
-  void rebuildMDDFromStoredStates(double incumbent);
-
-  /**
-   * \brief resets all the MDD as if it was just built
-   */
-  void resetGraph(bool resetStatesQueue);
+  void resetGraph();
 
   /**
    * \brief returns the state at given layer for the given node index.
@@ -135,6 +124,11 @@ class SYS_EXPORT_CLASS TopDownMDD {
   {
     return pMDDStateMatrix.at(layerIdx).at(nodeIdx).get();
   }
+
+  /**
+   * \brief returns the edge at given layer with given tail and head
+   */
+  MDDTDEdge* getEdgeMutable(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx) const;
 
   /**
    * \brief returns the variables paired to a given layer.
@@ -159,11 +153,10 @@ class SYS_EXPORT_CLASS TopDownMDD {
   uint32_t getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const;
 
   /**
-   * \brief returns the active edge that is on layer "layerIdx" and
+   * \brief returns the list of active edges that are on layer "layerIdx" and
    *        having "headIdx" as head node for "layerIdx".
-   *        If there is no active edge, returns nullptr.
    */
-  MDDTDEdge* getEdgeOnHeadMutable(uint32_t layerIdx, uint32_t headIdx) const;
+  std::vector<MDDTDEdge*> getEdgeOnHeadMutable(uint32_t layerIdx, uint32_t headIdx) const;
 
   /**
    * \brief returns the list of active edges on the given layer.
@@ -171,27 +164,24 @@ class SYS_EXPORT_CLASS TopDownMDD {
   std::vector<MDDTDEdge*> getActiveEdgesOnLayer(uint32_t layerIdx) const;
 
   /**
-   * \brief replace the state "nodeIdx" at layer "layerIdx" with the state
-   *        obtained by considering an edge with value "val" from the state "currState".
-   * \note discarded states can be stored in a queue of states to be used later in branch & bound
-   *       search strategies.
-   * \note store states only if their cost is lower than the incumbent.
+   * \brief replace the state "nodeIdx" at layer "layerIdx" with "state".
+   * \return the replaced state.
    */
-  void replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState* fromState, int64_t val,
-                    bool storeDiscardedStates, double incumbent);
+  DPState::UPtr replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState::UPtr state);
 
   /**
    * \brief disable the edge at given layer with specified tail and head.
    */
-  void disableEdge(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx);
+  void disableEdge(uint32_t layerIdx, uint32_t tailIdx, uint32_t headIdx);
 
   /**
    * \brief enable the edge at given layer with specified tail and head.
    */
-  void enableEdge(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx);
+  void enableEdge(uint32_t layerIdx, uint32_t tailIdx, uint32_t headIdx);
 
   /**
    * \brief sets the value on the specified edge.
+   * \note sets the FIRST value on the edge, i.e., as if the edge was NOT a parallel edge.
    */
   void setEdgeValue(uint32_t layerIdx,  uint32_t tailIdx, uint32_t headIdx, int64_t val);
 
@@ -209,7 +199,8 @@ class SYS_EXPORT_CLASS TopDownMDD {
   /**
    * \brief prints a JPEG representation of this MDD to the given file "name.dot".
    *        The file can be read by graphviz.
-   *        For more information, visit https://graphviz.org/about/
+   *        For more information, visit https://graphviz.org/about/.
+   * \note prints only active edges.
    */
   void printMDD(const std::string& outFileName) const;
 
@@ -233,14 +224,6 @@ class SYS_EXPORT_CLASS TopDownMDD {
   /// MDD number of layers
   uint32_t pNumLayers{0};
 
-  /// Pointer to the last layer used for MDD rebuilding.
-  /// @note the first layer contains the root node which
-  ///       is never replaced
-  uint32_t pHistoryStateLayerPtr{1};
-
-  /// Size of the history queue
-  uint64_t pHistoryQueueSize{0};
-
   /// Collection of edges in the MDD.
   /// Edges are stored "per-layer".
   /// For example, layer zero contains all edges that have
@@ -249,12 +232,6 @@ class SYS_EXPORT_CLASS TopDownMDD {
 
   /// Collection of states in the MDD
   MDDStateMatrix pMDDStateMatrix;
-
-  /// Queue of cloned states per layer:
-  /// - for each layer;
-  /// - for each node;
-  /// - add a queue of replaced states
-  spp::sparse_hash_map<uint32_t, std::vector<DPState::UPtr>> pReplacedStatesMatrix;
 
   /// Map of tracking the index of the first default state on each layer
   spp::sparse_hash_map<uint32_t, uint32_t> pStartDefaultStateIdxOnLevel;
@@ -278,9 +255,6 @@ class SYS_EXPORT_CLASS TopDownMDD {
   {
     return pProblem->getVariables();
   }
-
-  /// Returns the next state from the history using a "best first" heuristic
-  DPState::UPtr getStateFromHistory(double incumbent);
 
   /// Returns true if the given state is a leaf state.
   /// Returns false otherwise.

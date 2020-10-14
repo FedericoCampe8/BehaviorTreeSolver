@@ -52,7 +52,7 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
    * \brief updates this state to the next state in the DP transition function
    *        obtained by applying "val" to "state"
    */
-  void updateState(DPState* state, int64_t val) override;
+  void updateState(const DPState* state, int64_t val) override;
 
   /**
    * \brief returns the cost of taking the given value.

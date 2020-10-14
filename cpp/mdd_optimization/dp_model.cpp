@@ -39,7 +39,7 @@ DPState* DPState::clone() const noexcept
   return nullptr;
 }
 
-void DPState::updateState(DPState*, int64_t)
+void DPState::updateState(const DPState*, int64_t)
 {
 }
 
@@ -52,6 +52,16 @@ std::vector<std::pair<double, int64_t>> DPState::getCostListPerValue(int64_t, in
 {
   std::vector<std::pair<double, int64_t>> vals;
   return vals;
+}
+
+std::vector<DPState::UPtr> DPState::nextStateList(int64_t, int64_t, double) const
+{
+  return {};
+}
+
+uint32_t DPState::stateSelectForMerge(const std::vector<DPState::UPtr>&) const
+{
+  return 0;
 }
 
 void DPState::copyBaseDPState(DPState* other) const
@@ -82,11 +92,6 @@ DPState::SPtr DPState::next(int64_t, DPState*) const noexcept
 double DPState::cost(int64_t domainElement, DPState*) const noexcept
 {
   return static_cast<double>(domainElement);
-}
-
-double DPState::cumulativeCost() const noexcept
-{
-  return pCost;
 }
 
 bool DPState::isInfeasible() const noexcept

@@ -145,7 +145,7 @@ void runTSPPD()
 {
   using namespace mdd;
 
-  std::string instancePath{"../cpp/mdd_client/data/grubhub-15-9.json"};
+  std::string instancePath{"../cpp/mdd_client/data/grubhub-03-0.json"};
   std::ifstream datafile(instancePath);
   std::string dataString((std::istreambuf_iterator<char>(datafile)),
                          (std::istreambuf_iterator<char>()));
@@ -177,9 +177,10 @@ void runTSPPD()
   auto problem = std::make_shared<MDDProblem>();
   problem->setMinimization();
 
-  /*
+
   /////// ALL DIFFERENT ///////
-  numVars = 5;
+  /*
+  numVars = 12;
   for (int idx{0}; idx < numVars; ++idx)
   {
     problem->addVariable(std::make_shared<Variable>(idx, idx, 1, numVars));
@@ -195,17 +196,15 @@ void runTSPPD()
   problem->addConstraint(allDiff);
 
   tools::Timer timerAllDiff;
-  int32_t widthAllDiff{2};
+  int32_t widthAllDiff{1000};
   TDMDDOptimizer allDiffOptimizer(problem);
   allDiffOptimizer.runOptimization(widthAllDiff, 60000);
-  allDiffOptimizer.setMaxNumSolutions(3);
+  //allDiffOptimizer.setMaxNumSolutions(3);
   std::cout << "Wallclock time build (msec.): " << timerAllDiff.getWallClockTimeMsec() << std::endl;
   allDiffOptimizer.printMDD("topdown_mdd");
   return;
+  */
   /////////////////////////////
-   */
-
-
 
 
   // First variable is always the node "+0"

@@ -32,24 +32,22 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
   pCompiler = std::make_unique<TDCompiler>(pProblem, pMaxWidth);
 
   // Compile the initial MDD
-  pCompiler->compileMDD();
+  pCompiler->compileMDD(TDCompiler::CompilationMode::Restricted);
 
-  // Get the incumbent, i.e., the best solution found so far
+  // Get the incumbent, i.e., the best solution found so far.
+  // Note: incumbent should be found with a min/max path visit.
+  // Here it is done using DFS.
+  // TODO switch to min-path on directed acyclic graph
   double bestCost{std::numeric_limits<double>::max()};
-
-  // Get the best cost found which, in case of top-down restricted
-  // is equivalent to the cumulative cost stored at the tail node
-  auto mddGraph = pCompiler->getMDDMutable();
-  bestCost = mddGraph->getNodeState(mddGraph->getNumLayers(), 0)->cumulativeCost();
-
-#ifdef STRICT_CHECKS
-  double bestCostOnDFS{std::numeric_limits<double>::max()};
-  dfsRec(mddGraph, bestCostOnDFS, 0, -1, 0.0);
-  assert(bestCost == bestCostOnDFS);
-#endif
+  auto MDDGraph = pCompiler->getMDDMutable();
+  std::vector<int64_t> path;
+  path.reserve(pProblem->getVariables().size());
+  dfsRec(MDDGraph, MDDGraph->getNodeState(0, 0), path, bestCost, 0, 0.0);
 
   // Update the solution cost
   updateSolutionCost(bestCost);
+
+  return;
 
   bool improveIncumbent{true};
   if (pNumSolutionsCtr >= pNumMaxSolutions)
@@ -69,7 +67,7 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
     //std::cout << "QUEUE SIZE: " << pCompiler->getMDDMutable()->getNumStoredStates() << std::endl;
 
     // Rebuild the MDD using the sorted queued states
-    if (!pCompiler->rebuildMDDFromQueue())
+    if (false /*!pCompiler->rebuildMDDFromQueue()*/)
     {
       // Nothing to recompile, return asap
       std::cout << "No more nodes to explore, exit" << std::endl;
@@ -77,7 +75,7 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
     }
 
     // Compile the MDD
-    if (!pCompiler->compileMDD())
+    if (false /*!pCompiler->compileMDD()*/)
     {
       continue;
     }
@@ -87,7 +85,7 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
 
     // Get the best cost found which, in case of top-down restricted
     // is equivalent to the cumulative cost stored at the tail node
-    bestCost = mddGraph->getNodeState(mddGraph->getNumLayers(), 0)->cumulativeCost();
+    //bestCost = mddGraph->getNodeState(mddGraph->getNumLayers(), 0)->cumulativeCost();
 
 #ifdef STRICT_CHECKS
   double bestCostOnDFS{std::numeric_limits<double>::max()};
@@ -132,8 +130,8 @@ void TDMDDOptimizer::updateSolutionCost(double cost)
   }
 }
 
-void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, double& bestCost, const uint32_t currLayer,
-                            const int32_t currHead, double cost)
+void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<int64_t>& path,
+                            double& bestCost, const uint32_t currLayer, double cost)
 {
   if (currLayer == mddGraph->getNumLayers())
   {
@@ -145,17 +143,33 @@ void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, double& bestCost, const uint32
     return;
   }
 
-  auto activeEdgeList = mddGraph->getActiveEdgesOnLayer(currLayer);
-  for (auto edge : activeEdgeList)
+  for (auto edge : mddGraph->getActiveEdgesOnLayer(currLayer))
   {
-    if ((currHead >= 0) && (edge->tail != currHead))
+    if ((currLayer > 0) && (mddGraph->getNodeState(currLayer-1, edge->tail) != state))
     {
+      // Skip nodes that are not from the same parent
       continue;
     }
-    auto tailState = mddGraph->getNodeState(currLayer, edge->tail);
-    cost += tailState->getCostPerValue(edge->value);
-    dfsRec(mddGraph, bestCost, currLayer + 1, static_cast<int32_t>(edge->head), cost);
-    cost -= tailState->getCostPerValue(edge->value);
+
+    // Get the head of the edge and prepare next state
+    auto head = mddGraph->getNodeState(currLayer, edge->head);
+    for (auto val : edge->valuesList)
+    {
+      // Consider all values on a parallel edge
+      const auto currentCost = state->getCostPerValue(val);
+
+      // Update next state
+      path.push_back(val);
+      head->updateState(state, val);
+      head->forceCumulativePath(path);
+
+      // Call the recursion
+      cost += currentCost;
+      dfsRec(mddGraph, head, path, bestCost, currLayer + 1, cost);
+      cost -= currentCost;
+
+      path.pop_back();
+    }
   }
 }
 
