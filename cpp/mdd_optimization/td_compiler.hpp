@@ -41,9 +41,16 @@ class SYS_EXPORT_CLASS TDCompiler {
 
   /**
    * \brief compiles the MDD.
+   * \arg [in] compilationMode: mode of compilation, e.g., restricted.
+   * \arg [in] state: root state for the MDD to build. If nullptr, starts from the root.
    * \return true if the MDD allows solutions, returns false otherwise.
    */
-  bool compileMDD(CompilationMode compilationMode);
+  bool compileMDD(CompilationMode compilationMode, DPState::UPtr state=nullptr);
+
+  /**
+   * \brief returns true if the MDD is built as an exact MDD, returns false otherwise.
+   */
+  bool isExact() const noexcept { return pIsExactMDD; }
 
   /**
    * \brief sets the incumbent.
@@ -67,6 +74,13 @@ class SYS_EXPORT_CLASS TDCompiler {
   /// MDD data structure
   TopDownMDD::UPtr pMDDGraph{nullptr};
 
+  /// Flag indicating whether or not the compiler run for the first time
+  bool pFirstRun{true};
+
+  /// Flag indicating whether or not the MDD was built as an exact MDD
+  bool pIsExactMDD{true};
+
+  /// Incumbent value, i.e., best cost found so far
   double pIncumbent{std::numeric_limits<double>::max()};
 
   /**
@@ -78,6 +92,12 @@ class SYS_EXPORT_CLASS TDCompiler {
    * \brief returns the incumbent, i.e., the cost of the best solution found so far.
    */
   double getIncumbent() const noexcept { return pIncumbent; };
+
+  /**
+   * \brief builds the MDD from root and up to node with a single path and
+   *        values along cumulative path.
+   */
+  void buildMDDUpToState(DPState::UPtr node);
 
   /**
    * \brief given the current node, replace all states on next layer with

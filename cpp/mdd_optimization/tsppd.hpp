@@ -45,8 +45,20 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   /**
    * \brief returns true if "other" is equivalent (i.e., only one can be kept) to
    *        this state. Returns false otherwise.
+   *        Here, equivalence means that the two states ("this" and "other") have the
+   *        same set of next reachable states BUT they can differ, for example, on
+   *        their cumulative cost and path.
    */
   bool isEqual(const DPState* other) const noexcept override;
+
+  /**
+   * \brief returns true if "other" is strictly equivalent to this state.
+   *        Returns false otherwise.
+   *        Here there is a notion of strong equivalence meaning that the two states
+   *        ("this" and "other") have the same set of next reachable state AND they
+   *        MUST be equal on their cumulative cost and path.
+   */
+  bool isStrictlyEqual(const DPState* other) const noexcept override;
 
   /**
    * \brief reset this state to the default state

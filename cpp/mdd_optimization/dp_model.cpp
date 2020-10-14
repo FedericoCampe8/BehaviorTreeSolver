@@ -67,6 +67,7 @@ uint32_t DPState::stateSelectForMerge(const std::vector<DPState::UPtr>&) const
 void DPState::copyBaseDPState(DPState* other) const
 {
   other->pCost = pCost;
+  other->pIsExact = pIsExact;
   other->pPath = pPath;
   other->pIsDefault = pIsDefault;
 }
@@ -105,6 +106,11 @@ std::string DPState::toString() const noexcept
 }
 
 bool DPState::isEqual(const DPState*) const noexcept
+{
+  return false;
+}
+
+bool DPState::isStrictlyEqual(const DPState* other) const noexcept
 {
   return false;
 }

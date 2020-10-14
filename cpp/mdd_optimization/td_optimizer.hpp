@@ -38,6 +38,12 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
   void runOptimization(uint32_t width, uint64_t timeoutMsec=std::numeric_limits<uint64_t>::max());
 
   /**
+   * \brief sets the minimum optimality gap to reach before terminating.
+   *        This should be a number betweem 0 and 100.0.
+   */
+  void setMinOptimalityGap(double optGap) noexcept { pDeltaOnSolution = optGap; }
+
+  /**
    * \brief sets the maximum number of solutions.
    * \note by default it finds the first solution.
    */
@@ -76,14 +82,32 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
   /// Maximum number of solution
   uint64_t pNumMaxSolutions{std::numeric_limits<uint64_t>::max()};
 
+  /// Limit for the optimality gap
+  double pDeltaOnSolution{0.0};
+
   /// Timer that starts on construction
-  tools::Timer::SPtr pTimer;
+  tools::Timer::SPtr pTimer{nullptr};
 
   /// Cost value of the best solution found so far
   double pBestCost{std::numeric_limits<double>::max()};
 
+  /// Queue of nodes that are part of the exact cutset.
+  /// This queue is used to branch and bound on the MDD optimization process
+  std::vector<DPState::UPtr> pQueue;
+
+  /// Returns the node to branch on
+  DPState::UPtr selectNodeForBranching();
+
+  /// Runs the branch and bound process on the queue until the queue is empty
+  /// or until the given timeout
+  void runBranchAndBound(uint64_t timeoutMsec);
+
   /// Updates the solution cost
   void updateSolutionCost(double cost);
+
+  /// Identifies the "Frontier Cutset" on the current MDD and stores
+  /// a copy of each node in the cutset into the queue
+  void processCutset();
 
   /// Runs DFS to find the minimum value on the MDD starting from
   /// the given node

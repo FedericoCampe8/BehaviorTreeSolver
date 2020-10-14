@@ -1,16 +1,15 @@
 #include "mdd_optimization/td_optimizer.hpp"
 
+#include <cassert>
 #include <fstream>    // for std::ofstream
 #include <iostream>
 #include <stdexcept>  // for std::exception
-
-// #define STRICT_CHECKS
+#include <utility>    // for std::move
 
 namespace mdd {
 
 TDMDDOptimizer::TDMDDOptimizer(MDDProblem::SPtr problem)
-: pProblem(problem),
-  pTimer(std::make_shared<tools::Timer>(true))
+: pProblem(problem)
 {
   if (pProblem == nullptr)
   {
@@ -31,6 +30,22 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
   // Use a top-down compiler for B&B optimization
   pCompiler = std::make_unique<TDCompiler>(pProblem, pMaxWidth);
 
+  // Get the pointer to the MDD graph data structure
+  auto mddGraph = pCompiler->getMDDMutable();
+
+  // Initialize the queue of nodes to branch on
+  // with the root node
+  pQueue.push_back(DPState::UPtr(mddGraph->getNodeState(0, 0)->clone()));
+
+  // Run branch and bound optimization problem
+  runBranchAndBound(timeoutMsec);
+
+  return;
+
+
+
+
+
   // Compile the initial MDD
   pCompiler->compileMDD(TDCompiler::CompilationMode::Restricted);
 
@@ -39,10 +54,10 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
   // Here it is done using DFS.
   // TODO switch to min-path on directed acyclic graph
   double bestCost{std::numeric_limits<double>::max()};
-  auto MDDGraph = pCompiler->getMDDMutable();
+
   std::vector<int64_t> path;
   path.reserve(pProblem->getVariables().size());
-  dfsRec(MDDGraph, MDDGraph->getNodeState(0, 0), path, bestCost, 0, 0.0);
+  dfsRec(mddGraph, mddGraph->getNodeState(0, 0), path, bestCost, 0, 0.0);
 
   // Update the solution cost
   updateSolutionCost(bestCost);
@@ -129,6 +144,125 @@ void TDMDDOptimizer::updateSolutionCost(double cost)
     }
   }
 }
+
+void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
+{
+  // Start the timer
+  pTimer = std::make_shared<tools::Timer>();
+
+  // Get the pointer to the MDD
+  auto mdd = pCompiler->getMDDMutable();
+
+  // Start the optimization process on the queue
+  std::vector<int64_t> path;
+  path.reserve(pProblem->getVariables().size());
+  double bestCost{std::numeric_limits<double>::max()};
+  while(!pQueue.empty())
+  {
+    // Return on timeout
+    if (pTimer->getWallClockTimeMsec() > timeoutMsec)
+    {
+      // Return on timeout
+      std::cout << "Exit on timeout at (msec.) " << pTimer->getWallClockTimeMsec() << std::endl;
+      break;
+    }
+
+    // Choose a node to branch on
+    auto node = selectNodeForBranching();
+    assert(node != nullptr);
+
+    // Obtain an incumbent by building a restricted MDD starting from "node"
+    // Keep a copy of the node for future possible branching
+    pCompiler->compileMDD(TDCompiler::CompilationMode::Restricted, DPState::UPtr(node->clone()));
+
+    // Get the incumbent, i.e., the best solution found so far.
+    // Note: incumbent should be found with a min/max path visit.
+    // Here it is done using DFS.
+    // TODO switch to min-path on directed acyclic graph
+    path.clear();
+    bestCost = std::numeric_limits<double>::max();
+    dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, 0.0);
+
+    // Update the solution cost
+    updateSolutionCost(bestCost);
+
+    // Check if the MDD is exact, if not proceed with branch and bound
+    if (!pCompiler->isExact())
+    {
+      // Branch on the node and obtain a lower bound by
+      // building a relaxed MDD
+      pCompiler->compileMDD(TDCompiler::CompilationMode::Relaxed, std::move(node));
+
+      // Get the lower bound
+      path.clear();
+      bestCost = std::numeric_limits<double>::max();
+      dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, 0.0);
+
+      // Check if the percentage (delta) between lower bound and upper bound is acceptable
+      if (bestCost < pBestCost)
+      {
+        const auto diffBounds = pBestCost - bestCost;
+        const auto optGap = (diffBounds / pBestCost) * 100.0;
+        if (optGap < pDeltaOnSolution)
+        {
+          // Return on delta between lower and upper bound
+          std::cout << "Exit on optimality gap of " << optGap <<
+                  " at (msec.) " << pTimer->getWallClockTimeMsec() << std::endl;
+          break;
+        }
+      }
+
+      // If it is not possible to prune the search using this bound,
+      // identify and exact cutset of the MDD and add the nodes of the cutset
+      // into the queue
+      if (bestCost < pBestCost)
+      {
+        processCutset();
+      }
+    }
+  }
+}
+
+DPState::UPtr TDMDDOptimizer::selectNodeForBranching()
+{
+  int bestIdx{-1};
+  double bestCost{std::numeric_limits<double>::max()};
+  for (int idx{0}; idx < static_cast<int>(pQueue.size()); ++idx)
+  {
+    if (pQueue.at(idx)->cumulativeCost() < bestCost)
+    {
+      bestCost = pQueue.at(idx)->cumulativeCost();
+      bestIdx = idx;
+    }
+  }
+
+  if (bestIdx >= 0)
+  {
+    auto bestState = std::move(pQueue[bestIdx]);
+    pQueue.erase(pQueue.begin() + bestIdx);
+    return std::move(bestState);
+  }
+  else
+  {
+    return nullptr;
+  }
+}
+
+void TDMDDOptimizer::processCutset()
+{
+  // The frontier cutset is computed as follows:
+  //   for each w in 1 <= w <= max_width:
+  //     q = selectLowestExactNode on column(w);
+  //     queue <- {q}
+  // Get the pointer to the MDD
+  auto mdd = pCompiler->getMDDMutable();
+
+  for (uint32_t idx{0}; idx < mdd->getMaxWidth(); ++idx)
+  {
+
+  }
+}
+
 
 void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<int64_t>& path,
                             double& bestCost, const uint32_t currLayer, double cost)

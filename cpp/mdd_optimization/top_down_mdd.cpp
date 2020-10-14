@@ -234,6 +234,7 @@ void TopDownMDD::resetGraph()
       // Reset the state and make sure it is set as a default state
       state->resetState();
       state->setDefaultState();
+      state->setExact(false);
     }
   }
 

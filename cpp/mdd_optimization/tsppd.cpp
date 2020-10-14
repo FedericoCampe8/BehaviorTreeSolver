@@ -40,6 +40,7 @@ TSPPDState::TSPPDState(const TSPPDState& other)
   pLastNodeVisited = other.pLastNodeVisited;
   pDomain = other.pDomain;
   pPath = other.pPath;
+  pIsExact = other.pIsExact;
 }
 
 TSPPDState::TSPPDState(TSPPDState&& other)
@@ -49,6 +50,7 @@ TSPPDState::TSPPDState(TSPPDState&& other)
   pLastNodeVisited = other.pLastNodeVisited;
   pDomain = std::move(other.pDomain);
   pPath = std::move(other.pPath);
+  pIsExact = other.pIsExact;
 
   other.pPickupDeliveryMap = nullptr;
   other.pCostMatrix = nullptr;
@@ -67,6 +69,7 @@ TSPPDState& TSPPDState::operator=(const TSPPDState& other)
   pLastNodeVisited = other.pLastNodeVisited;
   pDomain = other.pDomain;
   pPath = other.pPath;
+  pIsExact = other.pIsExact;
   return *this;
 }
 
@@ -82,6 +85,7 @@ TSPPDState& TSPPDState::operator=(TSPPDState&& other)
   pLastNodeVisited = other.pLastNodeVisited;
   pDomain = std::move(other.pDomain);
   pPath = std::move(other.pPath);
+  pIsExact = other.pIsExact;
 
   other.pPickupDeliveryMap = nullptr;
   other.pCostMatrix = nullptr;
@@ -121,6 +125,21 @@ bool TSPPDState::isEqual(const DPState* other) const noexcept
 {
   // A state is equivalent to another if the set of next reachable nodes is the same
   return pDomain == reinterpret_cast<const TSPPDState*>(other)->pDomain;
+}
+
+bool TSPPDState::isStrictlyEqual(const DPState* other) const noexcept
+{
+  if (!this->isEqual(other))
+  {
+    return false;
+  }
+
+  auto otherState = reinterpret_cast<const TSPPDState*>(other);
+  if ((pCost != otherState->pCost) || (pPath.back() != otherState->pPath.back()))
+  {
+    return false;
+  }
+  return true;
 }
 
 void TSPPDState::resetState() noexcept

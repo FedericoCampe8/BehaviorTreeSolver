@@ -44,6 +44,16 @@ class SYS_EXPORT_STRUCT DPState {
   bool isStateSetForTopDownFiltering() const noexcept { return pTopDownFiltering; }
 
   /**
+   * \brief sets this node as exact or not according to the given flag.
+   */
+  void setExact(bool isExact) noexcept { pIsExact = isExact; }
+
+  /**
+   * \brief returns whether or not this is an exact state.
+   */
+  bool isExact() const noexcept { return pIsExact; }
+
+  /**
    * \brief forces the cumulative cost to the given value.
    */
   void forceCumulativeCost(double cost) noexcept { pCost = cost; };
@@ -67,8 +77,20 @@ class SYS_EXPORT_STRUCT DPState {
   /**
    * \brief returns true if "other" is equivalent (i.e., only one can be kept) to
    *        this state. Returns false otherwise.
+   *        Here, equivalence means that the two states ("this" and "other") have the
+   *        same set of next reachable states BUT they can differ, for example, on
+   *        their cumulative cost and path.
    */
   virtual bool isEqual(const DPState* other) const noexcept;
+
+  /**
+   * \brief returns true if "other" is strictly equivalent to this state.
+   *        Returns false otherwise.
+   *        Here there is a notion of strong equivalence meaning that the two states
+   *        ("this" and "other") have the same set of next reachable state AND they
+   *        MUST be equal on their cumulative cost and path.
+   */
+  virtual bool isStrictlyEqual(const DPState* other) const noexcept;
 
   /**
    * \brief reset this state to the default state
@@ -174,6 +196,9 @@ class SYS_EXPORT_STRUCT DPState {
  protected:
   /// Flag indicating whether or not this state works on top-down or bottom-up filtering
   bool pTopDownFiltering{true};
+
+  /// Flag indicating whether or not this is an exact state
+  bool pIsExact{false};
 
   /// Cumulative path found up to this state
   std::vector<int64_t> pPath;
