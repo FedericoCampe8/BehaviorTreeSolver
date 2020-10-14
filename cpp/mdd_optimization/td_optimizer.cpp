@@ -39,84 +39,6 @@ void TDMDDOptimizer::runOptimization(uint32_t width, uint64_t timeoutMsec)
 
   // Run branch and bound optimization problem
   runBranchAndBound(timeoutMsec);
-
-  return;
-
-
-
-
-
-  // Compile the initial MDD
-  pCompiler->compileMDD(TDCompiler::CompilationMode::Restricted);
-
-  // Get the incumbent, i.e., the best solution found so far.
-  // Note: incumbent should be found with a min/max path visit.
-  // Here it is done using DFS.
-  // TODO switch to min-path on directed acyclic graph
-  double bestCost{std::numeric_limits<double>::max()};
-
-  std::vector<int64_t> path;
-  path.reserve(pProblem->getVariables().size());
-  dfsRec(mddGraph, mddGraph->getNodeState(0, 0), path, bestCost, 0, 0.0);
-
-  // Update the solution cost
-  updateSolutionCost(bestCost);
-
-  return;
-
-  bool improveIncumbent{true};
-  if (pNumSolutionsCtr >= pNumMaxSolutions)
-  {
-    improveIncumbent = false;
-  }
-
-  while(improveIncumbent)
-  {
-    if (pTimer->getWallClockTimeMsec() > timeoutMsec)
-    {
-      // Return on timeout
-      std::cout << "Exit on timeout" << std::endl;
-      break;
-    }
-
-    //std::cout << "QUEUE SIZE: " << pCompiler->getMDDMutable()->getNumStoredStates() << std::endl;
-
-    // Rebuild the MDD using the sorted queued states
-    if (false /*!pCompiler->rebuildMDDFromQueue()*/)
-    {
-      // Nothing to recompile, return asap
-      std::cout << "No more nodes to explore, exit" << std::endl;
-      break;
-    }
-
-    // Compile the MDD
-    if (false /*!pCompiler->compileMDD()*/)
-    {
-      continue;
-    }
-
-    // Get the incumbent, i.e., the best solution found so far
-    bestCost = std::numeric_limits<double>::max();
-
-    // Get the best cost found which, in case of top-down restricted
-    // is equivalent to the cumulative cost stored at the tail node
-    //bestCost = mddGraph->getNodeState(mddGraph->getNumLayers(), 0)->cumulativeCost();
-
-#ifdef STRICT_CHECKS
-  double bestCostOnDFS{std::numeric_limits<double>::max()};
-  dfsRec(mddGraph, bestCostOnDFS, 0, -1, 0.0);
-  assert(bestCost == bestCostOnDFS);
-#endif
-
-    // Update the solution cost
-    updateSolutionCost(bestCost);
-
-    if (pNumSolutionsCtr >= pNumMaxSolutions)
-    {
-      std::cout << "Reached the maximum number of solutions, exit" << std::endl;
-      break;
-    }
-  }  // while improvements
 }
 
 void TDMDDOptimizer::updateSolutionCost(double cost)
@@ -256,10 +178,38 @@ void TDMDDOptimizer::processCutset()
   //     queue <- {q}
   // Get the pointer to the MDD
   auto mdd = pCompiler->getMDDMutable();
-
+  std::vector<DPState*> frontier;
   for (uint32_t idx{0}; idx < mdd->getMaxWidth(); ++idx)
   {
+    // For each vertical layer traverse top down to find the lowest exact node
+    DPState* exactNode{nullptr};
+    for (uint32_t lidx{1}; lidx < mdd->getNumLayers(); ++lidx)
+    {
+      if (mdd->isReachable(lidx, idx))
+      {
+        exactNode = mdd->getNodeState(lidx+1, idx);
+      }
+      else
+      {
+        break;
+      }
+    }
 
+    if (exactNode != nullptr)
+    {
+      frontier.push_back(exactNode);
+    }
+  }
+
+  if (frontier.size() < mdd->getMaxWidth())
+  {
+    std::cout << "Incomplete frontier of size " << frontier.size() << std::endl;
+  }
+
+  // Set the nodes of the frontier in the queue
+  for (auto node : frontier)
+  {
+    pQueue.push_back(DPState::UPtr(node->clone()));
   }
 }
 
