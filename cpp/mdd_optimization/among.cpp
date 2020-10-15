@@ -183,6 +183,7 @@ void Among::setParameters(const std::vector<int64_t>& domain, int lower, int upp
 int Among::getConstraintCountForPath(const std::vector<Edge*>& path) const
 {
     int count{0};
+    assert(path.size() == path[ path.size()-1 ]->getHead()->getVariable()->getId());
     for (auto edgeInPath : path)
     {
       // For each edge in the path
@@ -201,99 +202,6 @@ int Among::getConstraintCountForPath(const std::vector<Edge*>& path) const
 
     return count;
 }
-
-void Among::eraseUnfeasibleSuccessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
-{
-    std::vector<Node*> nodesToDelete;
-    std::queue<Node*> queue;
-    queue.push( node );
-
-    while (queue.size() > 0) {
-      Node* currNode = queue.front();
-      queue.pop();
-      std::vector<Node*> children;
-      // Get all unique children
-      for (auto outEdge: currNode->getOutEdges()) {
-          if ( std::count(children.begin(),children.end(),outEdge->getHead()) == 0 ) {
-              children.push_back( outEdge->getHead() );
-          }
-      }
-
-      // Iterate through children
-      for (auto nextNode : children) {
-          bool nextNodeValid = false;
-          for (auto headInEdge: nextNode->getInEdges()) {
-              if (headInEdge->getTail() != currNode) {
-                nextNodeValid = true;
-              }
-          }
-
-          if (nextNodeValid == false) {
-              queue.push( nextNode );
-              nodesToDelete.push_back( nextNode );
-          } 
-      }
-
-      // At this point curreNode is no longer valid.
-      arena->deleteNode(currNode->getUniqueId());
-      for (auto edge: currNode->getOutEdges()) {
-          arena->deleteEdge( edge->getUniqueId() );
-          edge->removeEdgeFromNodes();
-      }
-
-      mddRepresentation[currNode->getLayer()].erase( std::find(mddRepresentation[currNode->getLayer()].begin(), 
-              mddRepresentation[currNode->getLayer()].end(), currNode) );
-
-
-    }
-}
-
-void Among::eraseUnfeasiblePredecessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
-{
-    std::vector<Node*> nodesToDelete;
-    std::queue<Node*> queue;
-    queue.push( node );
-
-    while (queue.size() > 0) {
-      Node* currNode = queue.front();
-      queue.pop();
-      std::vector<Node*> parents;
-      // Get all unique children
-      for (auto inEdge: currNode->getInEdges()) {
-          if ( std::count(parents.begin(),parents.end(), inEdge->getTail()) == 0 ) {
-              parents.push_back( inEdge->getTail() );
-          }
-      }
-
-      // Iterate through children
-      for (auto prevNode : parents) {
-          bool prevNodeValid = false;
-          for (auto prevOutEdge: prevNode->getOutEdges()) {
-              if (prevOutEdge->getHead() != currNode) {
-                prevNodeValid = true;
-              }
-          }
-
-          if (prevNodeValid == false) {
-              queue.push( prevNode );
-              nodesToDelete.push_back( prevNode );
-          } 
-      }
-
-      // At this point curreNode is no longer valid.
-      arena->deleteNode(currNode->getUniqueId());
-      for (auto edge: currNode->getInEdges()) {
-          arena->deleteEdge( edge->getUniqueId() );
-          edge->removeEdgeFromNodes();
-      }
-
-      mddRepresentation[currNode->getLayer()].erase( std::find(mddRepresentation[currNode->getLayer()].begin(), 
-              mddRepresentation[currNode->getLayer()].end(), currNode) );
-
-    }
-
-}
-
 
 void Among::enforceConstraintTopDown(Arena* arena,
                                      std::vector<std::vector<Node*>>& mddRepresentation) const
@@ -314,7 +222,6 @@ void Among::enforceConstraintTopDown(Arena* arena,
 
     if (layerInConstraint)
     {
-      spp::sparse_hash_map<int, Node*> nodeByConstraintCount;
       for (int nodeIdx{0}; nodeIdx < static_cast<int>(mddRepresentation.at(layer).size()); ++nodeIdx)
       {
         auto node = mddRepresentation.at(layer).at(nodeIdx);
@@ -323,6 +230,7 @@ void Among::enforceConstraintTopDown(Arena* arena,
 
         // First split and merge nodes according to their paths (state of constraint)
 
+        spp::sparse_hash_map<int, Node*> nodeByConstraintCount;
         for (int edgeIdx = 0; edgeIdx < node->getInEdges().size(); edgeIdx++)
         {
           auto inEdge = node->getInEdges()[edgeIdx];
@@ -353,32 +261,6 @@ void Among::enforceConstraintTopDown(Arena* arena,
             nodeByConstraintCount[count] = newNode;
             inEdge->setHead(newNode);
 
-            // Remove invalid values from new node:
-            // for each value in new node, check if that value is contained in node.
-            // If so, continue, if not remove it from new node
-            // const auto& nodeDomain = node->getValues();
-            // auto newNodeDomain = newNode->getValuesMutable();
-
-            // auto nodeDomain = node->getNodeDomain();
-            // auto newNodeDomain = newNode->getNodeDomain();
-
-
-            // // Keep a copy of the values to remove to avoid invalidating iterators
-            // std::vector<int64_t> valuesToRemove;
-            // for (auto val : *(newNodeDomain->getValues()))
-            // {
-            //   if ( nodeDomain->isValueInDomain(val) == false )
-            //   {
-            //     valuesToRemove.push_back(val);
-            //   }
-            // }
-
-
-            // for (auto val : valuesToRemove)
-            // {
-            //   newNodeDomain->removeValue( val );
-            // }
-
             // Copy outgoing edges for new node
             for (auto outEdge : node->getOutEdges())
             {
@@ -399,7 +281,6 @@ void Among::enforceConstraintTopDown(Arena* arena,
 
     // Splitting and merging nodes for current layer should be consistent at this point
     //---------------------------------------------------------------------------------//
-
     for (int nodeIdx = 0; nodeIdx < static_cast<int>(mddRepresentation[layer].size()); ++nodeIdx)
     {
       auto node = mddRepresentation.at(layer).at(nodeIdx);
@@ -492,12 +373,12 @@ void Among::enforceConstraintTopDown(Arena* arena,
 void Among::enforceConstraintBottomUp(
         Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
 {
-  int lastNodeLayer =  mddRepresentation.size() - 1;
+  int lastNodeLayer = mddRepresentation.size() - 1;
   // There's only one node in last layer
   auto lastNode = mddRepresentation.at(lastNodeLayer).at(0);
 
   // Note: queue is very slow in c++
-  std::queue<Node*> queue;
+  std::deque<Node*> queue;
 
   std::vector<Edge*> inEdges = lastNode->getInEdges();
   for (auto inEdge : inEdges ) {
@@ -513,7 +394,7 @@ void Among::enforceConstraintBottomUp(
 
         // If tail has no outgoing edges, this node is no longer valid
         if (tail->getOutEdges().empty()) {
-          queue.push( tail );
+          queue.push_back( tail );
         }
     }
   }
@@ -521,21 +402,28 @@ void Among::enforceConstraintBottomUp(
   while(!queue.empty())
   {
     auto curretNode = queue.front();
-    queue.pop();
+    queue.pop_front();
 
     // Node does not lead to a solution
     if (curretNode->getOutEdges().empty())
     {
       // So delete node and check its parents
-      for (auto inEdge : curretNode->getInEdges())
+      Node::EdgeList inEdges = curretNode->getInEdges();
+      for (auto inEdge : inEdges)
       {
         auto parent = inEdge->getTail();
-        queue.push(parent);
+
         inEdge->removeEdgeFromNodes();
 
         // Remove the edge and node
         arena->deleteEdge(inEdge->getUniqueId());
+        if (parent->getOutEdges().size() == 0) {
+            queue.push_back(parent);
+        }
       }
+      mddRepresentation[curretNode->getLayer()].erase( std::find(mddRepresentation[curretNode->getLayer()].begin(), 
+              mddRepresentation[curretNode->getLayer()].end(), curretNode) );
+      std::cout << curretNode->getUniqueId() << std::endl;
       arena->deleteNode(curretNode->getUniqueId());
     }
   }
@@ -547,6 +435,7 @@ void Among::enforceConstraint(Arena* arena,
                               std::vector<std::vector<Node*>>& mddRepresentation,
                               std::vector<Node*>& newNodesList) const
 {
+  
   enforceConstraintTopDown(arena, mddRepresentation);
   enforceConstraintBottomUp(arena, mddRepresentation);
 }

@@ -192,12 +192,17 @@ void runMDDOpt()
 
   // Create the constraint
   auto allDiff = std::make_shared<AllDifferent>();
-  allDiff->setScope(problem->getVariables());
+  std::vector<Variable::SPtr> scope;
+  scope.push_back( problem->getVariables()[0] );
+  scope.push_back( problem->getVariables()[2] );
+  allDiff->setScope( scope );
+
+  // allDiff->setScope(problem->getVariables());
   problem->addConstraint(allDiff);
 
   auto among = std::make_shared<Among>();
   among->setScope(problem->getVariables());
-  among->setParameters({5}, 1, 1);
+  among->setParameters({2, 5}, 2, 2);
   // problem->addConstraint(among);
 
   // Create the MDD

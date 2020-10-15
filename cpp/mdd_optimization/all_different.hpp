@@ -9,6 +9,7 @@
 #include <cstdint>  // for int64_t
 #include <memory>
 #include <string>
+#include <set>
 
 #include <sparsepp/spp.h>
 
@@ -61,6 +62,9 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
   std::vector<ValuesSet> pStatesList;
 };
 
+
+
+
 class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
  public:
    using UPtr = std::unique_ptr<AllDifferent>;
@@ -95,7 +99,7 @@ class SYS_EXPORT_CLASS AllDifferent : public MDDConstraint {
                           std::vector<std::vector<Node*>>& mddRepresentation,
                           std::vector<Node*>& newNodesList) const;
 
-   std::vector<int> getConstraintValuesForPath(const std::vector<Edge*>& path) const;
+   NodeDomain getConstraintValuesForPath(const std::vector<Edge*>& path) const;
 
 };
 

@@ -6,8 +6,10 @@
 
 #pragma once
 
+#include <queue>
 #include <cstdint>  // for uint32_t
 #include <memory>   // for std::shared_ptr
+
 
 #include "mdd_optimization/arena.hpp"
 #include "mdd_optimization/constraint.hpp"
@@ -61,6 +63,10 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
 
    /// Returns the initial state of the DP transformation chain
    virtual DPState::SPtr getInitialDPState() const noexcept = 0;
+
+   void eraseUnfeasibleSuccessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const;
+   void eraseUnfeasiblePredecessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const;
+
 };
 
 }  // namespace mdd

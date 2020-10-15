@@ -165,9 +165,6 @@ class SYS_EXPORT_CLASS Among : public MDDConstraint {
    void enforceConstraintBottomUp(Arena* arena,
                                   std::vector<std::vector<Node*>>& mddRepresentation) const;
 
-   void eraseUnfeasibleSuccessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const;
-   void eraseUnfeasiblePredecessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const;
-
 };
 
 
