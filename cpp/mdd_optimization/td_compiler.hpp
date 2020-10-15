@@ -74,9 +74,6 @@ class SYS_EXPORT_CLASS TDCompiler {
   /// MDD data structure
   TopDownMDD::UPtr pMDDGraph{nullptr};
 
-  /// Flag indicating whether or not the compiler run for the first time
-  bool pFirstRun{true};
-
   /// Flag indicating whether or not the MDD was built as an exact MDD
   bool pIsExactMDD{true};
 

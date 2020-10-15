@@ -6,6 +6,8 @@
 #include <stdexcept>  // for std::exception
 #include <utility>    // for std::move
 
+// #define DEBUG
+
 namespace mdd {
 
 TDMDDOptimizer::TDMDDOptimizer(MDDProblem::SPtr problem)
@@ -67,6 +69,16 @@ void TDMDDOptimizer::updateSolutionCost(double cost)
   }
 }
 
+void TDMDDOptimizer::updateSolutionLowerBound(double cost)
+{
+  if (cost <= pBestCost && cost > pAdmissibleLowerBound)
+  {
+    pAdmissibleLowerBound = cost;
+    std::cout << "New lower bound: " << pAdmissibleLowerBound << " at " <<
+            pTimer->getWallClockTimeMsec() << " msec" <<  std::endl;
+  }
+}
+
 void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
 {
   // Start the timer
@@ -95,7 +107,15 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
 
     // Obtain an incumbent by building a restricted MDD starting from "node"
     // Keep a copy of the node for future possible branching
+
+#ifdef DEBUG
+    tools::Timer timerRestricted;
+    std::cout << "Build restricted MDD\n";
+#endif
     pCompiler->compileMDD(TDCompiler::CompilationMode::Restricted, DPState::UPtr(node->clone()));
+#ifdef DEBUG
+    std::cout << "Done in (msec): " << timerRestricted.getWallClockTimeMsec() << std::endl;
+#endif
 
     // Get the incumbent, i.e., the best solution found so far.
     // Note: incumbent should be found with a min/max path visit.
@@ -111,21 +131,28 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
     // Check if the MDD is exact, if not proceed with branch and bound
     if (!pCompiler->isExact())
     {
-      // Branch on the node and obtain a lower bound by
-      // building a relaxed MDD
+      // Branch on the node and obtain a lower bound by building a relaxed MDD
+#ifdef DEBUG
+      tools::Timer timerRelaxed;
+      std::cout << "Build relaxed MDD\n";
+#endif
       pCompiler->compileMDD(TDCompiler::CompilationMode::Relaxed, std::move(node));
+#ifdef DEBUG
+      std::cout << "Done in (msec): " << timerRelaxed.getWallClockTimeMsec() << std::endl;
+#endif
 
       // Get the lower bound
       path.clear();
       bestCost = std::numeric_limits<double>::max();
-      dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, 0.0);
+      dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, 0.0, true);
+      updateSolutionLowerBound(bestCost);
 
       // Check if the percentage (delta) between lower bound and upper bound is acceptable
-      if (bestCost < pBestCost)
+      if (pAdmissibleLowerBound < pBestCost)
       {
-        const auto diffBounds = pBestCost - bestCost;
+        const auto diffBounds = pBestCost - pAdmissibleLowerBound;
         const auto optGap = (diffBounds / pBestCost) * 100.0;
-        if (optGap < pDeltaOnSolution)
+        if (optGap <= pDeltaOnSolution)
         {
           // Return on delta between lower and upper bound
           std::cout << "Exit on optimality gap of " << optGap <<
@@ -185,7 +212,7 @@ void TDMDDOptimizer::processCutset()
     DPState* exactNode{nullptr};
     for (uint32_t lidx{1}; lidx < mdd->getNumLayers(); ++lidx)
     {
-      if (mdd->isReachable(lidx, idx))
+      if (mdd->isReachable(lidx, idx) && mdd->getNodeState(lidx+1, idx)->isExact())
       {
         exactNode = mdd->getNodeState(lidx+1, idx);
       }
@@ -198,13 +225,20 @@ void TDMDDOptimizer::processCutset()
     if (exactNode != nullptr)
     {
       frontier.push_back(exactNode);
+#ifdef DEBUG
+      std::cout << "EXACT NODE: " << std::endl;
+      std::cout << exactNode->toString() << std::endl;
+#endif
     }
   }
 
+#ifdef DEBUG
   if (frontier.size() < mdd->getMaxWidth())
   {
     std::cout << "Incomplete frontier of size " << frontier.size() << std::endl;
+    getchar();
   }
+#endif
 
   // Set the nodes of the frontier in the queue
   for (auto node : frontier)
@@ -215,7 +249,7 @@ void TDMDDOptimizer::processCutset()
 
 
 void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<int64_t>& path,
-                            double& bestCost, const uint32_t currLayer, double cost)
+                            double& bestCost, const uint32_t currLayer, double cost, bool isRelaxed)
 {
   if (currLayer == mddGraph->getNumLayers())
   {
@@ -235,12 +269,22 @@ void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<in
       continue;
     }
 
+    if (isRelaxed && bestCost < std::numeric_limits<double>::max())
+    {
+      continue;
+    }
+
     // Get the head of the edge and prepare next state
     auto head = mddGraph->getNodeState(currLayer, edge->head);
     for (auto val : edge->valuesList)
     {
       // Consider all values on a parallel edge
       const auto currentCost = state->getCostPerValue(val);
+      if (currentCost > bestCost)
+      {
+        // break on higher cost than the best cost found so far
+        continue;
+      }
 
       // Update next state
       path.push_back(val);
@@ -249,10 +293,13 @@ void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<in
 
       // Call the recursion
       cost += currentCost;
-      dfsRec(mddGraph, head, path, bestCost, currLayer + 1, cost);
+      dfsRec(mddGraph, head, path, bestCost, currLayer + 1, cost, isRelaxed);
       cost -= currentCost;
 
       path.pop_back();
+
+      // Consider only the first value
+      break;
     }
   }
 }

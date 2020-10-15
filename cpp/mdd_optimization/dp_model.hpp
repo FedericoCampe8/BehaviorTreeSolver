@@ -198,7 +198,7 @@ class SYS_EXPORT_STRUCT DPState {
   bool pTopDownFiltering{true};
 
   /// Flag indicating whether or not this is an exact state
-  bool pIsExact{false};
+  bool pIsExact{true};
 
   /// Cumulative path found up to this state
   std::vector<int64_t> pPath;

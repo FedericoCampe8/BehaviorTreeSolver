@@ -39,11 +39,7 @@ bool TDCompiler::compileMDD(CompilationMode compilationMode, DPState::UPtr state
   if (state != nullptr)
   {
     // Reset the MDD
-    if (!pFirstRun)
-    {
-      pMDDGraph->resetGraph();
-      pFirstRun = false;
-    }
+    pMDDGraph->resetGraph();
 
     // Build the MDD up to "state"
     buildMDDUpToState(std::move(state));
@@ -66,20 +62,10 @@ void TDCompiler::buildMDDUpToState(DPState::UPtr node)
   const auto& path = node->cumulativePath();
   for (int valIdx{0}; valIdx < static_cast<int>(path.size()); ++valIdx)
   {
-    DPState* headNode{nullptr};
-    if (valIdx < static_cast<int>(path.size()) - 1)
-    {
-      // Create a new node
-      headNode = pMDDGraph->getNodeState(valIdx+1, 0);
-      headNode->updateState(tailNode, path.at(valIdx));
-      headNode->setNonDefaultState();
-    }
-    else
-    {
-      // Use "topNode" as last node
-      headNode = node.get();
-      headNode->setNonDefaultState();
-    }
+    // Create a new node
+    auto headNode = pMDDGraph->getNodeState(valIdx+1, 0);
+    headNode->updateState(tailNode, path.at(valIdx));
+    headNode->setNonDefaultState();
 
     // Activate the corresponding edge
     auto edge = pMDDGraph->getEdgeMutable(valIdx, 0, 0);
@@ -365,8 +351,9 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
 
     // Replace the state in the MDD
     const auto val = stateList.at(repPtr)->cumulativePath().back();
+    const bool isExact = stateList[repPtr]->isExact();
     pMDDGraph->replaceState(nextLayer, defaultStateIdx, std::move(stateList[repPtr]));
-    pMDDGraph->getNodeState(nextLayer, defaultStateIdx)->setExact(true);
+    pMDDGraph->getNodeState(nextLayer, defaultStateIdx)->setExact(isExact);
 
     // Activate a new edge
     auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, defaultStateIdx);
@@ -397,7 +384,8 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
         // the exact state
         if (nextStateList->at(idx)->isStrictlyEqual(currState))
         {
-          nextStateList->at(idx)->setExact(true);
+          nextStateList->at(idx)->setExact(nextStateList->at(idx)->isExact() &&
+                                           currState->isExact());
         }
 
         // If two states are equal, they can be merged,
@@ -444,6 +432,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
     const auto val = currState->cumulativePath().back();
     (*nextStateList)[stateIdx]->mergeState(currState);
     (*nextStateList)[stateIdx]->setExact(false);
+    (*nextStateList)[stateIdx]->setNonDefaultState();
 
     auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, stateIdx);
     if (!edge->hasValueSet())

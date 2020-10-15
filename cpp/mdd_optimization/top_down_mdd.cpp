@@ -54,12 +54,6 @@ TopDownMDD::TopDownMDD(MDDProblem::SPtr problem, uint32_t width)
   // Edges fully connect the nodes on that layer with the nodes
   // on the next layer starting from the root node
   pNumLayers = static_cast<uint32_t>(getVariablesList().size());
-  for (uint32_t lidx{0}; lidx < pNumLayers+1; ++lidx)
-  {
-    // Set the position of the first default node on the current layer.
-    // At the beginning, all nodes will be default nodes
-    pStartDefaultStateIdxOnLevel[lidx] = 0;
-  }
 
   // Allocate all edges in the MDD
   allocateEdges();
@@ -206,7 +200,6 @@ void TopDownMDD::rebuildMDDFromState(DPState::UPtr state)
     auto nextNode = getNodeState(layerIdx + 1, 0);
     nextNode->updateState(tailNode, path.at(layerIdx));
     nextNode->setNonDefaultState();
-    pStartDefaultStateIdxOnLevel[layerIdx + 1]++;
 
     // Update the pointer to the tail node
     tailNode = nextNode;
@@ -234,14 +227,8 @@ void TopDownMDD::resetGraph()
       // Reset the state and make sure it is set as a default state
       state->resetState();
       state->setDefaultState();
-      state->setExact(false);
+      state->setExact(true);
     }
-  }
-
-  // Reset counter on first default state
-  for (auto& it : pStartDefaultStateIdxOnLevel)
-  {
-    it.second = 0;
   }
 }
 
@@ -259,18 +246,22 @@ MDDTDEdge* TopDownMDD::getEdgeMutable(uint32_t layerIdx,  uint32_t tailIdx, uint
 
 uint32_t TopDownMDD::getIndexOfFirstDefaultStateOnLayer(uint32_t layerIdx) const
 {
-  return pStartDefaultStateIdxOnLevel.at(layerIdx);
+  uint32_t idx{0};
+  for (const auto& state : pMDDStateMatrix.at(layerIdx))
+  {
+    if (state->isDefaultState())
+    {
+      return idx;
+    }
+    idx++;
+  }
+  return pMaxWidth;
+  // return pStartDefaultStateIdxOnLevel.at(layerIdx);
 }
 
 DPState::UPtr TopDownMDD::replaceState(uint32_t layerIdx, uint32_t nodeIdx, DPState::UPtr state)
 {
   auto stateToReplace = getNodeState(layerIdx, nodeIdx);
-  if(stateToReplace->isDefaultState())
-  {
-    // Default states should be replaced one at a time from left to right
-    assert(nodeIdx == pStartDefaultStateIdxOnLevel[layerIdx]);
-    pStartDefaultStateIdxOnLevel[layerIdx]++;
-  }
 
   // Keep track of the state to replace
   auto oldState = std::move(pMDDStateMatrix[layerIdx][nodeIdx]);

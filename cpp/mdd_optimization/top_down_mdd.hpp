@@ -233,9 +233,6 @@ class SYS_EXPORT_CLASS TopDownMDD {
   /// Collection of states in the MDD
   MDDStateMatrix pMDDStateMatrix;
 
-  /// Map of tracking the index of the first default state on each layer
-  spp::sparse_hash_map<uint32_t, uint32_t> pStartDefaultStateIdxOnLevel;
-
   /// Pre-allocate all edges in the MDD.
   /// @note edges are allocated on the heap
   void allocateEdges();
