@@ -318,6 +318,7 @@ std::string TSPPDState::toString() const noexcept
   std::stringstream ss;
   ss << "State ID: " << getUniqueId() << '\n';
   ss << "Cost: " << pCost << '\n';
+  ss << "Is exact: " << (pIsExact ? "true" : "false") << '\n';
   ss << "Path: ";
   for (auto v : pPath)
   {

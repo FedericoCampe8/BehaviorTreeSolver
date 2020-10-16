@@ -30,7 +30,15 @@ std::string MDDTDEdge::toString() const noexcept
 {
   std::string info{""};
   info += "edge (" + std::to_string(layer) + "): " +
-          std::to_string(tail) + " -> " + std::to_string(head);
+          std::to_string(tail) + " -> " + std::to_string(head) + '\n';
+  info += isActive ? "active\n" : "not active\n";
+  info += "Path: ";
+  for (auto val : valuesList)
+  {
+    info += std::to_string(val) + ", ";
+  }
+  info.pop_back();
+  info.pop_back();
   return info;
 }
 

@@ -36,6 +36,7 @@ bool TDCompiler::compileMDD(CompilationMode compilationMode, DPState::UPtr state
   // Reset exact MDD flag
   pIsExactMDD = true;
 
+  // Reset the graph
   if (state != nullptr)
   {
     // Reset the MDD
@@ -93,6 +94,7 @@ bool TDCompiler::buildMDD(CompilationMode compilationMode)
     auto var = pMDDGraph->getVariablePerLayer(lidx);
 
     // Go over each node on the current layer and calculate next layer's nodes
+    uint32_t numGenStates{0};
     for (uint32_t nidx{0}; nidx < pMDDGraph->getMaxWidth(); ++nidx)
     {
       if (lidx == 0 && nidx > 0)
@@ -159,7 +161,8 @@ bool TDCompiler::buildMDD(CompilationMode compilationMode)
         // best states at each iteration and overrides them
         newActiveEdgeList = restrictNextLayerStatesFromNode(lidx, nidx,
                                                             var->getLowerBound(),
-                                                            var->getUpperBound());
+                                                            var->getUpperBound(),
+                                                            numGenStates);
       }
 
       // All edges have "nidx" as tail node and lead to a node on layer "lidx+1"
@@ -181,6 +184,16 @@ bool TDCompiler::buildMDD(CompilationMode compilationMode)
         // Activate given layer
         edgePair.first->isActive = true;
       }
+    }  // for all nodes
+
+    // Check for exact MDDs
+    if (compilationMode == CompilationMode::Restricted)
+    {
+      // The MDD is NOT exact if a layer exceeds the width
+      if (numGenStates > pMDDGraph->getMaxWidth())
+      {
+        pIsExactMDD = false;
+      }
     }
 
     if (!layerHasSuccessors)
@@ -193,7 +206,7 @@ bool TDCompiler::buildMDD(CompilationMode compilationMode)
 }
 
 std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFromNode(
-        uint32_t currLayer, uint32_t currNode, int64_t lb, int64_t ub)
+        uint32_t currLayer, uint32_t currNode, int64_t lb, int64_t ub, uint32_t& generatedStates)
 {
   std::vector<std::pair<MDDTDEdge*, bool>> newConnections;
 
@@ -208,16 +221,11 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
   // Get the list of best "width" next states reachable from the current state
   // according to the heuristic implemented in the DP model
   auto stateList = currState->nextStateList(lb, ub, getIncumbent());
+  generatedStates += static_cast<uint32_t>(stateList.size());
 
   // Check whether or not to use next states
   const auto width = static_cast<uint32_t>(nextStateList->size());
   std::sort(stateList.begin(), stateList.end(), cmpStateList);
-
-  // The MDD is NOT exact if a layer exceeds the width
-  if (static_cast<uint32_t>(stateList.size()) > width)
-  {
-    pIsExactMDD = false;
-  }
 
   // First replace all default states
   uint32_t repPtr{0};

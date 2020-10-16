@@ -100,15 +100,16 @@ class SYS_EXPORT_CLASS TDCompiler {
    * \brief given the current node, replace all states on next layer with
    *        the states that are obtained by "currNode" using its function "next".
    *        States are replaced only if their cost is lower than current cost (heuristic).
+   *        Note: "generatedStates" is the number of next states generated at the current level
+   *        with the current node and it is used to determine exact MDDs.
    * \return the list of edges that should be activated due to state replacement.
    *         For each edge, there is a Boolean flag: if true, every current active edge leading
    *         to that node should be deactivated (the state has been completely replaced).
    *         If false, any active edge should remain active and a new active edge should be added
    *         (the state is shared).
    */
-  std::vector<std::pair<MDDTDEdge*, bool>> restrictNextLayerStatesFromNode(uint32_t currLayer,
-                                                                           uint32_t currNode,
-                                                                           int64_t lb, int64_t ub);
+  std::vector<std::pair<MDDTDEdge*, bool>> restrictNextLayerStatesFromNode(
+          uint32_t currLayer, uint32_t currNode, int64_t lb, int64_t ub, uint32_t& generatedStates);
 
   /**
    * \brief given the current node, merge all states on next layer with

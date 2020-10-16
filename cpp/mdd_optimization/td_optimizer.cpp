@@ -6,7 +6,7 @@
 #include <stdexcept>  // for std::exception
 #include <utility>    // for std::move
 
-// #define DEBUG
+//#define DEBUG
 
 namespace mdd {
 
@@ -112,7 +112,8 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
     tools::Timer timerRestricted;
     std::cout << "Build restricted MDD\n";
 #endif
-    pCompiler->compileMDD(TDCompiler::CompilationMode::Restricted, DPState::UPtr(node->clone()));
+    const auto builtRestricted = pCompiler->compileMDD(
+            TDCompiler::CompilationMode::Restricted, DPState::UPtr(node->clone()));
 #ifdef DEBUG
     std::cout << "Done in (msec): " << timerRestricted.getWallClockTimeMsec() << std::endl;
 #endif
@@ -129,17 +130,26 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
     updateSolutionCost(bestCost);
 
     // Check if the MDD is exact, if not proceed with branch and bound
-    if (!pCompiler->isExact())
+    if (!pCompiler->isExact() || !builtRestricted)
     {
       // Branch on the node and obtain a lower bound by building a relaxed MDD
 #ifdef DEBUG
       tools::Timer timerRelaxed;
       std::cout << "Build relaxed MDD\n";
 #endif
-      pCompiler->compileMDD(TDCompiler::CompilationMode::Relaxed, std::move(node));
+      const auto builtRelaxed = pCompiler->compileMDD(
+              TDCompiler::CompilationMode::Relaxed, std::move(node));
 #ifdef DEBUG
       std::cout << "Done in (msec): " << timerRelaxed.getWallClockTimeMsec() << std::endl;
 #endif
+
+      if (!builtRelaxed)
+      {
+        // The built was not successful meaning that the compiler couldn't find
+        // an MDD that led to a cost lower than the incumbent.
+        // Continue with next node in the queue
+        continue;
+      }
 
       // Get the lower bound
       path.clear();
@@ -162,13 +172,24 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
       }
 
       // If it is not possible to prune the search using this bound,
-      // identify and exact cutset of the MDD and add the nodes of the cutset
+      // identify an exact cutset of the MDD and add the nodes of the cutset
       // into the queue
-      if (bestCost < pBestCost)
+      if (bestCost < pBestCost || pQueue.empty())
       {
         processCutset();
       }
     }
+    else
+    {
+      std::cout << "Exit exact restricted MDD at (msec.) " <<
+              pTimer->getWallClockTimeMsec() << std::endl;
+    }
+  }
+
+  if (pQueue.empty())
+  {
+    std::cout << "Exit on empty queue at (msec.) " <<
+            pTimer->getWallClockTimeMsec() << std::endl;
   }
 }
 
@@ -178,6 +199,13 @@ DPState::UPtr TDMDDOptimizer::selectNodeForBranching()
   double bestCost{std::numeric_limits<double>::max()};
   for (int idx{0}; idx < static_cast<int>(pQueue.size()); ++idx)
   {
+    if (pQueue.at(idx)->cumulativeCost() >= pBestCost)
+    {
+      pQueue.erase(pQueue.begin() + idx);
+      idx = idx - 1;
+      continue;
+    }
+
     if (pQueue.at(idx)->cumulativeCost() < bestCost)
     {
       bestCost = pQueue.at(idx)->cumulativeCost();
@@ -185,16 +213,14 @@ DPState::UPtr TDMDDOptimizer::selectNodeForBranching()
     }
   }
 
+  DPState::UPtr outNode{nullptr};
   if (bestIdx >= 0)
   {
-    auto bestState = std::move(pQueue[bestIdx]);
+    outNode = std::move(pQueue[bestIdx]);
     pQueue.erase(pQueue.begin() + bestIdx);
-    return std::move(bestState);
   }
-  else
-  {
-    return nullptr;
-  }
+
+  return std::move(outNode);
 }
 
 void TDMDDOptimizer::processCutset()
@@ -206,44 +232,89 @@ void TDMDDOptimizer::processCutset()
   // Get the pointer to the MDD
   auto mdd = pCompiler->getMDDMutable();
   std::vector<DPState*> frontier;
+  frontier.resize(mdd->getMaxWidth(), nullptr);
   for (uint32_t idx{0}; idx < mdd->getMaxWidth(); ++idx)
   {
     // For each vertical layer traverse top down to find the lowest exact node
+    // excluding the root and the tail node
     DPState* exactNode{nullptr};
-    for (uint32_t lidx{1}; lidx < mdd->getNumLayers(); ++lidx)
+    for (uint32_t lidx{1}; lidx < mdd->getNumLayers()-1; ++lidx)
     {
-      if (mdd->isReachable(lidx, idx) && mdd->getNodeState(lidx+1, idx)->isExact())
+      if (mdd->isReachable(lidx, idx) && mdd->getNodeState(lidx, idx)->isExact())
       {
-        exactNode = mdd->getNodeState(lidx+1, idx);
-      }
-      else
-      {
-        break;
+        exactNode = mdd->getNodeState(lidx, idx);
       }
     }
 
     if (exactNode != nullptr)
     {
-      frontier.push_back(exactNode);
+      frontier[idx] = exactNode;
 #ifdef DEBUG
+      /*
       std::cout << "EXACT NODE: " << std::endl;
       std::cout << exactNode->toString() << std::endl;
+      std::cout << "at layer: " << exactNode->cumulativePath().size() - 1 << std::endl;
+      getchar();
+      */
 #endif
     }
   }
 
-#ifdef DEBUG
-  if (frontier.size() < mdd->getMaxWidth())
-  {
-    std::cout << "Incomplete frontier of size " << frontier.size() << std::endl;
-    getchar();
-  }
-#endif
-
   // Set the nodes of the frontier in the queue
   for (auto node : frontier)
   {
-    pQueue.push_back(DPState::UPtr(node->clone()));
+    if (node != nullptr)
+    {
+      pQueue.push_back(DPState::UPtr(node->clone()));
+    }
+  }
+
+  // If the frontier doesn't have an exact cutset,
+  // i.e., a node for each vertical layer, force nodes into the cutset
+  for (uint32_t idx{0}; idx < mdd->getMaxWidth(); ++idx)
+  {
+    if (frontier[idx] != nullptr)
+    {
+      continue;
+    }
+
+    // Find the first layer that contains "width" nodes
+    for (uint32_t lidx{1}; lidx < mdd->getNumLayers()-1; ++lidx)
+    {
+      if (mdd->isReachable(lidx, idx))
+      {
+        assert(!mdd->getNodeState(lidx+1, idx)->isExact());
+
+        // The node is reachable but it is not exact
+        // otherwise it would have been in the cutset
+        const auto queueSize = pQueue.size();
+        auto edgeList = mdd->getEdgeOnHeadMutable(lidx-1, idx);
+        for (auto edge : edgeList)
+        {
+          auto tailNode = mdd->getNodeState(lidx-1, edge->tail);
+          assert(tailNode->isExact());
+
+          // Create a new node for each value on the edge
+          for (auto val : edge->valuesList)
+          {
+            auto clonedNode = tailNode->clone();
+            clonedNode->updateState(clonedNode, val);
+            clonedNode->setExact(true);
+            clonedNode->setNonDefaultState();
+
+            // Store the node in the queue
+            pQueue.push_back(DPState::UPtr(clonedNode));
+          }
+        }
+
+        // Check if nodes for the current vertical layer has been added.
+        // If so, continue with next vertical layer
+        if (pQueue.size() > queueSize)
+        {
+          break;
+        }
+      }
+    }
   }
 }
 
