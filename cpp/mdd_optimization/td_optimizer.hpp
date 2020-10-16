@@ -120,10 +120,13 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
   /// a copy of each node in the cutset into the queue
   void processCutset();
 
+  /// Calculates the min-cost path in a DAG and returns the minimum cost
+  double calculateMinPath();
+
   /// Runs DFS to find the minimum value on the MDD starting from
   /// the given node
   void dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<int64_t>& path, double& bestCost,
-              const uint32_t currLayer, double cost=0.0, bool isRelaxed=false);
+              const uint32_t currLayer, bool isRelaxed=false);
 };
 
 }  // namespace mdd

@@ -29,17 +29,13 @@ namespace mdd {
  *        An edge can be active (i.e., connecting two edges)
  *        or not and it can have one or more domain values.
  *        If the edge has more than one value, it is a "parallel" edge.
+ *        By default, an edge is a single edge with a default value of +INF.
  */
 struct SYS_EXPORT_STRUCT MDDTDEdge {
   using UPtr = std::unique_ptr<MDDTDEdge>;
 
   MDDTDEdge();
   MDDTDEdge(int32_t tailLayer, int32_t tailIdx=-1, int32_t headIdx=-1);
-
-  /**
-   * \brief returns whether or not this is a parallel edge.
-   */
-  bool isParallel() const noexcept { return valuesList.size() > 1; }
 
   /**
    * \brief returns true if the first value on this edge is set.
@@ -66,6 +62,9 @@ struct SYS_EXPORT_STRUCT MDDTDEdge {
 
   /// Head node index
   int32_t head{-1};
+
+  /// Cost of this arc for each possible value on it
+  std::vector<double> costList;
 
   /// List of values on this edge
   std::vector<int64_t> valuesList;
@@ -162,6 +161,11 @@ class SYS_EXPORT_CLASS TopDownMDD {
    * \brief returns the list of active edges on the given layer.
    */
   std::vector<MDDTDEdge*> getActiveEdgesOnLayer(uint32_t layerIdx) const;
+
+  /**
+   * \brief returns the list of active edges on the given layer with given tail.
+   */
+  std::vector<MDDTDEdge*> getActiveEdgesOnLayerGivenTail(uint32_t layerIdx, uint32_t tailIdx) const;
 
   /**
    * \brief replace the state "nodeIdx" at layer "layerIdx" with "state".

@@ -153,6 +153,11 @@ class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
    /// Merges the given list of nodes and returns the representative merged node
    Node* mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const noexcept override;
 
+   /**
+    * \brief calculates and returns the cost of the given assignment.
+    */
+   double calculateCost(const std::vector<int64_t>& path) const override;
+
    /// Returns the initial DP state
    DPState::SPtr getInitialDPState() const noexcept override;
 

@@ -15,6 +15,7 @@ MDDTDEdge::MDDTDEdge()
   head(-1)
 {
   valuesList.push_back(std::numeric_limits<int64_t>::max());
+  costList.push_back(std::numeric_limits<double>::max());
 }
 
 MDDTDEdge::MDDTDEdge(int32_t tailLayer, int32_t tailIdx, int32_t headIdx)
@@ -24,6 +25,7 @@ MDDTDEdge::MDDTDEdge(int32_t tailLayer, int32_t tailIdx, int32_t headIdx)
   head(headIdx)
 {
   valuesList.push_back(std::numeric_limits<int64_t>::max());
+  costList.push_back(std::numeric_limits<double>::max());
 }
 
 std::string MDDTDEdge::toString() const noexcept
@@ -224,6 +226,8 @@ void TopDownMDD::resetGraph()
       edge->isActive = false;
       edge->valuesList.clear();
       edge->valuesList.push_back(std::numeric_limits<int64_t>::max());
+      edge->costList.clear();
+      edge->costList.push_back(std::numeric_limits<double>::max());
     }
   }
 
@@ -283,6 +287,22 @@ std::vector<MDDTDEdge*> TopDownMDD::getActiveEdgesOnLayer(uint32_t layerIdx) con
   std::vector<MDDTDEdge*> edgeList;
   for (const auto& edge : pLayerEdgeList.at(layerIdx))
   {
+    if (edge->isActive)
+    {
+      edgeList.push_back(edge.get());
+    }
+  }
+  return edgeList;
+}
+
+std::vector<MDDTDEdge*> TopDownMDD::getActiveEdgesOnLayerGivenTail(uint32_t layerIdx,
+                                                                   uint32_t tailIdx) const
+{
+  std::vector<MDDTDEdge*> edgeList;
+  uint32_t start{tailIdx * pMaxWidth};
+  for (uint32_t idx{0}; idx < pMaxWidth; ++idx)
+  {
+    const auto& edge = pLayerEdgeList.at(layerIdx).at(start + idx);
     if (edge->isActive)
     {
       edgeList.push_back(edge.get());

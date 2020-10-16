@@ -145,7 +145,7 @@ void runTSPPD()
 {
   using namespace mdd;
 
-  std::string instancePath{"../cpp/mdd_client/data/grubhub-15-9.json"}; // 03-0
+  std::string instancePath{"../cpp/mdd_client/data/grubhub-06-0.json"}; //  15-9
   std::ifstream datafile(instancePath);
   std::string dataString((std::istreambuf_iterator<char>(datafile)),
                          (std::istreambuf_iterator<char>()));
@@ -250,7 +250,7 @@ void runTSPPD()
   std::cout << "Wallclock time build (msec.): " << timerMDD.getWallClockTimeMsec() << std::endl;
   std::cout << "Number of solutions found " << tdOptimizer.getNumSolutions() << std::endl;
   std::cout << "UPPER BOUND " << tdOptimizer.getBestCost() << std::endl;
-  std::cout << "LOWER BOUND " << tdOptimizer.getBestLowerBoundOnCost() << std::endl;
+  // std::cout << "LOWER BOUND " << tdOptimizer.getBestLowerBoundOnCost() << std::endl;
   tdOptimizer.printMDD("topdown_mdd");
   return;
 

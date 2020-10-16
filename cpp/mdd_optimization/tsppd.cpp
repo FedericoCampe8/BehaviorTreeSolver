@@ -124,12 +124,13 @@ bool TSPPDState::isFeasibleValue(int64_t val, double incumbent) const noexcept
 bool TSPPDState::isEqual(const DPState* other) const noexcept
 {
   // A state is equivalent to another if the set of next reachable nodes is the same
-  return pDomain == reinterpret_cast<const TSPPDState*>(other)->pDomain;
+  //return pDomain == reinterpret_cast<const TSPPDState*>(other)->pDomain;
+  return false;
 }
 
 bool TSPPDState::isStrictlyEqual(const DPState* other) const noexcept
 {
-  if (!this->isEqual(other))
+  if (pDomain != reinterpret_cast<const TSPPDState*>(other)->pDomain)
   {
     return false;
   }
@@ -161,7 +162,7 @@ void TSPPDState::resetState() noexcept
   pPath.clear();
 
   // Set this state as default state
-  this->setNonDefaultState(true);
+  this->setDefaultState();
 }
 
 DPState* TSPPDState::clone() const noexcept
@@ -381,6 +382,16 @@ Node* TSPPD::mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const
     mergedNode->getDPState()->mergeState(node->getDPState());
   }
   return mergedNode;
+}
+
+double TSPPD::calculateCost(const std::vector<int64_t>& path) const
+{
+  double cost{0.0};
+  for (uint32_t idx{0}; idx < static_cast<int64_t>(path.size()) - 1; ++idx)
+  {
+    cost += pCostMatrix.at(path.at(idx)).at(path.at(idx+1));
+  }
+  return cost;
 }
 
 DPState::SPtr TSPPD::getInitialDPState() const noexcept

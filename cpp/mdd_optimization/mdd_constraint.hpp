@@ -41,6 +41,14 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
    /// Sets this constraint for top-down separation
    virtual void setForTopDownFiltering() noexcept {}
 
+   /**
+    * \brief calculates and returns the cost of the given assignment.
+    */
+   virtual double calculateCost(const std::vector<int64_t>&) const
+   {
+     return std::numeric_limits<double>::max();
+   }
+
    /// Applies some heuristics to select a subset of nodes in the given layer to merge
    virtual std::vector<Node*> mergeNodeSelect(
            int layer, const std::vector<std::vector<Node*>>& mddRepresentation) const noexcept = 0;

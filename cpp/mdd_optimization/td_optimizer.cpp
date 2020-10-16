@@ -74,8 +74,10 @@ void TDMDDOptimizer::updateSolutionLowerBound(double cost)
   if (cost <= pBestCost && cost > pAdmissibleLowerBound)
   {
     pAdmissibleLowerBound = cost;
+    /*
     std::cout << "New lower bound: " << pAdmissibleLowerBound << " at " <<
             pTimer->getWallClockTimeMsec() << " msec" <<  std::endl;
+    */
   }
 }
 
@@ -107,24 +109,24 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
 
     // Obtain an incumbent by building a restricted MDD starting from "node"
     // Keep a copy of the node for future possible branching
-
-#ifdef DEBUG
-    tools::Timer timerRestricted;
-    std::cout << "Build restricted MDD\n";
-#endif
     const auto builtRestricted = pCompiler->compileMDD(
             TDCompiler::CompilationMode::Restricted, DPState::UPtr(node->clone()));
-#ifdef DEBUG
-    std::cout << "Done in (msec): " << timerRestricted.getWallClockTimeMsec() << std::endl;
-#endif
 
     // Get the incumbent, i.e., the best solution found so far.
     // Note: incumbent should be found with a min/max path visit.
     // Here it is done using DFS.
     // TODO switch to min-path on directed acyclic graph
+    /*
+    if (builtRestricted)
+    {
+      std::cout << "PRINT RESTRICTED\n";
+      printMDD("restricted_mdd");
+      getchar();
+    }
+    */
     path.clear();
     bestCost = std::numeric_limits<double>::max();
-    dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, 0.0);
+    dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, false);
 
     // Update the solution cost
     updateSolutionCost(bestCost);
@@ -133,15 +135,8 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
     if (!pCompiler->isExact() || !builtRestricted)
     {
       // Branch on the node and obtain a lower bound by building a relaxed MDD
-#ifdef DEBUG
-      tools::Timer timerRelaxed;
-      std::cout << "Build relaxed MDD\n";
-#endif
       const auto builtRelaxed = pCompiler->compileMDD(
               TDCompiler::CompilationMode::Relaxed, std::move(node));
-#ifdef DEBUG
-      std::cout << "Done in (msec): " << timerRelaxed.getWallClockTimeMsec() << std::endl;
-#endif
 
       if (!builtRelaxed)
       {
@@ -154,9 +149,17 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
       // Get the lower bound
       path.clear();
       bestCost = std::numeric_limits<double>::max();
-      dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, 0.0, true);
-      updateSolutionLowerBound(bestCost);
 
+      /*
+      if (builtRelaxed)
+      {
+        std::cout << "PRINT RELAXED\n";
+        printMDD("relaxed_mdd");
+        getchar();
+      }
+      */
+      dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, true);
+      updateSolutionLowerBound(bestCost);
       // Check if the percentage (delta) between lower bound and upper bound is acceptable
       if (pAdmissibleLowerBound < pBestCost)
       {
@@ -174,7 +177,7 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
       // If it is not possible to prune the search using this bound,
       // identify an exact cutset of the MDD and add the nodes of the cutset
       // into the queue
-      if (bestCost < pBestCost || pQueue.empty())
+      if (bestCost < pBestCost)
       {
         processCutset();
       }
@@ -199,7 +202,9 @@ DPState::UPtr TDMDDOptimizer::selectNodeForBranching()
   double bestCost{std::numeric_limits<double>::max()};
   for (int idx{0}; idx < static_cast<int>(pQueue.size()); ++idx)
   {
-    if (pQueue.at(idx)->cumulativeCost() >= pBestCost)
+    const auto costPath = pProblem->getConstraints().at(0)->calculateCost(
+            pQueue.at(idx)->cumulativePath());
+    if (costPath >= pBestCost)
     {
       pQueue.erase(pQueue.begin() + idx);
       idx = idx - 1;
@@ -219,6 +224,7 @@ DPState::UPtr TDMDDOptimizer::selectNodeForBranching()
     outNode = std::move(pQueue[bestIdx]);
     pQueue.erase(pQueue.begin() + bestIdx);
   }
+  assert(pProblem->getConstraints().at(0)->calculateCost(outNode->cumulativePath()) < pBestCost);
 
   return std::move(outNode);
 }
@@ -232,69 +238,68 @@ void TDMDDOptimizer::processCutset()
   // Get the pointer to the MDD
   auto mdd = pCompiler->getMDDMutable();
   std::vector<DPState*> frontier;
+  std::vector<uint32_t> edgeLayerFrontier;
   frontier.resize(mdd->getMaxWidth(), nullptr);
-  for (uint32_t idx{0}; idx < mdd->getMaxWidth(); ++idx)
+  edgeLayerFrontier.resize(mdd->getMaxWidth());
+
+
+  uint32_t currLayer{0};
+  bool findNodes{true};
+  frontier[0] = mdd->getNodeState(0, 0);
+  while (findNodes && (currLayer < mdd->getNumLayers() - 1))
   {
-    // For each vertical layer traverse top down to find the lowest exact node
-    // excluding the root and the tail node
-    DPState* exactNode{nullptr};
-    for (uint32_t lidx{1}; lidx < mdd->getNumLayers()-1; ++lidx)
+    for (uint32_t w{0}; w < mdd->getMaxWidth(); ++w)
     {
-      if (mdd->isReachable(lidx, idx) && mdd->getNodeState(lidx, idx)->isExact())
+      auto node = frontier[w];
+      if (node == nullptr)
       {
-        exactNode = mdd->getNodeState(lidx, idx);
+        continue;
+      }
+
+      for (auto edge : mdd->getActiveEdgesOnLayerGivenTail(currLayer, w))
+      {
+        auto head = edge->head;
+        auto newNodePtr = mdd->getNodeState(currLayer+1, head);
+        frontier[head] = newNodePtr;
+        edgeLayerFrontier[head] = currLayer;
       }
     }
 
-    if (exactNode != nullptr)
+    // Try next layer
+    ++currLayer;
+
+    // Try to terminate the loop
+    findNodes = false;
+    for (auto node : frontier)
     {
-      frontier[idx] = exactNode;
-#ifdef DEBUG
-      /*
-      std::cout << "EXACT NODE: " << std::endl;
-      std::cout << exactNode->toString() << std::endl;
-      std::cout << "at layer: " << exactNode->cumulativePath().size() - 1 << std::endl;
-      getchar();
-      */
-#endif
+      if (node == nullptr)
+      {
+        // Continue looping to add nodes
+        findNodes = true;
+        break;
+      }
     }
   }
 
-  // Set the nodes of the frontier in the queue
-  for (auto node : frontier)
+  for (uint32_t w{0}; w < mdd->getMaxWidth(); ++w)
   {
-    if (node != nullptr)
+    auto node = frontier[w];
+    if (node->isExact())
     {
       pQueue.push_back(DPState::UPtr(node->clone()));
     }
-  }
-
-  // If the frontier doesn't have an exact cutset,
-  // i.e., a node for each vertical layer, force nodes into the cutset
-  for (uint32_t idx{0}; idx < mdd->getMaxWidth(); ++idx)
-  {
-    if (frontier[idx] != nullptr)
+    else
     {
-      continue;
-    }
-
-    // Find the first layer that contains "width" nodes
-    for (uint32_t lidx{1}; lidx < mdd->getNumLayers()-1; ++lidx)
-    {
-      if (mdd->isReachable(lidx, idx))
+      // Split the node on is incoming edges
+      auto layerForNotExactNode = edgeLayerFrontier[w];
+      for (auto edge : mdd->getActiveEdgesOnLayer(layerForNotExactNode))
       {
-        assert(!mdd->getNodeState(lidx+1, idx)->isExact());
-
-        // The node is reachable but it is not exact
-        // otherwise it would have been in the cutset
-        const auto queueSize = pQueue.size();
-        auto edgeList = mdd->getEdgeOnHeadMutable(lidx-1, idx);
-        for (auto edge : edgeList)
+        if (edge->head == w)
         {
-          auto tailNode = mdd->getNodeState(lidx-1, edge->tail);
-          assert(tailNode->isExact());
-
+          // This edge is active and it is pointing to the non exact node
           // Create a new node for each value on the edge
+          auto tailNode = mdd->getNodeState(layerForNotExactNode, edge->tail);
+          assert(tailNode->isExact());
           for (auto val : edge->valuesList)
           {
             auto clonedNode = tailNode->clone();
@@ -306,28 +311,80 @@ void TDMDDOptimizer::processCutset()
             pQueue.push_back(DPState::UPtr(clonedNode));
           }
         }
-
-        // Check if nodes for the current vertical layer has been added.
-        // If so, continue with next vertical layer
-        if (pQueue.size() > queueSize)
-        {
-          break;
-        }
       }
     }
   }
 }
 
+double TDMDDOptimizer::calculateMinPath()
+{
+  // Get the graph
+  auto mdd = pCompiler->getMDDMutable();
+
+  // Initialize the cost list
+  std::vector<double> nodeCostList;
+
+  // There is one root, one tail node and (num. layers - 1) * width nodes in the MDD
+  const auto width = mdd->getMaxWidth();
+  const auto numLayers = mdd->getNumLayers();
+  const auto numNodes = ((numLayers - 1) * width) + 2;
+  nodeCostList.resize(numNodes, std::numeric_limits<double>::max());
+
+  // Start from the root with cost zero
+  nodeCostList[0] = 0.0;
+
+  // Consider the nodes in a topological order.
+  // Note: the topological order is encapsulated by the structure of the MDD:
+  // top-down, left-to-right.
+  // The algorithm works like follows:
+  //  for each node u in topological order:
+  //    for each adjacent vertex v of u:
+  //      if (dist[v] > dist[u] + weight(u, v)) then
+  //        dist[v] = dist[u] + weight(u, v)
+  // Note: all the arcs in the graph must have their cost initialized
+  // before starting the min-path algorithm.
+  for (uint32_t lidx{0}; lidx < numLayers; ++lidx)
+  {
+    for (uint32_t nidx{0}; nidx < width; ++nidx)
+    {
+      if (lidx == 0 && nidx > 0)
+      {
+        // Break on layer 0 after the first node since layer 0
+        // contains only the root
+        break;
+      }
+
+      // Update all nodes reachable from the current node with their cost
+      // considering the edges connecting them
+      for (auto edge : mdd->getActiveEdgesOnLayerGivenTail(lidx, nidx))
+      {
+        // Get the index of the corresponding reachable node
+        assert(edge->tail == nidx);
+        const auto tailNodeIdx = (lidx == 0) ? 0 : ((lidx - 1) * width + edge->tail + 1);
+        const auto headNodeIdx = (lidx - 1) * width + edge->head + 1;
+        for (auto costVal : edge->costList)
+        {
+          if (nodeCostList.at(tailNodeIdx) + costVal < nodeCostList.at(headNodeIdx))
+          {
+            nodeCostList[headNodeIdx] = nodeCostList.at(tailNodeIdx) + costVal;
+          }
+        }
+      }
+    }
+  }
+  return nodeCostList.back();
+}
 
 void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<int64_t>& path,
-                            double& bestCost, const uint32_t currLayer, double cost, bool isRelaxed)
+                            double& bestCost, const uint32_t currLayer, bool isRelaxed)
 {
   if (currLayer == mddGraph->getNumLayers())
   {
     // Get the cost on the tail node
-    if (cost < bestCost)
+    const auto costPath = pProblem->getConstraints().at(0)->calculateCost(path);
+    if (costPath < bestCost)
     {
-      bestCost = cost;
+      bestCost = costPath;
     }
     return;
   }
@@ -340,7 +397,7 @@ void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<in
       continue;
     }
 
-    if (isRelaxed && bestCost < std::numeric_limits<double>::max())
+    if (false && isRelaxed && bestCost < std::numeric_limits<double>::max())
     {
       continue;
     }
@@ -349,24 +406,9 @@ void TDMDDOptimizer::dfsRec(TopDownMDD* mddGraph, DPState* state, std::vector<in
     auto head = mddGraph->getNodeState(currLayer, edge->head);
     for (auto val : edge->valuesList)
     {
-      // Consider all values on a parallel edge
-      const auto currentCost = state->getCostPerValue(val);
-      if (currentCost > bestCost)
-      {
-        // break on higher cost than the best cost found so far
-        continue;
-      }
-
-      // Update next state
-      path.push_back(val);
-      head->updateState(state, val);
-      head->forceCumulativePath(path);
-
       // Call the recursion
-      cost += currentCost;
-      dfsRec(mddGraph, head, path, bestCost, currLayer + 1, cost, isRelaxed);
-      cost -= currentCost;
-
+      path.push_back(val);
+      dfsRec(mddGraph, head, path, bestCost, currLayer + 1, isRelaxed);
       path.pop_back();
 
       // Consider only the first value

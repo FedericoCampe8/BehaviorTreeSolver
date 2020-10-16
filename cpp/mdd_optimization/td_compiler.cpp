@@ -242,6 +242,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
     // Replace the state in the MDD
     const auto val = stateList.at(repPtr)->cumulativePath().back();
     pMDDGraph->replaceState(nextLayer, defaultStateIdx, std::move(stateList[repPtr]));
+    pMDDGraph->getNodeState(nextLayer, defaultStateIdx)->setNonDefaultState();
 
     // Activate a new edge
     auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, defaultStateIdx);
@@ -331,6 +332,8 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
 
   // Get the start node
   auto currState = pMDDGraph->getNodeState(currLayer, currNode);
+  //std::cout << "TOP DOWN ON " << currLayer << " " << currNode << std::endl;
+  //std::cout << currState->toString() << std::endl; getchar();
   assert(currState != nullptr);
 
   // Get the list of next states to override (since only "width" states are allowed)
