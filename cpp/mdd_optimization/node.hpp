@@ -133,7 +133,7 @@ class SYS_EXPORT_CLASS Node {
   Edge* getSelectedEdge() const noexcept { return pSelectedEdge; }
 
   /// Return the path to node
-  const IncomingPathList& getIncomingPaths() const noexcept { return pIncomingPathsForEdge; }
+  IncomingPathList getIncomingPaths();
 
   /// Returns a string identifier for this node
   std::string getNodeStringId() const noexcept;

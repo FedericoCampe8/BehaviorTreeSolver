@@ -229,6 +229,7 @@ void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*
     std::vector<int> seenValues;
     std::vector<int> constraintIds;
 
+
     int firstLayerInConstraint = mddRepresentation.size(); int lastLayerInConstraint = 0;
 
     // Find which are the values that create conflict in this constraint
@@ -242,15 +243,15 @@ void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*
           firstLayerInConstraint = var->getId();
         }
 
-        for (int val : var->getAvailableValues()) {
-            if ( std::count(seenValues.begin(), seenValues.end(), val) ) {
-                if (std::count(conflictingValues.begin(), conflictingValues.end(), val) == 0) {
-                   conflictingValues.push_back( val );
-                }
-            } else {
-              seenValues.push_back( val );
-            }
-        }
+        // for (int val : var->getAvailableValues()) {
+        //     if ( std::count(seenValues.begin(), seenValues.end(), val) ) {
+        //         if (std::count(conflictingValues.begin(), conflictingValues.end(), val) == 0) {
+        //            conflictingValues.push_back( val );
+        //         }
+        //     } else {
+        //       seenValues.push_back( val );
+        //     }
+        // }
     }
 
 
@@ -385,198 +386,5 @@ void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*
 }
 
 
-// void AllDifferent::enforceConstraintForNode(Node* node, Arena* arena,
-//                                      std::vector<std::vector<Node*>>& mddRepresentation,
-//                                      std::vector<Node*>& newNodesList) const
-// {
-//   if (node == nullptr)
-//   {
-//     throw std::invalid_argument("AllDifferent - enforceConstraint: empty pointer to the node");
-//   }
-
-//   if (arena == nullptr)
-//   {
-//     throw std::invalid_argument("AllDifferent - enforceConstraint: empty pointer to the arena");
-//   }
-
-//   // Find all children nodes of the current node
-//   std::vector<Node*> children;
-//   children.reserve(node->getOutEdges().size());
-
-//   // Use a set for quick lookup to avoid duplicate nodes
-//   spp::sparse_hash_set<uint32_t> uniqueNodes;
-//   for (auto edge : node->getOutEdges())
-//   {
-//     auto nextNode = edge->getHead();
-
-//     // Check that the node hasn't already been added
-//     if ((uniqueNodes.find(nextNode->getUniqueId()) == uniqueNodes.end()) &&
-//             (!nextNode->isLeaf()))
-//     {
-//       uniqueNodes.insert(nextNode->getUniqueId());
-//       children.push_back(nextNode);
-//     }
-//   }
-
-//   // Enforce AllDifferent constraint by splitting nodes
-// #ifdef DEBUG
-//   std::cout << "check nodes (num) " << children.size() << std::endl;
-// #endif
-
-//   for (int nodeIdx{0}; nodeIdx < static_cast<int>(children.size()); ++nodeIdx)
-//   {
-//     auto nextNode = children.at(nodeIdx);
-//     // const auto& availableValuesTail = node->getValues();
-//     auto tailDomain = node->getNodeDomain();
-//     // auto availableValuesHead = nextNode->getValuesMutable();
-//     auto headDomain = nextNode->getNodeDomain();
-    
-// #ifdef DEBUG
-//     std::cout << "Check for " << availableValuesTail.size() << " values\n";
-// #endif
-
-//     // Find all conflicting values
-//     std::vector<int64_t> conflictingValues;
-//     for (auto val : tailDomain->getValues())
-//     {
-//       if ( headDomain->isValueInDomain(val) )
-//       {
-
-// #ifdef DEBUG
-//         std::cout << "Value is conflicting " << val << std::endl;
-// #endif
-//         conflictingValues.push_back(val);
-//       }
-//     }
-
-// #ifdef DEBUG
-//     std::cout << "check edges (num) " << node->getOutEdges().size() << std::endl;
-// #endif
-  
-//     Edge* conflictingEdge = nullptr;
-//     for (auto edge : node->getOutEdges())
-//     {
-//       // If outgoing edge is in conflicting values find its position
-//       for (int idx{0}; idx < static_cast<int>(conflictingValues.size()); ++idx)
-//       {
-//         if (conflictingValues.at(idx) == edge->getValue())
-//         {
-
-// #ifdef DEBUG
-//           std::cout << "Found a conflicting edge " << edge->getValue() << std::endl;
-// #endif
-//           conflictingEdge = edge;
-//           break;
-//         }
-//       }
-
-//       if (conflictingEdge != nullptr)
-//       {
-//         // BUG FIX: the domain of newNode was initialized with the full domain of the variable:
-//         //      newNode->initializeNodeDomain();
-//         // I believe that it should be initialized with the restricted domain of nextVariable
-//         // auto newReducedDomain = *(node->getValuesMutable());
-//         auto newReducedDomain = *(node->getNodeDomain());
-
-//         bool result = newReducedDomain.removeValue(conflictingEdge->getValue());
-//         assert( result == true );
-
-//         // BUG FIX: before creating a new node, check if the domain/values that would go into
-//         // the newNode is already present in another node on the same level.
-//         // If so, simply connect the edges
-//         Node* mappedNode{nullptr};
-//         for (auto newNode : mddRepresentation[nextNode->getLayer()])
-//         {
-//           // Note: the following works only on ordered list of values.
-//           // TODO move from lists to sets/bitsets/ranges
-//           if (*newNode->getNodeDomain() == newReducedDomain)
-//           {
-//             mappedNode = newNode;
-//             break;
-//           }
-//         }
-
-//         if (mappedNode != nullptr)
-//         {
-//           // A match is found!
-//           // Connect the edge to the mapped node and continue
-//           // Move incoming conflicting edge from next node to the mapped node
-//           nextNode->removeInEdgeGivenPtr(edge);
-
-//           // Set the in edge on the new node.
-//           // Note: the head on the edge is set automatically
-//           mappedNode->addInEdge(edge);
-//         }
-//         else
-//         {
-//           // Edge points to conflicting value, so split node
-//           auto newNode = arena->buildNode(nextNode->getLayer(), nextNode->getVariable());
-
-//           // TODO check if it is possible to "build" the domain rather than copying the entire
-//           // variable domain and removing values
-//           // auto newAvailableValues = newNode->getValuesMutable();
-//           // *newAvailableValues = newReducedDomain;
-
-//           // All paths should lead to the same values being used
-//           std::vector<int> usedValues;
-//           if (node->getInEdges().size() > 0) {
-//               Node::IncomingPathList pathList = node->getIncomingPaths();
-//               std::vector< Node::EdgeList > paths = pathList[ node->getInEdges()[0]->getUniqueId() ];
-//               usedValues = getConstraintValuesForPath( paths[0] );
-//           }
-//           usedValues.push_back( conflictingEdge->getValue() );
-
-//           for (auto outEdge: nextNode->getOutEdges()) {
-//             if (std::count(usedValues.begin(), usedValues.end(), outEdge->getValue()) == 0) {
-//                 arena->buildEdge(newNode, outEdge->getHead(), outEdge->getDomainLowerBound(), outEdge->getDomainUpperBound());
-//             }
-//           }
-
-//           auto newDomain = newNode->getNodeDomain();
-
-//           // If new node has no available values,
-//           // then it is infeasible so do not add it to the graph
-//           if (newDomain->getSize() > 0)
-//           {
-//             // Add the node to the current level
-//             mddRepresentation[nextNode->getLayer()].push_back(newNode);
-
-//             // Store the new node in the newNodesList for next iteration
-//             newNodesList.push_back(newNode);
-
-//             // Move incoming conflicting edge from next node to splitting node
-//             nextNode->removeInEdgeGivenPtr(edge);
-
-//             // Set the in edge on the new node.
-//             // Note: the head on the edge is set automatically
-//             newNode->addInEdge(edge);
-
-//           }
-//         }
-
-//         // If nextNode doesn't have any incoming edge, it can be removed
-//         // from the layer since it is not reachable anymore
-//         if (nextNode->getInEdges().empty())
-//         {
-//           // Remove all the outgoing edges
-//           Node::EdgeList outEdges = nextNode->getOutEdges();
-//           for (auto outEdge : outEdges)
-//           {
-//             outEdge->removeEdgeFromNodes();
-//             arena->deleteEdge(outEdge->getUniqueId());
-//           }
-
-//           // Remove the node from the layer
-//           auto& nextNodeLayer = mddRepresentation[nextNode->getLayer()];
-//           auto itNode = std::find(nextNodeLayer.begin(), nextNodeLayer.end(), nextNode);
-
-//           assert(itNode != nextNodeLayer.end());
-//           nextNodeLayer.erase(itNode);
-//           arena->deleteNode(nextNode->getUniqueId());
-//         }
-//       }  // position > -1
-//     }  // for all out edges
-//   }  // for all nodes
-// }
 
 };

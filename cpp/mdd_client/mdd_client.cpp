@@ -202,8 +202,8 @@ void runMDDOpt()
 
   auto among = std::make_shared<Among>();
   among->setScope(problem->getVariables());
-  among->setParameters({2, 5}, 2, 2);
-  // problem->addConstraint(among);
+  among->setParameters({4, 5}, 2, 2);
+  problem->addConstraint(among);
 
   // Create the MDD
   int32_t width{std::numeric_limits<int32_t>::max()};

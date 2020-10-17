@@ -183,7 +183,7 @@ void Among::setParameters(const std::vector<int64_t>& domain, int lower, int upp
 int Among::getConstraintCountForPath(const std::vector<Edge*>& path) const
 {
     int count{0};
-    assert(path.size() == path[ path.size()-1 ]->getHead()->getVariable()->getId());
+    assert(path.size() == path[ path.size()-1 ]->getTail()->getVariable()->getId()+1);
     for (auto edgeInPath : path)
     {
       // For each edge in the path
@@ -231,9 +231,10 @@ void Among::enforceConstraintTopDown(Arena* arena,
         // First split and merge nodes according to their paths (state of constraint)
 
         spp::sparse_hash_map<int, Node*> nodeByConstraintCount;
-        for (int edgeIdx = 0; edgeIdx < node->getInEdges().size(); edgeIdx++)
+        Node::EdgeList inEdges = node->getInEdges();
+        for (int edgeIdx = 0; edgeIdx < inEdges.size(); edgeIdx++)
         {
-          auto inEdge = node->getInEdges()[edgeIdx];
+          auto inEdge = inEdges[edgeIdx];
 
           // All path to same node should lead to the same count, so use the first one
           const auto& path = nodeInPaths.at(inEdge->getUniqueId()).at(0);
@@ -284,7 +285,8 @@ void Among::enforceConstraintTopDown(Arena* arena,
     for (int nodeIdx = 0; nodeIdx < static_cast<int>(mddRepresentation[layer].size()); ++nodeIdx)
     {
       auto node = mddRepresentation.at(layer).at(nodeIdx);
-      for (auto outEdge : node->getOutEdges())
+      std::vector<Edge*> outEdges = node->getOutEdges();
+      for (auto outEdge : outEdges)
       {
         // If edge could create conflict, split into separate node
         if (std::count(pConstraintDomain.begin(), pConstraintDomain.end(), outEdge->getValue()) > 0)
@@ -306,14 +308,14 @@ void Among::enforceConstraintTopDown(Arena* arena,
            *     "if (count > pUpperBound) {...}" instead?
            */
           auto head = outEdge->getHead();
-          const auto& nodeIncomingPath = node->getIncomingPaths();
+          auto nodeIncomingPath = node->getIncomingPaths();
 
           int count;
           if (node->getInEdges().size() == 0) {
             count = 0;
           } else {
             auto inEdge = node->getInEdges().at(0);
-            const auto& path = nodeIncomingPath.at(inEdge->getUniqueId()).at(0);
+            auto path = nodeIncomingPath.at(inEdge->getUniqueId()).at(0);
             count = getConstraintCountForPath(path);
           }
 
@@ -381,9 +383,10 @@ void Among::enforceConstraintBottomUp(
   std::deque<Node*> queue;
 
   std::vector<Edge*> inEdges = lastNode->getInEdges();
+  Node::IncomingPathList incomingPaths = lastNode->getIncomingPaths();
   for (auto inEdge : inEdges ) {
 
-    const auto& path = lastNode->getIncomingPaths().at( inEdge->getUniqueId() ).at(0);
+    auto path = incomingPaths[ inEdge->getUniqueId() ][0];
     int count = getConstraintCountForPath(path);
 
     // If count is less than lower bound, this edge is not feasible
@@ -435,7 +438,6 @@ void Among::enforceConstraint(Arena* arena,
                               std::vector<std::vector<Node*>>& mddRepresentation,
                               std::vector<Node*>& newNodesList) const
 {
-  
   enforceConstraintTopDown(arena, mddRepresentation);
   enforceConstraintBottomUp(arena, mddRepresentation);
 }

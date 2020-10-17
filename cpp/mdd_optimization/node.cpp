@@ -71,29 +71,60 @@ void Node::addInEdge(Edge* edge)
   edge->setHead(this);
 
   // Keep track of all incoming paths
-  std::vector<EdgeList> newIncomingPaths;
-  for (const auto& pathsTillHereIter : edge->getTail()->getIncomingPaths())
-  {
-    // For all paths getting to the tail, take the path and add the current edge
-    for (int pathIdx{0}; pathIdx < pathsTillHereIter.second.size(); ++pathIdx)
-    {
-      newIncomingPaths.emplace_back(pathsTillHereIter.second[pathIdx]);
-      newIncomingPaths.back().push_back(edge);
-    }
-  }
+  // std::vector<EdgeList> newIncomingPaths;
+  // for (const auto& pathsTillHereIter : edge->getTail()->getIncomingPaths())
+  // {
+  //   // For all paths getting to the tail, take the path and add the current edge
+  //   for (int pathIdx{0}; pathIdx < pathsTillHereIter.second.size(); ++pathIdx)
+  //   {
+  //     newIncomingPaths.emplace_back(pathsTillHereIter.second[pathIdx]);
+  //     newIncomingPaths.back().push_back(edge);
+  //   }
+  // }
 
   // Consider the case where the tail is the root node
   // and there are no incoming paths.
   // The in-edge should still be added to the list of paths
   // arriving at this current node
-  if (newIncomingPaths.empty())
-  {
-    newIncomingPaths.resize(1);
-    newIncomingPaths.back().push_back(edge);
+  // if (newIncomingPaths.empty())
+  // {
+  //   newIncomingPaths.resize(1);
+  //   newIncomingPaths.back().push_back(edge);
+  // }
+
+  // pIncomingPathsForEdge[edge->getUniqueId()] = newIncomingPaths;
+}
+
+Node::IncomingPathList Node::getIncomingPaths()
+{ 
+  Node::IncomingPathList incomingPaths;
+  for (auto edge : pInEdges) {
+    auto parent = edge->getTail();
+    Node::IncomingPathList pathList = parent->getIncomingPaths();
+    std::vector<EdgeList> newIncomingPaths;
+    for ( auto iter = pathList.begin(); iter != pathList.end(); iter++) {
+        std::vector<EdgeList> pathsForEdge = iter->second;
+        for (auto path : pathsForEdge) {
+          newIncomingPaths.emplace_back( path );
+        }
+    }
+
+    if (newIncomingPaths.empty()) {
+      newIncomingPaths.resize(1);
+      newIncomingPaths.back().push_back(edge);
+    } else {
+      for (int i = 0; i < newIncomingPaths.size(); i++) {
+        newIncomingPaths[i].push_back( edge );
+      }
+    }
+
+    incomingPaths[edge->getUniqueId()] = newIncomingPaths;
+
   }
 
-  pIncomingPathsForEdge[edge->getUniqueId()] = newIncomingPaths;
+  return incomingPaths; 
 }
+
 
 void Node::addOutEdge(Edge* edge)
 {
@@ -145,7 +176,7 @@ void Node::removeInEdgeGivenPtr(Edge* edge)
   edge->removeHead();
 
   // Remove paths from this edge
-  pIncomingPathsForEdge.erase(edge->getUniqueId());
+  // pIncomingPathsForEdge.erase(edge->getUniqueId());
 }
 
 void Node::removeOutEdgeGivenPtr(Edge* edge)
