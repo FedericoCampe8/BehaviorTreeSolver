@@ -55,11 +55,6 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
   double getBestCost() const noexcept { return pBestCost; }
 
   /**
-   * \brief returns the (best) lower bound on the cost of the solution found so far.
-   */
-  double getBestLowerBoundOnCost() const noexcept { return pAdmissibleLowerBound; }
-
-  /**
    * \breif returns the number of solutions found so far.
    */
   uint64_t getNumSolutions() const noexcept { return pNumSolutionsCtr; }
@@ -96,9 +91,6 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
   /// Cost value of the best solution found so far
   double pBestCost{std::numeric_limits<double>::max()};
 
-  /// Cost value of the best lower bound found so far
-  double pAdmissibleLowerBound{std::numeric_limits<double>::lowest()};
-
   /// Queue of nodes that are part of the exact cutset.
   /// This queue is used to branch and bound on the MDD optimization process
   std::vector<DPState::UPtr> pQueue;
@@ -112,9 +104,6 @@ class SYS_EXPORT_CLASS TDMDDOptimizer {
 
   /// Updates the solution cost
   void updateSolutionCost(double cost);
-
-  /// Updates the lower bound
-  void updateSolutionLowerBound(double cost);
 
   /// Identifies the "Frontier Cutset" on the current MDD and stores
   /// a copy of each node in the cutset into the queue

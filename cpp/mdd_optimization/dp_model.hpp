@@ -123,7 +123,7 @@ class SYS_EXPORT_STRUCT DPState {
    * \brief returns the cost of taking the given value.
    * \note return +INF if the value is inducing a non-admissible state
    */
-  virtual double getCostPerValue(int64_t value);
+  virtual double getCostOnValue(int64_t value);
 
   /**
    * \brief returns the list of pairs <cost, value> that can be obtains

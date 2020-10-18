@@ -69,18 +69,6 @@ void TDMDDOptimizer::updateSolutionCost(double cost)
   }
 }
 
-void TDMDDOptimizer::updateSolutionLowerBound(double cost)
-{
-  if (cost <= pBestCost && cost > pAdmissibleLowerBound)
-  {
-    pAdmissibleLowerBound = cost;
-    /*
-    std::cout << "New lower bound: " << pAdmissibleLowerBound << " at " <<
-            pTimer->getWallClockTimeMsec() << " msec" <<  std::endl;
-    */
-  }
-}
-
 void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
 {
   // Start the timer
@@ -90,9 +78,6 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
   auto mdd = pCompiler->getMDDMutable();
 
   // Start the optimization process on the queue
-  std::vector<int64_t> path;
-  path.reserve(pProblem->getVariables().size());
-  double bestCost{std::numeric_limits<double>::max()};
   while(!pQueue.empty())
   {
     // Return on timeout
@@ -112,24 +97,23 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
     const auto builtRestricted = pCompiler->compileMDD(
             TDCompiler::CompilationMode::Restricted, DPState::UPtr(node->clone()));
 
-    // Get the incumbent, i.e., the best solution found so far.
-    // Note: incumbent should be found with a min/max path visit.
-    // Here it is done using DFS.
-    // TODO switch to min-path on directed acyclic graph
-    /*
+    // Get the incumbent, i.e., the best solution found so far
     if (builtRestricted)
     {
-      std::cout << "PRINT RESTRICTED\n";
-      printMDD("restricted_mdd");
-      getchar();
-    }
-    */
-    path.clear();
-    bestCost = std::numeric_limits<double>::max();
-    dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, false);
+      /*
+       * @note the shortest path should be equivalent
+       * at running the DFS and finding the node with minimum cost.
+       * In other words, it should be equivalent to the following:
+       *  std::vector<int64_t> path;
+       *  auto bestCostTest = std::numeric_limits<double>::max();
+       *  dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCostTest, 0, false);
+       *  assert(bestCostTest == solutionCost);
+       */
+      const auto solutionCost = calculateMinPath();
 
-    // Update the solution cost
-    updateSolutionCost(bestCost);
+      // Update the solution cost
+      updateSolutionCost(solutionCost);
+    }
 
     // Check if the MDD is exact, if not proceed with branch and bound
     if (!pCompiler->isExact() || !builtRestricted)
@@ -147,23 +131,19 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
       }
 
       // Get the lower bound
-      path.clear();
-      bestCost = std::numeric_limits<double>::max();
-
-      /*
-      if (builtRelaxed)
-      {
-        std::cout << "PRINT RELAXED\n";
-        printMDD("relaxed_mdd");
-        getchar();
-      }
-      */
+      std::vector<int64_t> path;
+      path.reserve(pProblem->getVariables().size());
+      auto bestCost = std::numeric_limits<double>::max();
       dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, true);
-      updateSolutionLowerBound(bestCost);
+      const auto restrictedSolCost = calculateMinPath();
+      std::cout << "COSTS " << bestCost << " vs " << restrictedSolCost << std::endl; getchar();
+
+
+
       // Check if the percentage (delta) between lower bound and upper bound is acceptable
-      if (pAdmissibleLowerBound < pBestCost)
+      if (bestCost < pBestCost)
       {
-        const auto diffBounds = pBestCost - pAdmissibleLowerBound;
+        const auto diffBounds = pBestCost - bestCost;
         const auto optGap = (diffBounds / pBestCost) * 100.0;
         if (optGap <= pDeltaOnSolution)
         {
@@ -211,9 +191,9 @@ DPState::UPtr TDMDDOptimizer::selectNodeForBranching()
       continue;
     }
 
-    if (pQueue.at(idx)->cumulativeCost() < bestCost)
+    if (costPath < bestCost)
     {
-      bestCost = pQueue.at(idx)->cumulativeCost();
+      bestCost = costPath;
       bestIdx = idx;
     }
   }
@@ -361,7 +341,8 @@ double TDMDDOptimizer::calculateMinPath()
         // Get the index of the corresponding reachable node
         assert(edge->tail == nidx);
         const auto tailNodeIdx = (lidx == 0) ? 0 : ((lidx - 1) * width + edge->tail + 1);
-        const auto headNodeIdx = (lidx - 1) * width + edge->head + 1;
+        const auto headNodeIdx = lidx * width + edge->head + 1;
+
         for (auto costVal : edge->costList)
         {
           if (nodeCostList.at(tailNodeIdx) + costVal < nodeCostList.at(headNodeIdx))

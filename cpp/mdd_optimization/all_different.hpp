@@ -55,12 +55,6 @@ class SYS_EXPORT_STRUCT AllDifferentState : public DPState {
   void updateState(const DPState* state, int64_t val) override;
 
   /**
-   * \brief returns the cost of taking the given value.
-   * \note return +INF if the value is inducing a non-admissible state
-   */
-  double getCostPerValue(int64_t value) override;
-
-  /**
    * \brief returns the list of pairs <cost, value> that can be obtains
    *        from this state when following an edge with value in [lb, ub].
    * \note values that are higher than or equal the given incumbet are discarded.

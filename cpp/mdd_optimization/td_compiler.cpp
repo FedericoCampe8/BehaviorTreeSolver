@@ -72,6 +72,7 @@ void TDCompiler::buildMDDUpToState(DPState::UPtr node)
     auto edge = pMDDGraph->getEdgeMutable(valIdx, 0, 0);
     edge->isActive = true;
     edge->valuesList[0] = path.at(valIdx);
+    edge->costList[0] = tailNode->getCostOnValue(path.at(valIdx));
 
     // Swap nodes
     tailNode = headNode;
@@ -211,8 +212,8 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
   std::vector<std::pair<MDDTDEdge*, bool>> newConnections;
 
   // Get the start node
-  auto currState = pMDDGraph->getNodeState(currLayer, currNode);
-  assert(currState != nullptr);
+  auto fromState = pMDDGraph->getNodeState(currLayer, currNode);
+  assert(fromState != nullptr);
 
   // Get the list of next states to override (since only "width" states are allowed)
   const auto nextLayer = currLayer + 1;
@@ -220,7 +221,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
 
   // Get the list of best "width" next states reachable from the current state
   // according to the heuristic implemented in the DP model
-  auto stateList = currState->nextStateList(lb, ub, getIncumbent());
+  auto stateList = fromState->nextStateList(lb, ub, getIncumbent());
   generatedStates += static_cast<uint32_t>(stateList.size());
 
   // Check whether or not to use next states
@@ -247,6 +248,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
     // Activate a new edge
     auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, defaultStateIdx);
     edge->valuesList[0] = val;
+    edge->costList[0] = fromState->getCostOnValue(val);
     newConnections.emplace_back(edge, true);
 
     // Move to next state
@@ -277,6 +279,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
         if (nextStateList->at(idx)->cumulativeCost() > currState->cumulativeCost())
         {
           nextStateList->at(idx)->forceCumulativeCost(currState->cumulativeCost());
+          nextStateList->at(idx)->forceCumulativePath(currState->cumulativePath());
         }
 
         // Merge a new edge
@@ -286,10 +289,12 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
         if (!edge->hasValueSet())
         {
           edge->valuesList[0] = currState->cumulativePath().back();
+          edge->costList[0] = fromState->getCostOnValue(edge->valuesList[0]);
         }
         else
         {
           edge->valuesList.push_back(currState->cumulativePath().back());
+          edge->costList.push_back(fromState->getCostOnValue(edge->valuesList.back()));
         }
         newConnections.emplace_back(edge, false);
 
@@ -307,13 +312,14 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::restrictNextLayerStatesFrom
         // The state is overridden by the new one
         // Replace the state in the MDD
         const auto val = stateList[repPtr]->cumulativePath().back();
+        const auto cost = fromState->getCostOnValue(val);
         pMDDGraph->replaceState(nextLayer, idx, std::move(stateList[repPtr]));
 
         // Activate a new edge
         auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, idx);
         edge->valuesList[0] = val;
+        edge->costList[0] = cost;
         newConnections.emplace_back(edge, true);
-
         break;
       }
     }
@@ -331,10 +337,8 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
   std::vector<std::pair<MDDTDEdge*, bool>> newConnections;
 
   // Get the start node
-  auto currState = pMDDGraph->getNodeState(currLayer, currNode);
-  //std::cout << "TOP DOWN ON " << currLayer << " " << currNode << std::endl;
-  //std::cout << currState->toString() << std::endl; getchar();
-  assert(currState != nullptr);
+  auto fromState = pMDDGraph->getNodeState(currLayer, currNode);
+  assert(fromState != nullptr);
 
   // Get the list of next states to override (since only "width" states are allowed)
   const auto nextLayer = currLayer + 1;
@@ -342,7 +346,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
 
   // Get the list of best "width" next states reachable from the current state
   // according to the heuristic implemented in the DP model
-  auto stateList = currState->nextStateList(lb, ub,  getIncumbent());
+  auto stateList = fromState->nextStateList(lb, ub,  getIncumbent());
 
   // Check whether or not to use next states
   const auto width = static_cast<uint32_t>(nextStateList->size());
@@ -369,6 +373,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
     // Activate a new edge
     auto edge = pMDDGraph->getEdgeMutable(currLayer, currNode, defaultStateIdx);
     edge->valuesList[0] = val;
+    edge->costList[0] = fromState->getCostOnValue(val);
     newConnections.emplace_back(edge, true);
 
     // Move to next state
@@ -407,6 +412,7 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
         if (nextStateList->at(idx)->cumulativeCost() > currState->cumulativeCost())
         {
           nextStateList->at(idx)->forceCumulativeCost(currState->cumulativeCost());
+          nextStateList->at(idx)->forceCumulativePath(currState->cumulativePath());
         }
 
         // Merge a new edge
@@ -416,12 +422,13 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
         if (!edge->hasValueSet())
         {
           edge->valuesList[0] = currState->cumulativePath().back();
+          edge->costList[0] = fromState->getCostOnValue(edge->valuesList[0]);
         }
         else
         {
           edge->valuesList.push_back(currState->cumulativePath().back());
+          edge->costList.push_back(fromState->getCostOnValue(edge->valuesList.back()));
         }
-
         newConnections.emplace_back(edge, false);
         foundEquivalent = true;
 
@@ -449,10 +456,12 @@ std::vector<std::pair<MDDTDEdge*, bool>> TDCompiler::relaxNextLayerStatesFromNod
     if (!edge->hasValueSet())
     {
       edge->valuesList[0] = val;
+      edge->costList[0] = fromState->getCostOnValue(val);
     }
     else
     {
       edge->valuesList.push_back(val);
+      edge->costList.push_back(fromState->getCostOnValue(val));
     }
     newConnections.emplace_back(edge, false);
 

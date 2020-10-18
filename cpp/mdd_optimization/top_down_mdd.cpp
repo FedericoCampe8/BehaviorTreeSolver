@@ -302,6 +302,14 @@ std::vector<MDDTDEdge*> TopDownMDD::getActiveEdgesOnLayerGivenTail(uint32_t laye
   uint32_t start{tailIdx * pMaxWidth};
   for (uint32_t idx{0}; idx < pMaxWidth; ++idx)
   {
+    if (layerIdx == pNumLayers - 1)
+    {
+      start = 0;
+      if (tailIdx != idx)
+      {
+        continue;
+      }
+    }
     const auto& edge = pLayerEdgeList.at(layerIdx).at(start + idx);
     if (edge->isActive)
     {

@@ -80,15 +80,7 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
    * \brief returns the cost of taking the given value.
    * \note return +INF if the value is inducing a non-admissible state
    */
-  double getCostPerValue(int64_t value) override;
-
-  /**
-   * \brief returns the list of pairs <cost, value> that can be obtains
-   *        from this state when following an edge with value in [lb, ub].
-   * \note values that are higher than or equal the given incumbet are discarded.
-   */
-  std::vector<std::pair<double, int64_t>> getCostListPerValue(
-          int64_t lb, int64_t ub, double incumbent) override;
+  double getCostOnValue(int64_t value) override;
 
   /**
    * \brief returns the list of "width" states (if any) reachable from the current state.
@@ -102,8 +94,6 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
    */
   uint32_t stateSelectForMerge(const std::vector<DPState::UPtr>& statesList) const override;
 
-  bool isInfeasible() const noexcept override;
-
   std::string toString() const noexcept override;
 
   bool isMerged() const noexcept override { return false; }
@@ -115,17 +105,9 @@ class SYS_EXPORT_STRUCT TSPPDState : public DPState {
   /// Matrix of costs visiting cities
   CostMatrix* pCostMatrix;
 
-  /// Last node visited, i.e., this state
-  mutable int64_t pLastNodeVisited{-1};
-
   /// Set of nodes that can be still visited
   /// from this state on
   spp::sparse_hash_set<int64_t> pDomain;
-
-  /// Check if the value if feasible according to the current state
-  /// and given incumbent
-  bool isFeasibleValue(int64_t val, double incumbent) const noexcept;
-
 };
 
 class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {

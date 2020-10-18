@@ -43,7 +43,7 @@ void DPState::updateState(const DPState*, int64_t)
 {
 }
 
-double DPState::getCostPerValue(int64_t value)
+double DPState::getCostOnValue(int64_t value)
 {
   return std::numeric_limits<double>::max();
 }

@@ -110,16 +110,6 @@ void AllDifferentState::updateState(const DPState* state, int64_t val)
   pDomain.erase(val);
 }
 
-double AllDifferentState::getCostPerValue(int64_t value)
-{
-  if (pDomain.find(value) == pDomain.end())
-  {
-    return std::numeric_limits<double>::max();
-  }
-
-  return static_cast<double>(value);
-}
-
 std::vector<std::pair<double, int64_t>> AllDifferentState::getCostListPerValue(
         int64_t lb, int64_t ub, double incumbent)
 {
