@@ -145,7 +145,7 @@ void runTSPPD()
 {
   using namespace mdd;
 
-  std::string instancePath{"../cpp/mdd_client/data/grubhub-06-0.json"};//10-0, 15-9
+  std::string instancePath{"../cpp/mdd_client/data/grubhub-10-0.json"};//10-0, 15-9
   std::ifstream datafile(instancePath);
   std::string dataString((std::istreambuf_iterator<char>(datafile)),
                          (std::istreambuf_iterator<char>()));

@@ -42,6 +42,22 @@ class SYS_EXPORT_CLASS MDDConstraint : public Constraint {
    virtual void setForTopDownFiltering() noexcept {}
 
    /**
+    * \brief returns the lists of states that are "equal" in "stateList" according
+    *        to the DPState function implemented for this constraint.
+    *        Equal states are states that can be reached from different paths but that
+    *        are the root of the same sub-MDD.
+    */
+   virtual std::vector<std::vector<uint32_t>> calculateEqualStates(
+           const std::vector<DPState::UPtr>& statesList) { return {}; }
+
+   /**
+    * \brief returns a lists of at most "maxWidth" sublists of states.
+    *        The sublist contains the nodes that can be "merged" together when relaxing the MDD.
+    */
+   virtual std::vector<std::vector<uint32_t>> calculateMergeStates(
+           const std::vector<DPState::UPtr>& statesList, uint32_t maxWidth) { return {}; }
+
+   /**
     * \brief calculates and returns the cost of the given assignment.
     */
    virtual double calculateCost(const std::vector<int64_t>&) const

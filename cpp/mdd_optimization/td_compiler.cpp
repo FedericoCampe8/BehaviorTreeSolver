@@ -51,7 +51,7 @@ bool TDCompiler::compileMDD(CompilationMode compilationMode, DPState::UPtr state
   // activating the edge connections between nodes.
   // Note: the root node state has been already set to the default state
   // when building the MDD
-  return buildMDD(compilationMode);
+  return buildMDD2(compilationMode);
 }
 
 void TDCompiler::buildMDDUpToState(DPState::UPtr node)
@@ -77,6 +77,365 @@ void TDCompiler::buildMDDUpToState(DPState::UPtr node)
     // Swap nodes
     tailNode = headNode;
   }
+}
+
+bool TDCompiler::buildMDD2(CompilationMode compilationMode)
+{
+  // Process one layer at a time
+  bool setEdgesForCutset{false};
+  for (uint32_t lidx{0}; lidx < pMDDGraph->getNumLayers(); ++lidx)
+  {
+    // Skip layers that were previously built when reconstructing the MDD
+    // from a node that was in the queue.
+    // This layers have a non-default state as the first state in that layer.
+    // Every other MDD (e.g., the first one being built) contains only default states
+    if (pMDDGraph->getIndexOfFirstDefaultStateOnLayer(lidx + 1))
+    {
+      continue;
+    }
+
+    bool isValidMDD{false};
+    if (compilationMode == CompilationMode::Restricted)
+    {
+      isValidMDD = buildRestrictedMDD(lidx);
+    }
+    else if (compilationMode == CompilationMode::Relaxed)
+    {
+      isValidMDD = buildRelaxedMDD(lidx, setEdgesForCutset);
+    }
+
+    if (!isValidMDD)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool TDCompiler::buildRestrictedMDD(uint32_t layer)
+{
+  // Get the variable associated with the current layer.
+  // @note the variable is on the tail of the edge on the current layer
+  auto var = pMDDGraph->getVariablePerLayer(layer);
+
+  // Go over each node on the current layer and calculate next layer's nodes.
+  // @note keep track of:
+  // 1 - whether or not the restricted MDD is exact;
+  // 2 - if a layer is connected to the next one.
+  // An MDD is exact (1) if, when compiled as restricted MDD, the list of "next" nodes
+  // from a layer never exceeds the width of the MDD.
+  // If a layer is not connected to the next one (2), the MDD doesn't contain any path root-tail.
+  // An MDD may not be connected if, given a layer, all next nodes lead to nodes
+  // with a higher cost than the current incumbent
+  uint32_t numGenStates{0};
+  bool layerHasSuccessors{false};
+  for (uint32_t nidx{0}; nidx < pMDDGraph->getMaxWidth(); ++nidx)
+  {
+    if (layer == 0 && nidx > 0)
+    {
+      // Break on layer 0 after the first node since layer 0
+      // contains only the root
+      break;
+    }
+
+    // Skip non reachable states
+    if (!pMDDGraph->isReachable(layer, nidx))
+    {
+      continue;
+    }
+
+    // Compute all next states from current node and filter only the "best" states
+    std::vector<std::pair<MDDTDEdge*, bool>> newActiveEdgeList;
+
+    // @note the original restricted algorithm, given layer i, first creates all 'k' states
+    // for layer i+1; then it shrinks them to 'w' according to a selection heuristic.
+    // In what follows, we create only the states that will be part of layer i+1.
+    // In other words, instead of computing all 'k' states, the algorithm selects the 'w'
+    // best states at each iteration and overrides them
+    newActiveEdgeList = restrictNextLayerStatesFromNode(layer, nidx,
+                                                        var->getLowerBound(),
+                                                        var->getUpperBound(),
+                                                        numGenStates);
+
+    // All edges have "nidx" as tail node and lead to a node on layer "lidx+1"
+    for (const auto& edgePair : newActiveEdgeList)
+    {
+      assert(edgePair.first->tail == nidx);
+
+      // This layer has at least one successor on the next layer
+      layerHasSuccessors = true;
+      if (edgePair.second)
+      {
+        // Deactivate all current layers and active given layer
+        for (auto edge : pMDDGraph->getEdgeOnHeadMutable(layer, edgePair.first->head))
+        {
+          edge->isActive = false;
+        }
+      }
+
+      // Activate given layer
+      edgePair.first->isActive = true;
+    }
+  }
+
+  if (!layerHasSuccessors)
+  {
+    // No successor to next layer, break since there are no solution
+    return false;
+  }
+
+  // The MDD is NOT exact if a layer exceeds the width
+  if (numGenStates > pMDDGraph->getMaxWidth())
+  {
+    pIsExactMDD = false;
+  }
+
+  return true;
+}
+
+bool TDCompiler::buildRelaxedMDD(uint32_t layer, bool& setEdgesForCutset)
+{
+  // Get the variable associated with the current layer.
+  // @note the variable is on the tail of the edge on the current layer
+  auto var = pMDDGraph->getVariablePerLayer(layer);
+
+  // Go over each node on the current layer and calculate next layer's nodes.
+  // @note the relaxed MDD merges nodes to reduce the layer to the maximum allowed width.
+  // The merge procedure needs the complete view of the nodes to merge.
+  // This implies that all "next" states need to be created before merging them
+  std::vector<DPState::UPtr> nextStatesList;
+  nextStatesList.reserve(2 * pMDDGraph->getMaxWidth());
+
+  // Step 0: prepare the data-structure to collect the values of the edges
+  //         arriving at each node
+  bool cutsetEdgeFound{false};
+  spp::sparse_hash_map<uint32_t, std::vector<double>> edgeCostMap;
+  spp::sparse_hash_map<uint32_t, std::vector<uint32_t>> edgeTailMap;
+  spp::sparse_hash_map<uint32_t, std::vector<int64_t>> edgeValueMap;
+  for (uint32_t nidx{0}; nidx < pMDDGraph->getMaxWidth(); ++nidx)
+  {
+    // Go over each node of the current layer and get the list of states
+    // reachable from the current node
+    if (layer == 0 && nidx > 0)
+    {
+      // Break on layer 0 after the first node since layer 0
+      // contains only the root
+      break;
+    }
+
+    // Skip non reachable states
+    if (!pMDDGraph->isReachable(layer, nidx))
+    {
+      continue;
+    }
+
+    // Step 1: get the list of best next states reachable from the current state
+    // according to the heuristic implemented in the DP model and initialize
+    // the data structures
+    auto currentState = pMDDGraph->getNodeState(layer, nidx);
+    for (auto& state : currentState->nextStateList(var->getLowerBound(),
+                                                   var->getUpperBound(),
+                                                   getIncumbent()))
+    {
+      const auto nodeId = state->getUniqueId();
+
+
+      edgeCostMap[nodeId] = {currentState->getCostOnValue(state->cumulativePath().back())};
+      edgeValueMap[nodeId] = {state->cumulativePath().back()};
+      edgeTailMap[state->getUniqueId()] = {nidx};
+      nextStatesList.push_back(std::move(state));
+    }
+  }
+
+  // Check if the layer has successors
+  if (nextStatesList.empty())
+  {
+    // No successors, the MDD cannot be built
+    return false;
+  }
+
+  // Get the constraint modeling the problem
+  auto con = pProblem->getConstraints().at(0).get();
+
+
+  // Step 2: unify nodes that are equal,
+  // i.e., given n states, there may be subsets of the n states of states
+  // that are equal to each other.
+  // These states would be equal also on the exact MDD.
+  // Merge these states first
+  bool keepRepresentativeOnly{true};
+  const auto equalStatesList = con->calculateEqualStates(nextStatesList);
+  relaxNextNodesList(nextStatesList, equalStatesList,
+                     edgeTailMap, edgeValueMap, edgeCostMap,
+                     layer,
+                     keepRepresentativeOnly);
+
+  // Step 3: merge nodes according to the DP state equivalence function
+  keepRepresentativeOnly = false;
+  while(nextStatesList.size() > pMDDGraph->getMaxWidth())
+  {
+    const auto mergeStatesList = con->calculateMergeStates(
+            nextStatesList, pMDDGraph->getMaxWidth());
+    relaxNextNodesList(nextStatesList, mergeStatesList,
+                       edgeTailMap, edgeValueMap, edgeCostMap,
+                       layer,
+                       keepRepresentativeOnly);
+  }
+
+  // Replace default states with the merged states
+  const auto nextLayer{layer + 1};
+  uint32_t nextDefaultNodeIdx{0};
+  auto nextLayerStates = pMDDGraph->getStateListMutable(nextLayer);
+  for (auto& node : nextStatesList)
+  {
+    // Scan all the edges incoming to the current "next" node,
+    // activate them and set the costs and values on them
+    spp::sparse_hash_map<uint32_t, spp::sparse_hash_map<int64_t, double>> valuesOnEdge;
+    for (auto edgeTail : edgeTailMap.at(node->getUniqueId()))
+    {
+      // Set the lower cost as well as the value leading to the lower cost
+      assert(edgeCostMap.at(node->getUniqueId()).size() ==
+              edgeValueMap.at(node->getUniqueId()).size());
+
+      const auto& allValuesList = edgeValueMap.at(node->getUniqueId());
+      for (uint32_t idx{0}; idx < static_cast<uint32_t>(allValuesList.size()); ++idx)
+      {
+        const auto currVal = allValuesList.at(idx);
+        if (valuesOnEdge[edgeTail].find(currVal) == valuesOnEdge[edgeTail].end())
+        {
+          valuesOnEdge[edgeTail][currVal] = edgeCostMap.at(node->getUniqueId()).at(idx);
+        }
+        else
+        {
+          valuesOnEdge[edgeTail][currVal] = std::min<double>(
+                  valuesOnEdge[edgeTail][currVal], edgeCostMap.at(node->getUniqueId()).at(idx));
+        }
+      }
+    }
+
+    for (const auto& it : valuesOnEdge)
+    {
+      auto edge = pMDDGraph->getEdgeMutable(layer, it.first, nextDefaultNodeIdx);
+      const auto& valueMap = it.second;
+
+      // Find the minimum value
+      double bestCost{std::numeric_limits<double>::max()};
+      int64_t bestVal{std::numeric_limits<int64_t>::max()};
+      bool setVal{false};
+
+      if (valueMap.size() > 1)
+      {
+        cutsetEdgeFound = true;
+      }
+
+      for (const auto& valIt : valueMap)
+      {
+        if (valIt.second < bestCost)
+        {
+          bestCost = valIt.second;
+          bestVal = valIt.first;
+        }
+
+        // Set all the values on the edge if the cutset has not being set yet
+        if (!setEdgesForCutset)
+        {
+          if (!setVal)
+          {
+            edge->valuesList[0] = valIt.first;
+            setVal = true;
+          }
+          else
+          {
+            edge->valuesList.push_back(valIt.first);
+          }
+        }
+      }
+
+      // @note in general, set only one value per edge even if
+      // the edge is a parallel edge.
+      // The value to set is the one that leads to a lower cost.
+      // Setting one single value means that some sub-MDD are lost
+      // when finding the cutset.
+      // To avoid loosing sub-MDDs, the idea is to "expand",
+      // i.e., create only one, the first, parallel edge since from
+      // that edge, all other sub-MDDs can be re-built
+      edge->costList[0] = bestCost;
+      if (setEdgesForCutset)
+      {
+        // Set one value only if the cutset edge has been set
+        edge->valuesList[0] = bestVal;
+      }
+      edge->isActive = true;
+    }
+
+    pMDDGraph->replaceState(nextLayer, nextDefaultNodeIdx, std::move(node));
+    pMDDGraph->getNodeState(nextLayer, nextDefaultNodeIdx)->setNonDefaultState();
+    if (layer < (pMDDGraph->getNumLayers() - 1))
+    {
+      // @note last layer always has one node,
+      // i.e., the terminal node
+      ++nextDefaultNodeIdx;
+    }
+  }
+
+  if(cutsetEdgeFound)
+  {
+    // One cutset edge has been found and set
+    setEdgesForCutset = true;
+  }
+
+  return true;
+}
+
+void TDCompiler::relaxNextNodesList(
+        std::vector<DPState::UPtr>& nextStatesList,
+        const std::vector<std::vector<uint32_t>>& mergeList,
+        spp::sparse_hash_map<uint32_t, std::vector<uint32_t>>& edgeTailMap,
+        spp::sparse_hash_map<uint32_t, std::vector<int64_t>>& edgeValueMap,
+        spp::sparse_hash_map<uint32_t, std::vector<double>>& edgeCostMap,
+        uint32_t layer,
+        bool keepRepresentativeOnly)
+{
+  for (const auto& sublist : mergeList)
+  {
+    // Keep only one representative (i.e., the first)
+    // for each equal state but keep track of the paths leading to those states
+    auto representativeNode = nextStatesList.at(sublist.at(0)).get();
+    const auto nodeId = representativeNode->getUniqueId();
+    for (uint32_t idx{1}; idx < static_cast<uint32_t>(sublist.size()); ++idx)
+    {
+      assert(edgeTailMap.at(nextStatesList.at(sublist.at(idx))->getUniqueId()).size() == 1);
+
+      // Get the value leading to that "equal" state and store the value and its cost
+      auto nodeToMerge = nextStatesList.at(sublist.at(idx)).get();
+      const auto nodeToMergeId = nodeToMerge->getUniqueId();
+      const auto val = edgeValueMap.at(nodeToMergeId).front();
+      const auto cost = edgeCostMap.at(nodeToMergeId).front();
+      const auto tail = edgeTailMap.at(nodeToMergeId).front();
+
+      if (!keepRepresentativeOnly)
+      {
+        // Since this is not replacing nodes but merging,
+        // add cost, value, and the tail
+        edgeCostMap[nodeId].push_back(cost);
+        edgeValueMap[nodeId].push_back(val);
+        edgeTailMap[nodeId].push_back(tail);
+
+        // Nodes should be merged rather than keeping only the representative node
+        representativeNode->mergeState(nodeToMerge);
+        representativeNode->setNonDefaultState();
+        representativeNode->setExact(false);
+      }
+
+      // Remove the merged state
+      nextStatesList[sublist.at(idx)].reset();
+    }
+  }
+
+  // Remove all nullptr states
+  nextStatesList.erase(std::remove_if(
+          nextStatesList.begin(), nextStatesList.end(),
+          [](auto const& ptr){ return ptr == nullptr; }), nextStatesList.end());
 }
 
 bool TDCompiler::buildMDD(CompilationMode compilationMode)
@@ -131,12 +490,7 @@ bool TDCompiler::buildMDD(CompilationMode compilationMode)
         }
       }
 
-      // Compute all next states from current node and filter only the "best" states.
-      // Note: the original restricted algorithm, given layer i, first creates all 'k' states
-      // for layer i+1; then it shrinks them to 'w' according to a selection heuristic.
-      // In what follows, we create only the states that will be part of layer i+1.
-      // In other words, instead of computing all 'k' states, the algorithm selects the 'w'
-      // best states at each iteration and overrides them
+      // Compute all next states from current node and merge or filter the states
       std::vector<std::pair<MDDTDEdge*, bool>> newActiveEdgeList;
       if (compilationMode == CompilationMode::Relaxed)
       {

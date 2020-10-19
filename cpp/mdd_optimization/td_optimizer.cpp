@@ -121,7 +121,6 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
       // Branch on the node and obtain a lower bound by building a relaxed MDD
       const auto builtRelaxed = pCompiler->compileMDD(
               TDCompiler::CompilationMode::Relaxed, std::move(node));
-
       if (!builtRelaxed)
       {
         // The built was not successful meaning that the compiler couldn't find
@@ -131,19 +130,12 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
       }
 
       // Get the lower bound
-      std::vector<int64_t> path;
-      path.reserve(pProblem->getVariables().size());
-      auto bestCost = std::numeric_limits<double>::max();
-      dfsRec(mdd, mdd->getNodeState(0, 0), path, bestCost, 0, true);
-      const auto restrictedSolCost = calculateMinPath();
-      std::cout << "COSTS " << bestCost << " vs " << restrictedSolCost << std::endl; getchar();
-
-
+      const auto relaxedCost = calculateMinPath();
 
       // Check if the percentage (delta) between lower bound and upper bound is acceptable
-      if (bestCost < pBestCost)
+      if (relaxedCost < pBestCost)
       {
-        const auto diffBounds = pBestCost - bestCost;
+        const auto diffBounds = pBestCost - relaxedCost;
         const auto optGap = (diffBounds / pBestCost) * 100.0;
         if (optGap <= pDeltaOnSolution)
         {
@@ -157,7 +149,7 @@ void TDMDDOptimizer::runBranchAndBound(uint64_t timeoutMsec)
       // If it is not possible to prune the search using this bound,
       // identify an exact cutset of the MDD and add the nodes of the cutset
       // into the queue
-      if (bestCost < pBestCost)
+      if (relaxedCost < pBestCost)
       {
         processCutset();
       }

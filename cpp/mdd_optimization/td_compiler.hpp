@@ -86,6 +86,11 @@ class SYS_EXPORT_CLASS TDCompiler {
   bool buildMDD(CompilationMode compilationMode);
 
   /**
+   * \brief builds the MDD using top-down compilation.
+   */
+  bool buildMDD2(CompilationMode compilationMode);
+
+  /**
    * \brief returns the incumbent, i.e., the cost of the best solution found so far.
    */
   double getIncumbent() const noexcept { return pIncumbent; };
@@ -124,6 +129,16 @@ class SYS_EXPORT_CLASS TDCompiler {
   std::vector<std::pair<MDDTDEdge*, bool>> relaxNextLayerStatesFromNode(uint32_t currLayer,
                                                                         uint32_t currNode,
                                                                         int64_t lb, int64_t ub);
+
+  bool buildRestrictedMDD(uint32_t layer);
+  bool buildRelaxedMDD(uint32_t layer, bool& setEdgesForCutset);
+  void relaxNextNodesList(std::vector<DPState::UPtr>& nextStatesList,
+                          const std::vector<std::vector<uint32_t>>& mergeList,
+                          spp::sparse_hash_map<uint32_t, std::vector<uint32_t>>& edgeTailMap,
+                          spp::sparse_hash_map<uint32_t, std::vector<int64_t>>& edgeValueMap,
+                          spp::sparse_hash_map<uint32_t, std::vector<double>>& edgeCostMap,
+                          uint32_t layer,
+                          bool keepRepresentativeOnly);
 };
 
 }  // namespace mdd

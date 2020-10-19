@@ -137,6 +137,13 @@ DPState* TSPPDState::clone() const noexcept
   return other;
 }
 
+double TSPPDState::getCostOnValue(int64_t value)
+{
+  return pPath.empty() ?
+          pCostMatrix->at(0).at(value) :
+          pCostMatrix->at(pPath.back()).at(value);
+}
+
 void TSPPDState::updateState(const DPState* fromState, int64_t val)
 {
   // Replace the state (override its internal data)
@@ -160,13 +167,6 @@ void TSPPDState::updateState(const DPState* fromState, int64_t val)
   {
     pDomain.insert(pPickupDeliveryMap->at(val));
   }
-}
-
-double TSPPDState::getCostOnValue(int64_t value)
-{
-  return pPath.empty() ?
-          pCostMatrix->at(0).at(value) :
-          pCostMatrix->at(pPath.back()).at(value);
 }
 
 std::vector<DPState::UPtr> TSPPDState::nextStateList(int64_t lb, int64_t ub, double incumbent) const
@@ -234,12 +234,26 @@ uint32_t TSPPDState::stateSelectForMerge(const std::vector<DPState::UPtr>& state
 void TSPPDState::mergeState(DPState* other) noexcept
 {
   auto otherState = reinterpret_cast<const TSPPDState*>(other);
-  if (otherState->pCost < pCost)
+
+  const auto thisPathLegth = static_cast<uint32_t>(pPath.size());
+  const auto otherPathLegth = static_cast<uint32_t>(otherState->pPath.size());
+  assert(thisPathLegth == otherPathLegth);
+  assert(thisPathLegth > 1);
+
+  const auto thisFrom = pPath.at(thisPathLegth - 1);
+  const auto thisTo = pPath.at(thisPathLegth - 2);
+  const auto otherFrom = otherState->pPath.at(otherPathLegth - 1);
+  const auto otherTo = otherState->pPath.at(otherPathLegth - 2);
+  if (pCostMatrix->at(otherFrom).at(otherTo) < pCostMatrix->at(thisFrom).at(thisTo))
   {
+    // Replace this path with other's path since the local transition cost
+    // for other is cheaper than the this transition cost
     pCost = otherState->pCost;
     pPath = otherState->pPath;
   }
 
+  // Merge domains since next states can be produced by both
+  // this and other's state
   for (auto node : otherState->pDomain)
   {
     pDomain.insert(node);
@@ -314,6 +328,45 @@ Node* TSPPD::mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const
     mergedNode->getDPState()->mergeState(node->getDPState());
   }
   return mergedNode;
+}
+
+std::vector<std::vector<uint32_t>> TSPPD::calculateMergeStates(
+        const std::vector<DPState::UPtr>& statesList, uint32_t maxWidth)
+{
+  // The node selection works as follows:
+  // - sort the n nodes in increasing order of cost
+  // - merge the last n - maxWidth + 1 nodes
+  // The idea is that infeasibility is introduced in the MDD only when
+  // nodes are merged.
+  // By selecting nodes with higher costs, information is lost in parts
+  // of the MDD that are unlikely to partecipate in the optimal solution
+  std::vector<std::vector<uint32_t>> mergingStates;
+
+  if (static_cast<uint32_t>(statesList.size()) < maxWidth)
+  {
+    // Naive case: do not merge anything
+    return mergingStates;
+  }
+
+  // Sort the states by cost
+  std::vector<std::pair<double, uint32_t>> sortingVector;
+  for (uint32_t idx{0}; idx < static_cast<uint32_t>(statesList.size()); ++idx)
+  {
+    sortingVector.push_back({statesList.at(idx)->cumulativeCost(), idx});
+  }
+
+  // Sort in ascending order
+  std::sort(sortingVector.begin(), sortingVector.end());
+
+  // Merge the last |statesList| - maxWidth + 1 states
+  mergingStates.push_back({});
+  uint32_t mergeIdx =  static_cast<uint32_t>(statesList.size()) - maxWidth + 1;
+  mergeIdx = static_cast<uint32_t>(statesList.size()) - mergeIdx;
+  for (; mergeIdx < static_cast<uint32_t>(statesList.size()); ++mergeIdx)
+  {
+    mergingStates.back().push_back(sortingVector.at(mergeIdx).second);
+  }
+  return mergingStates;
 }
 
 double TSPPD::calculateCost(const std::vector<int64_t>& path) const

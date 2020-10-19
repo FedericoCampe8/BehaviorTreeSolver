@@ -136,6 +136,22 @@ class SYS_EXPORT_CLASS TSPPD : public MDDConstraint {
    Node* mergeNodes(const std::vector<Node*>& nodesList, Arena* arena) const noexcept override;
 
    /**
+    * \brief returns the lists of states that are "equal" in "stateList" according
+    *        to the DPState function implemented for this constraint.
+    *        Equal states are states that can be reached from different paths but that
+    *        are the root of the same sub-MDD.
+    */
+   std::vector<std::vector<uint32_t>> calculateEqualStates(
+           const std::vector<DPState::UPtr>& statesList) override { return {}; }
+
+   /**
+    * \brief returns a lists of at most "maxWidth" sublists of states.
+    *        The sublist contains the nodes that can be "merged" together when relaxing the MDD.
+    */
+   std::vector<std::vector<uint32_t>> calculateMergeStates(
+           const std::vector<DPState::UPtr>& statesList, uint32_t maxWidth) override;
+
+   /**
     * \brief calculates and returns the cost of the given assignment.
     */
    double calculateCost(const std::vector<int64_t>& path) const override;
