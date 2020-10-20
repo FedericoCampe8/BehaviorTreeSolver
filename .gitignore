@@ -2,6 +2,6 @@
 .idea/
 
 # Build
-build/
-build-remote/
+build*/
+cmake-build*/
 
