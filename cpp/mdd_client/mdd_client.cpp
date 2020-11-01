@@ -16,6 +16,7 @@
 
 #include "mdd_optimization/all_different.hpp"
 #include "mdd_optimization/among.hpp"
+#include "mdd_optimization/equality.hpp"
 #include "mdd_optimization/mdd.hpp"
 #include "mdd_optimization/mdd_problem.hpp"
 #include "mdd_optimization/tsppd.hpp"
@@ -192,19 +193,26 @@ void runMDDOpt()
 
   // Create the constraint
   auto allDiff = std::make_shared<AllDifferent>();
-  std::vector<Variable::SPtr> scope;
-  scope.push_back( problem->getVariables()[0] );
-  scope.push_back( problem->getVariables()[2] );
-  allDiff->setScope( scope );
+  // std::vector<Variable::SPtr> scope;
+  // scope.push_back( problem->getVariables()[1] );
+  // scope.push_back( problem->getVariables()[2] );
+  // allDiff->setScope( scope );
 
-  // allDiff->setScope(problem->getVariables());
-  problem->addConstraint(allDiff);
+  allDiff->setScope(problem->getVariables());
+  // problem->addConstraint(allDiff);
 
   auto among = std::make_shared<Among>();
   among->setScope(problem->getVariables());
-  among->setParameters({4, 5}, 2, 2);
+  among->setParameters({4, 5}, 1, 1);
   problem->addConstraint(among);
 
+  auto equality = std::make_shared<Equality>();
+  std::vector<Variable::SPtr> scope;
+  scope.push_back( problem->getVariables()[2] );
+  scope.push_back( problem->getVariables()[0] );
+  equality->setScope( scope );
+  problem->addConstraint(equality);
+  
   // Create the MDD
   int32_t width{std::numeric_limits<int32_t>::max()};
   width = 10;

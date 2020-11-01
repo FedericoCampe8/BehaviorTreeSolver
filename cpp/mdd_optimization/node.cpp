@@ -96,30 +96,39 @@ void Node::addInEdge(Edge* edge)
 }
 
 Node::IncomingPathList Node::getIncomingPaths()
+{
+   //Return incoming paths from var starting with id 0
+   return getIncomingPathsFromVarWithId(0);
+}
+
+Node::IncomingPathList Node::getIncomingPathsFromVarWithId(int varId)
 { 
   Node::IncomingPathList incomingPaths;
-  for (auto edge : pInEdges) {
-    auto parent = edge->getTail();
-    Node::IncomingPathList pathList = parent->getIncomingPaths();
-    std::vector<EdgeList> newIncomingPaths;
-    for ( auto iter = pathList.begin(); iter != pathList.end(); iter++) {
-        std::vector<EdgeList> pathsForEdge = iter->second;
-        for (auto path : pathsForEdge) {
-          newIncomingPaths.emplace_back( path );
-        }
-    }
-
-    if (newIncomingPaths.empty()) {
-      newIncomingPaths.resize(1);
-      newIncomingPaths.back().push_back(edge);
-    } else {
-      for (int i = 0; i < newIncomingPaths.size(); i++) {
-        newIncomingPaths[i].push_back( edge );
+  //Null ptr for variable should only happen for the last node in the graph
+  if (pVariable == nullptr ||  pVariable->getId() > varId) {
+    for (auto edge : pInEdges) {
+      auto parent = edge->getTail();
+      Node::IncomingPathList pathList = parent->getIncomingPathsFromVarWithId(varId);
+      std::vector<EdgeList> newIncomingPaths;
+      for ( auto iter = pathList.begin(); iter != pathList.end(); iter++) {
+          std::vector<EdgeList> pathsForEdge = iter->second;
+          for (auto path : pathsForEdge) {
+            newIncomingPaths.emplace_back( path );
+          }
       }
+
+      if (newIncomingPaths.empty()) {
+        newIncomingPaths.resize(1);
+        newIncomingPaths.back().push_back(edge);
+      } else {
+        for (int i = 0; i < newIncomingPaths.size(); i++) {
+          newIncomingPaths[i].push_back( edge );
+        }
+      }
+
+      incomingPaths[edge->getUniqueId()] = newIncomingPaths;
+
     }
-
-    incomingPaths[edge->getUniqueId()] = newIncomingPaths;
-
   }
 
   return incomingPaths; 

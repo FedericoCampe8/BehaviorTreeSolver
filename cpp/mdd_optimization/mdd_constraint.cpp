@@ -13,12 +13,12 @@ MDDConstraint::MDDConstraint(ConstraintType type, const std::string& name)
 void MDDConstraint::eraseUnfeasibleSuccessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
 {
     std::vector<Node*> nodesToDelete;
-    std::queue<Node*> queue;
-    queue.push( node );
+    std::deque<Node*> queue;
+    queue.push_back( node );
 
     while (queue.size() > 0) {
-      Node* currNode = queue.front();
-      queue.pop();
+      auto currNode = queue.front();
+      queue.pop_front();
       std::vector<Node*> children;
       // Get all unique children
       for (auto outEdge: currNode->getOutEdges()) {
@@ -37,21 +37,22 @@ void MDDConstraint::eraseUnfeasibleSuccessors(Node* node, Arena* arena, std::vec
           }
 
           if (nextNodeValid == false) {
-              queue.push( nextNode );
+              queue.push_back( nextNode );
               nodesToDelete.push_back( nextNode );
           } 
       }
 
       // At this point curreNode is no longer valid.
-      arena->deleteNode(currNode->getUniqueId());
-      for (auto edge: currNode->getOutEdges()) {
-          arena->deleteEdge( edge->getUniqueId() );
+      std::vector<Edge*> outEdges = currNode->getOutEdges();
+      for (auto edge: outEdges) {
           edge->removeEdgeFromNodes();
+          arena->deleteEdge( edge->getUniqueId() );
       }
 
       mddRepresentation[currNode->getLayer()].erase( std::find(mddRepresentation[currNode->getLayer()].begin(), 
               mddRepresentation[currNode->getLayer()].end(), currNode) );
 
+      arena->deleteNode(currNode->getUniqueId());
 
     }
 }
@@ -59,12 +60,12 @@ void MDDConstraint::eraseUnfeasibleSuccessors(Node* node, Arena* arena, std::vec
 void MDDConstraint::eraseUnfeasiblePredecessors(Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
 {
     std::vector<Node*> nodesToDelete;
-    std::queue<Node*> queue;
-    queue.push( node );
+    std::deque<Node*> queue;
+    queue.push_back( node );
 
     while (queue.size() > 0) {
       Node* currNode = queue.front();
-      queue.pop();
+      queue.pop_front();
       std::vector<Node*> parents;
       // Get all unique children
       for (auto inEdge: currNode->getInEdges()) {
@@ -83,20 +84,22 @@ void MDDConstraint::eraseUnfeasiblePredecessors(Node* node, Arena* arena, std::v
           }
 
           if (prevNodeValid == false) {
-              queue.push( prevNode );
+              queue.push_back( prevNode );
               nodesToDelete.push_back( prevNode );
           } 
       }
 
       // At this point curreNode is no longer valid.
-      arena->deleteNode(currNode->getUniqueId());
-      for (auto edge: currNode->getInEdges()) {
-          arena->deleteEdge( edge->getUniqueId() );
+      std::vector<Edge*> inEdges = currNode->getInEdges();
+      for (auto edge: inEdges) {
           edge->removeEdgeFromNodes();
+          arena->deleteEdge( edge->getUniqueId() );
       }
 
       mddRepresentation[currNode->getLayer()].erase( std::find(mddRepresentation[currNode->getLayer()].begin(), 
               mddRepresentation[currNode->getLayer()].end(), currNode) );
+
+      arena->deleteNode(currNode->getUniqueId());
 
     }
 

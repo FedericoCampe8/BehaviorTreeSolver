@@ -242,16 +242,6 @@ void AllDifferent::enforceConstraint(Arena* arena, std::vector<std::vector<Node*
         if (var->getId() < firstLayerInConstraint) {
           firstLayerInConstraint = var->getId();
         }
-
-        // for (int val : var->getAvailableValues()) {
-        //     if ( std::count(seenValues.begin(), seenValues.end(), val) ) {
-        //         if (std::count(conflictingValues.begin(), conflictingValues.end(), val) == 0) {
-        //            conflictingValues.push_back( val );
-        //         }
-        //     } else {
-        //       seenValues.push_back( val );
-        //     }
-        // }
     }
 
 

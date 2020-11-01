@@ -134,6 +134,7 @@ class SYS_EXPORT_CLASS Node {
 
   /// Return the path to node
   IncomingPathList getIncomingPaths();
+  IncomingPathList getIncomingPathsFromVarWithId(int varId);
 
   /// Returns a string identifier for this node
   std::string getNodeStringId() const noexcept;

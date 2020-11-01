@@ -222,13 +222,14 @@ void Among::enforceConstraintTopDown(Arena* arena,
 
     if (layerInConstraint)
     {
-      for (int nodeIdx{0}; nodeIdx < static_cast<int>(mddRepresentation.at(layer).size()); ++nodeIdx)
+      int total_nodes = mddRepresentation.at(layer).size();
+      for (int nodeIdx{0}; nodeIdx < total_nodes; ++nodeIdx)
       {
         auto node = mddRepresentation.at(layer).at(nodeIdx);
 
         const auto& nodeInPaths = node->getIncomingPaths();
 
-        // First split and merge nodes according to their paths (state of constraint)
+        // First split nodes according to their paths (state of constraint)
 
         spp::sparse_hash_map<int, Node*> nodeByConstraintCount;
         Node::EdgeList inEdges = node->getInEdges();
@@ -280,9 +281,10 @@ void Among::enforceConstraintTopDown(Arena* arena,
     }  // layerInConstraint
 
 
-    // Splitting and merging nodes for current layer should be consistent at this point
+    // Splitting nodes for current layer should be consistent at this point
     //---------------------------------------------------------------------------------//
-    for (int nodeIdx = 0; nodeIdx < static_cast<int>(mddRepresentation[layer].size()); ++nodeIdx)
+    int totalNodes = mddRepresentation[layer].size();
+    for (int nodeIdx = 0; nodeIdx < totalNodes; ++nodeIdx)
     {
       auto node = mddRepresentation.at(layer).at(nodeIdx);
       std::vector<Edge*> outEdges = node->getOutEdges();
@@ -365,7 +367,6 @@ void Among::enforceConstraintTopDown(Arena* arena,
               mddRepresentation[node->getLayer()].end(), node) );
           
           arena->deleteNode( node->getUniqueId() );
-
       }
 
     }  //  for all nodes in current layer

@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <queue>
+#include <deque>
 #include <cstdint>  // for uint32_t
 #include <memory>   // for std::shared_ptr
 
