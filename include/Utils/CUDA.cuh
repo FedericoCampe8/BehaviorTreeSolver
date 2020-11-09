@@ -1,0 +1,1 @@
+#define ONE_THREAD_IN_BLOCK if(threadIdx.x == 0)

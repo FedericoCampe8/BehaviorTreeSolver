@@ -1,30 +1,24 @@
-#include <MDD/Edge.cuh>
+#include "Edge.cuh"
 
 __device__
-Edge::Edge() :
-    status(Status::NotInitialized)
+MDD::Edge::Edge() :
+    status(Status::NotActive)
 {}
 
 __device__
-Edge::Edge(unsigned int from, unsigned int to, int value) :
-    from(from),
-    to(to),
+MDD::Edge::Edge(unsigned int to) :
     status(Status::Active),
-    value(value)
+    to(to)
 {}
 
 __device__
-bool Edge::isActive() const
+bool MDD::Edge::isActive(Edge const & edge)
 {
-    return status == Status::Active;
+    return edge.status == Status::Active;
 }
 
 __device__
-void Edge::deactivate()
+void MDD::Edge::reset(MDD::Edge& edge)
 {
-    status = Status::NotActive;
+    edge.status = Status::NotActive;
 }
-
-
-
-
