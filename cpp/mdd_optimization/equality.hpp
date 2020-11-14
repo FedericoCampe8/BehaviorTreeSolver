@@ -104,6 +104,8 @@ class SYS_EXPORT_CLASS Equality : public MDDConstraint {
    void enforceAdmissibleValuesForLayer(int layer, std::vector<int64_t> admissibleValues, Arena* arena,
                           std::vector<std::vector<Node*>>& mddRepresentation) const;
 
+   void removeEdgeAndCleanMdd(Edge* edge, Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const;
+
 };
 
 

@@ -264,6 +264,46 @@ void Equality::enforceAdmissibleValuesForLayer(int layer, std::vector<int64_t> a
 }
 
 
+void Equality::removeEdgeAndCleanMdd(Edge* edge, Node* node, Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation) const
+{
+  
+  Node* head = edge->getHead();
+  edge->removeEdgeFromNodes();
+      
+  if (head->getInEdges().size() == 0)
+  {
+    eraseUnfeasibleSuccessors(head, arena, mddRepresentation);
+  }
+
+  arena->deleteEdge( edge->getUniqueId() );
+
+  //If node is no longer feasible, delete it and check parents
+  if (node->getOutEdges().size() == 0) {
+      std::vector<Edge*> inEdges = node->getInEdges();
+      for (auto inEdge: inEdges) {
+        Node* parent = inEdge->getTail();
+        bool parentIsValid = false;
+        for (auto outEdge: parent->getOutEdges()) {
+            if (outEdge->getHead() != node) {
+              parentIsValid = true;
+              break;
+            }
+        }
+
+        if (parentIsValid == false) {
+          eraseUnfeasiblePredecessors(parent, arena, mddRepresentation);
+        }
+
+        arena->deleteEdge( inEdge->getUniqueId() );
+      }
+      mddRepresentation[node->getLayer()].erase( std::find(mddRepresentation[node->getLayer()].begin(), 
+          mddRepresentation[node->getLayer()].end(), node) );
+      
+      arena->deleteNode( node->getUniqueId() );
+  }
+}
+
+
 
 void Equality::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& mddRepresentation,
                                      std::vector<Node*>& newNodesList) const
@@ -296,72 +336,26 @@ void Equality::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& 
     std::vector<Node*> lastLayer = mddRepresentation[lastLayerInConstraint];
     spp::sparse_hash_map<int, std::vector<int>> admissibleValueForX1;
     for (auto node : lastLayer ) {
+
         mdd::Node::IncomingPathList incomingPaths = node->getIncomingPathsFromVarWithId(firstLayerInConstraint);
-    
+
         std::vector<int> inValues;
         for (auto inEdge : node->getInEdges()) {
             for (auto path : incomingPaths[inEdge->getUniqueId()] ) {
-               Edge* firstEdge = path[0];
-               inValues.push_back( firstEdge->getValue() ); 
-            }
-        }
-
-        std::vector<Edge*> outEdges = node->getOutEdges();
-        bool nodeDeleted = false;
-
-        for (auto edge : outEdges) {
-            if (std::count(inValues.begin(), inValues.end(), edge->getValue()) == 0) {
-                Node* head = edge->getHead();
-
-                edge->removeEdgeFromNodes();
-                arena->deleteEdge( edge->getUniqueId() );
-                    
-                if (head->getInEdges().size() == 0)
-                {
-                  eraseUnfeasibleSuccessors(head, arena, mddRepresentation);
-                }
-
-                //If node is no longer feasible, delete it and check parents
-                if (node->getOutEdges().size() == 0) {
-                    std::vector<Edge*> inEdges = node->getInEdges();
-                    for (auto inEdge: inEdges) {
-                      Node* parent = inEdge->getTail();
-                      bool parentIsValid = false;
-                      for (auto outEdge: parent->getOutEdges()) {
-                          if (outEdge->getHead() != node) {
-                            parentIsValid = true;
-                            break;
-                          }
-                      }
-
-                      if (parentIsValid == false) {
-                        eraseUnfeasiblePredecessors(parent, arena, mddRepresentation);
-                      }
-
-                      arena->deleteEdge( inEdge->getUniqueId() );
-                    }
-                    mddRepresentation[node->getLayer()].erase( std::find(mddRepresentation[node->getLayer()].begin(), 
-                        mddRepresentation[node->getLayer()].end(), node) );
-                    
-                    arena->deleteNode( node->getUniqueId() );
-                    nodeDeleted = true;
-                }
-
-            }
-        }
-
-
-        if (nodeDeleted == false) {
-          //After clearing invalid values for x2, keep track of valid ones for x1
-          for (auto inEdge : node->getInEdges()) {
-              for (auto path : incomingPaths[inEdge->getUniqueId()] ) {
                 Edge* firstEdge = path[0];
-                Node* x1 = firstEdge->getTail();
+                int tailId = firstEdge->getTail()->getUniqueId();
                 for (auto outEdge : node->getOutEdges()) {
-                  admissibleValueForX1[ x1->getUniqueId() ].push_back( outEdge->getValue() );
+                    // Keep track of valid values for x1 based on what's reachable to x2.
+                    if (admissibleValueForX1.find(tailId) != admissibleValueForX1.end() ) {
+                      if (std::count(admissibleValueForX1[tailId].begin(), 
+                          admissibleValueForX1[tailId].end(), outEdge->getValue()) == 0) {
+                              admissibleValueForX1[firstEdge->getTail()->getUniqueId()].push_back( outEdge->getValue() );
+                          }
+                    } else {
+                          admissibleValueForX1[firstEdge->getTail()->getUniqueId()].push_back( outEdge->getValue() );
+                    }
                 }
-              }
-          }
+            }
         }
     }
 
@@ -385,44 +379,13 @@ void Equality::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& 
         std::vector<Edge*> outEdges = node->getOutEdges();
         for (int k = 0; k < outEdges.size(); k++) {
             Edge* edge = outEdges[k];
-            Node* head = edge->getHead();
             if (std::count(validValues.begin(), validValues.end(), edge->getValue()) == 0) {
                 // Invalid value from x1
-                edge->removeEdgeFromNodes();
-                    
-                if (head->getInEdges().size() == 0)
-                {
-                  eraseUnfeasibleSuccessors(head, arena, mddRepresentation);
-                }
+                removeEdgeAndCleanMdd(edge, node, arena, mddRepresentation);
 
-                arena->deleteEdge( edge->getUniqueId() );
-
-                //If node is no longer feasible, delete it and check parents
-                if (node->getOutEdges().size() == 0) {
-                    std::vector<Edge*> inEdges = node->getInEdges();
-                    for (auto inEdge: inEdges) {
-                      Node* parent = inEdge->getTail();
-                      bool parentIsValid = false;
-                      for (auto outEdge: parent->getOutEdges()) {
-                          if (outEdge->getHead() != node) {
-                            parentIsValid = true;
-                            break;
-                          }
-                      }
-
-                      if (parentIsValid == false) {
-                        eraseUnfeasiblePredecessors(parent, arena, mddRepresentation);
-                      }
-
-                      arena->deleteEdge( inEdge->getUniqueId() );
-                    }
-                    mddRepresentation[node->getLayer()].erase( std::find(mddRepresentation[node->getLayer()].begin(), 
-                        mddRepresentation[node->getLayer()].end(), node) );
-                    
-                    arena->deleteNode( node->getUniqueId() );
-                }
             } else {
               // Valid value from x1
+              Node* head = edge->getHead();
               int headId = head->getUniqueId();
               if (valueByNodeId.find(headId) != valueByNodeId.end() ) {
                     if (valueByNodeId[headId] == edge->getValue()) {
@@ -431,7 +394,7 @@ void Equality::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& 
                         Node* newHead = arena->buildNode(head->getLayer(), head->getVariable());
 
                         for (auto headOutEdge : head->getOutEdges()) {
-                            arena->buildEdge(newHead, headOutEdge->getHead(), edge->getDomainLowerBound(), edge->getDomainUpperBound());
+                            arena->buildEdge(newHead, headOutEdge->getHead(), headOutEdge->getDomainLowerBound(), headOutEdge->getDomainUpperBound());
                         }
                         edge->setHead( newHead );
                         mddRepresentation[newHead->getLayer()].push_back( newHead );
@@ -453,24 +416,21 @@ void Equality::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& 
 
     // After nodes in x1 are split, each node that was split needs to take a different path.
     // So split successors until you reach nodes in x2.
-    for (int layer = firstLayerInConstraint+1; layer < lastLayerInConstraint-1; layer++) {
+    for (int layer = firstLayerInConstraint+1; layer < lastLayerInConstraint; layer++) {
         for (int nodeIdx = 0; nodeIdx < mddRepresentation[layer].size(); nodeIdx++) {
             Node* node = mddRepresentation[layer][nodeIdx];
             //If node is a copy, create a copy for the head.
             //A copy is needed to differentiate unique solutions
             if ( mappedNodesIds.find(node->getUniqueId()) != mappedNodesIds.end() ) {
-
-                int mappedId = mappedNodesIds[node->getUniqueId()];
-                Node* mappedNode = nodeByNodeId[mappedId];
                 
-                for (auto outEdge : mappedNode->getOutEdges()) {
+                for (auto outEdge : node->getOutEdges()) {
                     Node* head = outEdge->getHead();
 
-                    if (mappedNodesIds.find(head->getUniqueId()) != mappedNodesIds.end()) {
-                        int mappedHeadId = mappedNodesIds[head->getUniqueId()];
-                        Node* mappedHead = nodeByNodeId[mappedHeadId];
-                        outEdge->setHead( mappedHead );
-                    } else {
+                    // if (mappedNodesIds.find(head->getUniqueId()) != mappedNodesIds.end()) {
+                    //     int mappedHeadId = mappedNodesIds[head->getUniqueId()];
+                    //     Node* mappedHead = nodeByNodeId[mappedHeadId];
+                    //     outEdge->setHead( mappedHead );
+                    // } else {
                         Node* mappedHead = arena->buildNode(head->getLayer(), head->getVariable());
 
                         for (auto headOutEdge: head->getOutEdges()) {
@@ -479,13 +439,42 @@ void Equality::enforceConstraint(Arena* arena, std::vector<std::vector<Node*>>& 
                         mddRepresentation[mappedHead->getLayer()].push_back( mappedHead );
                         mappedNodesIds[ mappedHead->getUniqueId() ] = head->getUniqueId();
                         nodeByNodeId[ mappedHead->getUniqueId() ] = mappedHead;
-                    }
+                        outEdge->setHead( mappedHead );
+                    // }
                 }
-
             }
         }
     }
 
+    std::vector<Node*> nodesLastLayer = mddRepresentation[lastLayerInConstraint];
+    for (auto node : nodesLastLayer ) {
+                
+        mdd::Node::IncomingPathList incomingPaths = node->getIncomingPathsFromVarWithId(firstLayerInConstraint);
+        std::vector<Edge*> inEdges = node->getInEdges();
+        for (auto inEdge : inEdges) {
+            auto path = incomingPaths[inEdge->getUniqueId()][0];
+            Edge* firstEdge = path[0];
+
+            std::vector<Edge*> outEdges = node->getOutEdges();
+
+            bool deleteNode = true;
+            for (auto outEdge : outEdges) {
+                
+                if (outEdge->getValue() != firstEdge->getValue()) {
+                  removeEdgeAndCleanMdd(outEdge, node, arena, mddRepresentation);
+                } else {
+                  deleteNode = false;
+                }
+
+            }
+
+            // Done with this node
+            if (deleteNode) {
+              break;
+            }
+        }
+
+    }
 
 }
 
