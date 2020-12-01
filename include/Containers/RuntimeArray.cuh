@@ -35,7 +35,7 @@ class RuntimeArray
         __host__ __device__ T* begin() const;
         __host__ __device__ T* end() const;
         __host__ __device__ void print(bool endline = true) const;
-        __host__ __device__ std::byte* getStorageEnd() const;
+        __host__ __device__ std::byte* getStorageEnd(size_t const alignment = 1) const;
         __host__ __device__ void swap(RuntimeArray<T> & other);
         __host__ __device__ static std::size_t sizeofStorage(unsigned int size);
     private:
@@ -160,9 +160,9 @@ T* RuntimeArray<T>::mallocStorage()
 
 template<typename T>
 __host__ __device__
-std::byte* RuntimeArray<T>::getStorageEnd() const
+std::byte* RuntimeArray<T>::getStorageEnd(size_t const alignment) const
 {
-    return reinterpret_cast<std::byte*>(storage + size);
+    return Memory::align(alignment,reinterpret_cast<std::byte*>(storage + size));
 }
 
 template<typename T>

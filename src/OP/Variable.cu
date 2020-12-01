@@ -6,7 +6,7 @@ OP::Variable::Variable(int minValue, int maxValue) :
     maxValue(maxValue)
 {}
 
-__device__
+__host__ __device__
 unsigned int OP::Variable::cardinality(Variable const & var)
 {
     return var.maxValue - var.minValue + 1;

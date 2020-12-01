@@ -6,6 +6,7 @@
 #include <cassert>
 #include <type_traits>
 
+
 #include <thrust/copy.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -43,8 +44,8 @@ class StaticVector
         __host__ __device__ void popBack();
         __host__ __device__ void clear();
         __host__ __device__ void remove(T const & t);
-        __host__ __device__ void print(bool endline = true) const;
-        __host__ __device__ std::byte* getStorageEnd() const;
+        __host__ __device__ void print(bool endline = true, bool compact = true) const;
+        __host__ __device__ std::byte* getStorageEnd(size_t const alignment = 1) const;
         __host__ __device__ static std::size_t sizeofStorage(unsigned int capacity);
     private:
         __host__ __device__ T* mallocStorage();
@@ -194,7 +195,7 @@ void StaticVector<T>::popBack()
 
 template<typename T>
 __host__ __device__
-void StaticVector<T>::print(bool endline) const
+void StaticVector<T>::print(bool endline, bool compact) const
 {
     static_assert(std::is_integral<T>::value);
 
@@ -206,9 +207,12 @@ void StaticVector<T>::print(bool endline) const
         {
             printf(",%d", storage[i]);
         }
-        for (uint i = size; i < capacity; i += 1)
+        if (not compact)
         {
-            printf(",_");
+            for (uint i = size; i < capacity; i += 1)
+            {
+                printf(",_");
+            }
         }
     }
     printf("]");
@@ -237,9 +241,9 @@ T* StaticVector<T>::mallocStorage()
 
 template<typename T>
 __host__ __device__
-std::byte* StaticVector<T>::getStorageEnd() const
+std::byte* StaticVector<T>::getStorageEnd(size_t const alignment) const
 {
-    return reinterpret_cast<std::byte*>(storage + capacity);
+    return Memory::align(alignment,  reinterpret_cast<std::byte*>(storage + capacity));
 }
 
 template<typename T>

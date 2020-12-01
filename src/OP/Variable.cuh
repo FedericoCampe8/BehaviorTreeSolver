@@ -11,6 +11,6 @@ namespace OP
         public:
             __host__ Variable(int minValue, int maxValue);
             __device__ Variable& operator=(Variable const & other);
-            __device__ static unsigned int cardinality(Variable const & var);
+            __host__ __device__ static unsigned int cardinality(Variable const & var);
     };
 }

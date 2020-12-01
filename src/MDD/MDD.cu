@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <cmath>
+#include <numeric>
+#include <algorithm>
 
 #include <thrust/transform_reduce.h>
 #include <thrust/binary_search.h>
@@ -15,24 +17,24 @@
 using namespace DP;
 
 __device__
-MDD::MDD::MDD(Type type, unsigned int width, DP::TSPState const * const root, unsigned int rootLvl, OP::TSPProblem const * problem) :
+MDD::MDD::MDD(Type type, unsigned int width, DP::TSPState const * const root, unsigned int rootLvl, OP::TSPProblem const * problem, DP::TSPState * const cutset) :
     type(type),
     root(root),
     rootLvl(rootLvl),
     problem(problem),
-    dag(width, calcFanout(), calcHeight())
+    dag(width, calcFanout(problem, rootLvl), calcHeight()),
+    cutset(cutset)
 {}
 
-__device__
-unsigned int MDD::MDD::calcFanout() const
+__host__ __device__
+unsigned int MDD::MDD::calcFanout(OP::TSPProblem const* problem, unsigned int rootLvl)
 {
-    return thrust::transform_reduce(
-        thrust::seq,
-        &problem->vars[rootLvl],
-        problem->vars.end(),
-        OP::Variable::cardinality,
-        0,
-        thrust::maximum<unsigned int>());
+    unsigned int result = 0;
+    for(OP::Variable * var = &problem->vars[rootLvl]; var != problem->vars.end(); var += 1)
+    {
+        result = max(OP::Variable::cardinality(*var), result);
+    }
+    return result;
 }
 
 __device__
@@ -55,12 +57,12 @@ void MDD::MDD::buildTopDown(std::byte* buffer)
     });
 
     //Next states buffer
-    RuntimeArray<DP::TSPState> nextStates(dag.width, statesStorage.getStorageEnd());
+    RuntimeArray<DP::TSPState> nextStates(dag.width, statesStorage.getStorageEnd(alignof(DP::TSPState)));
     RuntimeArray<std::byte> nextStatesStorage(dag.width * dag.stateStorageSize, nextStates.getStorageEnd());
-    thrust::for_each(thrust::seq, nextStates.begin(), nextStates.end(), [=] (auto& state)
+    thrust::for_each(thrust::seq, nextStates.begin(), nextStates.end(), [=] (auto& nextState)
     {
-        unsigned int stateIdx = thrust::distance(nextStates.begin(), &state);
-        new (&state) DP::TSPState(dag.height, &nextStatesStorage[dag.stateStorageSize * stateIdx]);
+        unsigned int nextStateIdx = thrust::distance(nextStates.begin(), &nextState);
+        new (&nextState) DP::TSPState(dag.height, &nextStatesStorage[dag.stateStorageSize * nextStateIdx]);
     });
 
     //Edges buffer
@@ -72,8 +74,8 @@ void MDD::MDD::buildTopDown(std::byte* buffer)
 
     //Auxiliary information
     unsigned int infoCount = dag.fanout * dag.width;
-    RuntimeArray<uint32_t> costs(infoCount, edges.getStorageEnd());
-    RuntimeArray<uint32_t> indices(infoCount, costs.getStorageEnd());
+    RuntimeArray<uint32_t> costs(infoCount, edges.getStorageEnd(alignof(uint32_t)));
+    RuntimeArray<uint32_t> indices(infoCount, costs.getStorageEnd(alignof(uint32_t)));
 
     //Root
     states[0] = *root;
@@ -86,11 +88,12 @@ void MDD::MDD::buildTopDown(std::byte* buffer)
     });
 
     //Build
+    bool cutsetInitialized = false;
     unsigned int statesCount = 1;
     unsigned int nextStatesCount = 0;
     for(unsigned int level = 0; level < dag.height; level += 1 )
     {
-        //Intitialize indices
+        //Initialize indices
         thrust::sequence(thrust::seq, indices.begin(), indices.end());
 
         //Initialize costs
@@ -113,34 +116,52 @@ void MDD::MDD::buildTopDown(std::byte* buffer)
         nextStatesCount = min(dag.width, costsCount);
         nextStatesCount = level < dag.height - 1 ? nextStatesCount : 1;
 
+        //Cutset
+        if(type == MDD::Relaxed and (not cutsetInitialized) and costsCount > dag.width)
+        {
+            thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
+            {
+                unsigned int currentStateIdx = index / dag.fanout;
+                unsigned int edgeIdx =  index % dag.fanout;
+                int value = problem->vars[rootLvl + level].minValue + edgeIdx;
+                unsigned int nextStateIdx = thrust::distance(indices.begin(), &index);
+                DP::TSPModel::makeNextState(problem, &states[currentStateIdx], value, costs[nextStateIdx], &cutset[nextStateIdx]);
+            });
+            
+            cutsetInitialized = true;
+        }
+
         //Add states
         assert(nextStatesCount <= indices.size);
-        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + nextStatesCount, [=] (auto& index)
+        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
         {
             unsigned int currentStateIdx = index / dag.fanout;
             unsigned int edgeIdx =  index % dag.fanout;
             int value = problem->vars[rootLvl + level].minValue + edgeIdx;
             unsigned int nextStateIdx = thrust::distance(indices.begin(), &index);
-            DP::TSPModel::makeNextState(problem, &states[currentStateIdx], value, costs[nextStateIdx], &nextStates[nextStateIdx]);
+            if(nextStateIdx < nextStatesCount)
+            {
+                DP::TSPModel::makeNextState(problem, &states[currentStateIdx], value, costs[nextStateIdx], &nextStates[nextStateIdx]);
+            }
+            else if (type == Relaxed)
+            {
+                DP::TSPModel::mergeNextState(problem, &states[currentStateIdx], value, &nextStates[nextStatesCount - 1]);
+            }
         });
+
 
         //Add edges
         assert(costsCount <= indices.size);
         thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
         {
             unsigned int nextStateIdx = thrust::distance(indices.begin(), &index);
-            if(type == Relaxed or nextStateIdx <= dag.width - 1)
+            if(nextStateIdx < nextStatesCount)
             {
-                if(level < dag.height - 1)
-                {
-                    nextStateIdx = min(dag.width - 1, nextStateIdx);
-                }
-                else
-                {
-                    nextStateIdx = 0;
-                };
-
-                new (&edges[index]) Edge(nextStateIdx);
+                new(&edges[index]) Edge(nextStateIdx);
+            }
+            else if (type == Relaxed)
+            {
+                new (&edges[index]) Edge(nextStatesCount - 1);
             }
         });
 
@@ -178,12 +199,14 @@ void MDD::MDD::print(unsigned int rootLvl, bool endline) const
     printf("digraph G\n");
     printf("{\n");
     printf("\n");
-    printf("  node [shape=circle];\n");
+    printf("  node [shape=circle, style=filled];\n");
 
     //States
-    for (unsigned int level = 0; level < dag.height; level += 1)
+    for (unsigned int level = 0; level <= dag.height; level += 1)
     {
         printf("\n");
+
+
         printf("  {\n");
         printf("      rank = same;\n");
 
@@ -192,8 +215,11 @@ void MDD::MDD::print(unsigned int rootLvl, bool endline) const
         for(unsigned int stateIdx = 0; stateIdx < dag.width; stateIdx += 1)
         {
             DP::TSPState const & state = states[stateIdx];
-            if (DP::TSPState::isActive(state))
+            if (state.active)
             {
+                printf("      L%dN%d [fillcolor=%s,label=\"L%dN%d\\n(%d)\\n",level, stateIdx, state.exact ? "green": "orange", level, stateIdx, state.cost);
+                state.admissibleValues.print(false, true);
+                printf("\"];\n");
                 if (stateIdx > 0)
                 {
                     printf("      L%dN%d -> L%dN%d [style=invis];\n", level, previousStateIdx, level, stateIdx);
@@ -213,7 +239,7 @@ void MDD::MDD::print(unsigned int rootLvl, bool endline) const
         for(unsigned int stateIdx = 0; stateIdx < dag.width; stateIdx += 1)
         {
             DP::TSPState const & state = states[stateIdx];
-            if (DP::TSPState::isActive(state))
+            if (state.active)
             {
                 for (unsigned int edgeIdx = 0; edgeIdx < dag.fanout; edgeIdx += 1)
                 {
@@ -234,4 +260,9 @@ void MDD::MDD::print(unsigned int rootLvl, bool endline) const
     {
         printf("\n");
     }
+}
+__device__
+unsigned int MDD::MDD::getMinCost() const
+{
+    return dag.getStates(dag.height)[0].cost;
 }

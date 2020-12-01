@@ -27,6 +27,7 @@ namespace MDD
             __device__ Edge* getEdges(unsigned int level) const;
             __device__ DP::TSPState* getStates(unsigned int level) const;
             __device__ std::byte* getStatesStorage(unsigned int level) const;
+            __device__ void reset();
 
         private:
             __device__ std::byte* mallocStatesStorage() const;

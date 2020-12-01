@@ -68,3 +68,21 @@ MDD::Edge& MDD::DAG::getEdge(unsigned int level, unsigned int nodeIdx, unsigned 
     return edges[index];
 }
 
+__device__
+void MDD::DAG::reset()
+{
+    //Initialize edges
+    thrust::for_each(thrust::seq, edges.begin(), edges.end(), [=] (auto& edge)
+    {
+        Edge::reset(edge);
+    });
+
+    //Initialize states
+    std::size_t stateStorageSize = DP::TSPState::sizeofStorage(height);
+    thrust::for_each(thrust::seq, states.begin(), states.end(), [=] (auto& state)
+    {
+
+        DP::TSPState::reset(state);
+    });
+}
+

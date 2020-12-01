@@ -6,20 +6,15 @@
 
 __host__ __device__
 DP::TSPState::TSPState(unsigned int height, std::byte* storage) :
-    type(Type::NotActive),
+    active(false),
+    exact(true),
     admissibleValues(height, storage)
 {}
 
-__device__
-bool DP::TSPState::isActive(TSPState const & state)
-{
-    return state.type == Type::Active;
-}
-
 __host__ __device__
-std::size_t DP::TSPState::sizeofStorage(unsigned int capacity)
+std::size_t DP::TSPState::sizeofStorage(unsigned int height)
 {
-    return StaticVector<int32_t>::sizeofStorage(capacity);
+    return StaticVector<int32_t>::sizeofStorage(height);
 }
 
 __host__ __device__
@@ -40,15 +35,18 @@ void DP::TSPState::addToAdmissibles(int value)
 __device__
 DP::TSPState& DP::TSPState::operator=(TSPState const & other)
 {
-    this->type = other.type;
+    this->active = other.active;
+    this->exact = other.exact;
     this->cost = other.cost;
     this->lastValue = other.lastValue;
     this->admissibleValues = other.admissibleValues;
     return *this;
 }
+
 __device__
 void DP::TSPState::reset(TSPState& state)
 {
-    state.type = Type::NotActive;
+    state.active = false;
+    state.exact = true;
     state.admissibleValues.clear();
 }

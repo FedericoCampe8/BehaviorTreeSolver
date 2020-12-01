@@ -11,9 +11,7 @@ namespace Memory
 {
     __host__ __device__ inline std::byte* safeMalloc(std::size_t size);
     __host__ inline std::byte* safeManagedMalloc(std::size_t size);
-    template<typename T>
-    __host__ __device__ inline std::byte* endOf(T const * t);
-
+    __host__ __device__ inline std::byte*  align(size_t const  alignment, std::byte const * ptr);
 
 }
 
@@ -35,9 +33,10 @@ std::byte* Memory::safeManagedMalloc(std::size_t size)
     return static_cast<std::byte*>(mem);
 }
 
-template<typename T>
 __host__ __device__
-std::byte* Memory::endOf(T const * t)
+std::byte* Memory::align(size_t const alignment, std::byte const * ptr)
 {
-    return reinterpret_cast<std::byte*>(t) + sizeof(T);
+    uintptr_t const intptr = reinterpret_cast<uintptr_t>(ptr);
+    uintptr_t const aligned = intptr + (intptr  % alignment);
+    return reinterpret_cast<std::byte*>(aligned);
 }
