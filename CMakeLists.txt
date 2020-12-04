@@ -15,7 +15,7 @@ endif ()
 string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda")
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 string(APPEND CMAKE_CUDA_FLAGS " --compiler-options=-Wall")
-string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -G")
+string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -g -G")
 string(APPEND CMAKE_CUDA_FLAGS_RELEASE " -lineinfo")
 
 # Check CUDA and GCC version
@@ -28,6 +28,8 @@ if (NOT ((CMAKE_CXX_COMPILER_ID STREQUAL "GNU") AND (CMAKE_CXX_COMPILER_VERSION 
     message(FATAL_ERROR "Required GCC ${GCC_REQUIRED_VERSION}")
 endif ()
 
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
 # Add sources
 set(SOURCES
     src/DP/TSPState.cu
@@ -36,17 +38,16 @@ set(SOURCES
     src/Main.cu
     src/MDD/Edge.cu
     src/MDD/Edge.cuh
-    src/MDD/DAG.cuh
     src/OP/Variable.cu
     src/OP/Variable.cuh
     src/DP/TSPModel.cuh
     src/MDD/MDD.cu
     src/MDD/MDD.cuh
-    src/MDD/DAG.cu
     src/OP/Problem.cu
     src/OP/Problem.cuh
     src/OP/TSPProblem.cu
-    src/OP/TSPProblem.cuh)
+    src/OP/TSPProblem.cuh
+    src/BB/FullState.cuh)
 
 # Add include path
 include_directories(include)

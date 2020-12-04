@@ -33,6 +33,7 @@ class StaticVector
         __host__ __device__ bool operator==(StaticVector<T> const & other) const;
         __host__ __device__ unsigned int getSize() const;
         __host__ __device__ bool isEmpty() const;
+        __host__ __device__ bool isFull() const;
         __host__ __device__ void resize(unsigned int size);
         __host__ __device__ T& at(unsigned int index) const;
         __host__ __device__ T& front() const;
@@ -117,6 +118,13 @@ __host__ __device__
 bool StaticVector<T>::isEmpty() const
 {
     return size == 0;
+}
+
+template<typename T>
+__host__ __device__
+bool StaticVector<T>::isFull() const
+{
+    return size == capacity;
 }
 
 template<typename T>

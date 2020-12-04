@@ -2,7 +2,6 @@
 #include <thrust/for_each.h>
 #include <thrust/execution_policy.h>
 
-#include "../OP/TSPProblem.cuh"
 #include "TSPModel.cuh"
 
 __host__
@@ -10,7 +9,6 @@ void DP::TSPModel::makeRoot(OP::TSPProblem const * problem,  TSPState* root)
 {
     root->active = true;
     root->cost = 0;
-    root->lastValue = problem->startLocation;
     root->addToAdmissibles(problem->startLocation);
     root->addToAdmissibles(problem->endLocation);
     thrust::for_each(thrust::seq, problem->pickups.begin(), problem->pickups.end(), [=] (auto& pickup)
@@ -20,11 +18,32 @@ void DP::TSPModel::makeRoot(OP::TSPProblem const * problem,  TSPState* root)
 }
 
 __device__
+void DP::TSPModel::calcCosts(OP::TSPProblem const * problem, unsigned int level, TSPState const * state, uint32_t* costs)
+{
+    OP::Variable const & var = problem->vars[level];
+    thrust::for_each(thrust::seq, state->admissibleValues.begin(), state->admissibleValues.end(), [=] (auto& value)
+    {
+        if (var.minValue <= value and value <= var.maxValue)
+        {
+            unsigned int edgeIdx = value - problem->vars[level].minValue;
+            costs[edgeIdx] = state->cost;
+            if(not state->selectedValues.isEmpty())
+            {
+                costs[edgeIdx] += problem->getDistance(state->selectedValues.back(), value);
+            }
+        }
+    });
+}
+
+__device__
 void DP::TSPModel::makeNextState(OP::TSPProblem const * problem, TSPState const * state, int value, unsigned int cost, TSPState* nextState)
 {
     *nextState = *state;
     nextState->cost = cost;
-    nextState->lastValue = value;
+    if (not nextState->isSelected(value))
+    {
+        nextState->selectedValues.pushBack(value);
+    }
     bool isPickup = thrust::binary_search(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
     if (isPickup)
     {
@@ -40,27 +59,14 @@ void DP::TSPModel::makeNextState(OP::TSPProblem const * problem, TSPState const 
 }
 
 __device__
-void DP::TSPModel::calcCosts(OP::TSPProblem const * problem, unsigned int level, TSPState const * state, uint32_t* costs)
-{
-    OP::Variable const & var = problem->vars[level];
-    thrust::for_each(thrust::seq, state->admissibleValues.begin(), state->admissibleValues.end(), [=] (auto& value)
-    {
-        if(var.minValue <= value and value <= var.maxValue)
-        {
-            unsigned int edgeIdx = value - problem->vars[level].minValue;
-            costs[edgeIdx] = state->cost + problem->getDistance(state->lastValue, value);
-        }
-    });
-}
-
-__device__
 void DP::TSPModel::mergeNextState(OP::TSPProblem const * problem, TSPState const * state, int value, TSPState* nextState)
 {
     nextState->exact = false;
 
+    // Merge admissible values
     thrust::for_each(thrust::seq, state->admissibleValues.begin(),  state->admissibleValues.end(), [=] (auto& admissibleValue)
     {
-        if (value != admissibleValue and not nextState->isAdmissible(admissibleValue))
+        if (value != admissibleValue and (not nextState->isAdmissible(admissibleValue)))
         {
             nextState->addToAdmissibles(admissibleValue);
         }
@@ -77,5 +83,4 @@ void DP::TSPModel::mergeNextState(OP::TSPProblem const * problem, TSPState const
             nextState->addToAdmissibles(delivery);
         }
     }
-
 }

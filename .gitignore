@@ -5,3 +5,6 @@
 build*/
 cmake-build*/
 
+# Dataset
+data/
+
