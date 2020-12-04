@@ -68,17 +68,24 @@ int main(int argc, char ** argv)
     //Bound
     int32_t gUpperBound = INT32_MAX;
 
+    unsigned int visitedStates = 0;
+    unsigned int maxQueueSize = 0;
     auto start = Chrono::now();
     do
     {
-        printf("[INFO] Queue size: %d\r", queue->validPrefixSize );
 
+        maxQueueSize = std::max(maxQueueSize, queue->validPrefixSize);
+        {
+            auto end = Chrono::now();
+            printf("[INFO] Queued states: %7d | Visited states: %7u | Time: %u ms\r", queue->validPrefixSize, visitedStates, static_cast<unsigned int>(end - start));
+        }
         // Offload
         prepareOffload(gUpperBound, queue, toOffload);
 
         if (not toOffload->isEmpty())
         {
             {
+                visitedStates += toOffload->getSize();
                 auto start = Chrono::now();
                 doOffload<<<toOffload->getSize(), 32>>>(problem, width, toOffload, queue, solutions, cutsetsSizes, cutsets);
                 cudaDeviceSynchronize();
@@ -97,9 +104,12 @@ int main(int argc, char ** argv)
                     bestSolution = solutions->at(i);
 
                     auto end = Chrono::now();
-                    printf("[INFO] Found new solution ");
+                    printf("[INFO] New solution: ");
                     bestSolution.selectedValues.print(false);
-                    printf(" of value %d in %d ms\n", gUpperBound, static_cast<unsigned int>(end - start));
+                    printf(" | Value: %d", gUpperBound);
+                    printf(" | Time: %u ms", static_cast<unsigned int>(end - start));
+                    printf(" | Visited states: %u", visitedStates);
+                    printf(" | Max queue size: %u\n", maxQueueSize);
                 }
             }
 
@@ -152,10 +162,13 @@ int main(int argc, char ** argv)
     while(queue->validPrefixSize > 0);
 
     auto end = Chrono::now();
-
-    printf("[INFO] Found optimal solution ");
-    bestSolution.selectedValues.print(false);
-    printf(" of value %d in %d ms\n", gUpperBound, static_cast<unsigned int>(end - start));
+    printf("[INFO] ----------                                                               \n");
+    printf("[INFO] Best solution: ");
+    bestSolution.selectedValues.print();
+    printf("[INFO] Value: %d\n", gUpperBound);
+    printf("[INFO] Time: %u ms\n", static_cast<unsigned int>(end - start));
+    printf("[INFO] Visited states: %u\n", visitedStates);
+    printf("[INFO] Max queue size: %u\n", maxQueueSize);
 
     return EXIT_SUCCESS;
 }
