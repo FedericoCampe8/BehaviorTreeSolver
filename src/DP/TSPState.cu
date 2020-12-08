@@ -8,7 +8,7 @@ __host__ __device__
 DP::TSPState::TSPState(OP::TSPProblem const * problem, std::byte* storage) :
     active(false),
     exact(true),
-    cost(0),
+    cost(UINT32_MAX),
     selectedValues(problem->vars.size, storage),
     admissibleValues(problem->vars.size, selectedValues.getStorageEnd())
 {}
@@ -56,7 +56,20 @@ void DP::TSPState::reset(TSPState& state)
 {
     state.active = false;
     state.exact = true;
-    state.cost = 0;
+    state.cost = UINT32_MAX;
     state.selectedValues.clear();
     state.admissibleValues.clear();
+}
+
+__host__ __device__
+void DP::TSPState::print()
+{
+    auto bool2Str = [&] (bool const & b) -> char const *
+    {
+        return b ? "T" : "F";
+    };
+
+    printf("Active: %s | Exact: %s | Cost: %d | Details: ", bool2Str(active) , bool2Str(exact), cost);
+    selectedValues.print(false);
+    admissibleValues.print();
 }

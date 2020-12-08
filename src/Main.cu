@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cinttypes>
 #include <cstddef>
 #include <new>
 #include <utility>
@@ -16,7 +17,7 @@
 #include "DP/TSPModel.cuh"
 #include "BB/FullState.cuh"
 
-#define CPU_QUEUE_SIZE 150000
+#define CPU_QUEUE_SIZE 10000000
 
 using namespace std;
 using json = nlohmann::json;
@@ -28,11 +29,14 @@ OP::TSPProblem* parseGrubHubInstance(char const * problemFileName);
 
 ManualVector<BB::FullState<DP::TSPState>>* fullStateBuffer(OP::TSPProblem const * problem, unsigned int size);
 RuntimeArray<DP::TSPState>* stateArray(OP::TSPProblem const * problem, unsigned int size);
-StaticVector<unsigned int>* uintVector(unsigned int size);
+ManualVector<unsigned int>* uintManualVector(unsigned int size);
 RuntimeArray<unsigned int>* uintArray(unsigned int size);
 
-void prepareOffload(int& gUpperBound, ManualVector<BB::FullState<DP::TSPState>>* queue, StaticVector<unsigned int>* toOffload);
-__global__ void doOffload(OP::TSPProblem const * problem, unsigned int width, StaticVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets);
+unsigned int enqueueStatesToGPU(unsigned int globalUpperBound, ManualVector<BB::FullState<DP::TSPState>>* queue, ManualVector<unsigned int>* toOffload);
+void doOffload(OP::TSPProblem const * problem, unsigned int width, ManualVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets);
+__global__ void offload(OP::TSPProblem const * problem, unsigned int width, ManualVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets);
+void checkForBestSolutions(uint64_t startTime, uint64_t& bestSolutionTime, DP::TSPState& bestSolution, ManualVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions);
+unsigned int dequeueStatesFromGPU(unsigned int globalUpperBound, ManualVector<unsigned int>* toOffload, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets, ManualVector<BB::FullState<DP::TSPState>>* queue);
 
 int main(int argc, char ** argv)
 {
@@ -53,122 +57,54 @@ int main(int argc, char ** argv)
     RuntimeArray<unsigned int>* const cutsetsSizes = uintArray(maxParallelism);
 
     // To offload
-    StaticVector<unsigned int>* const toOffload = uintVector(maxParallelism);
+    ManualVector<unsigned int>* const toOffload = uintManualVector(maxParallelism + 1);
 
     // Root
     DP::TSPModel::makeRoot(problem, queue->at(0).state);
-    queue->at(0).upperBound = INT32_MAX;
-    queue->at(0).lowerBound = INT32_MIN;
-    queue->validPrefixSize = 1;
+    queue->emplaceBackValid(true, queue->at(0).state);
 
     //Solutions
     RuntimeArray<DP::TSPState>* solutions = stateArray(problem, maxParallelism + 1);
-    DP::TSPState& bestSolution = solutions->at(solutions->size - 1);
 
-    //Bound
-    int32_t gUpperBound = INT32_MAX;
+    //Optimum
+    DP::TSPState& bestSolution = solutions->at(solutions->size - 1);
+    DP::TSPState::reset(bestSolution);
+    uint64_t bestSolutionTime = Chrono::now();
 
     unsigned int visitedStates = 0;
-    unsigned int maxQueueSize = 0;
-    auto start = Chrono::now();
+    auto startTime = Chrono::now();
+
+    unsigned int enqueuedStates;
+    unsigned int iterationsCount = 0;
+
+
     do
     {
+        /*
+        printf("[INFO] --- Iteration %d ---\n", iterationsCount);
+        printf("[INFO] Best solution: ");
+        bestSolution.selectedValues.print(false);
+        printf(" | Value: %d | Time %ld ms\n", bestSolution.cost, bestSolutionTime > startTime ? static_cast<long>(Chrono::now() - startTime) : 0);
+        printf("[INFO] Visited states: %u\n", visitedStates);
+        printf("[INFO] Total time: %ld ms\n", static_cast<long>(Chrono::now() - startTime));
+         */
 
-        maxQueueSize = std::max(maxQueueSize, queue->validPrefixSize);
+        enqueuedStates = enqueueStatesToGPU(bestSolution.cost, queue, toOffload);
+
+        if (enqueuedStates > 0)
         {
-            auto end = Chrono::now();
-            printf("[INFO] Queued states: %7d | Visited states: %7u | Time: %u ms\r", queue->validPrefixSize, visitedStates, static_cast<unsigned int>(end - start));
-        }
-        // Offload
-        prepareOffload(gUpperBound, queue, toOffload);
+            visitedStates += toOffload->validPrefixSize;
 
-        if (not toOffload->isEmpty())
-        {
-            {
-                visitedStates += toOffload->getSize();
-                auto start = Chrono::now();
-                doOffload<<<toOffload->getSize(), 32>>>(problem, width, toOffload, queue, solutions, cutsetsSizes, cutsets);
-                cudaDeviceSynchronize();
-                auto end = Chrono::now();
-                //printf("[INFO] Explored %d states on GPU (%d ms)\n", toOffload->getSize(), static_cast<unsigned int>(end - start));
-            }
+            doOffload(problem, width, toOffload, queue, solutions, cutsetsSizes, cutsets);
 
-            // Update global upper bound
-            for (unsigned int i = 0; i < toOffload->getSize(); i += 1)
-            {
-                unsigned int fullStateIdx = toOffload->at(i);
-                BB::FullState<DP::TSPState>& fullState = queue->at(fullStateIdx);
-                if (fullState.upperBound < gUpperBound)
-                {
-                    gUpperBound = fullState.upperBound;
-                    bestSolution = solutions->at(i);
+            checkForBestSolutions(startTime, bestSolutionTime, bestSolution, toOffload, queue, solutions);
 
-                    auto end = Chrono::now();
-                    printf("[INFO] New solution: ");
-                    bestSolution.selectedValues.print(false);
-                    printf(" | Value: %d", gUpperBound);
-                    printf(" | Time: %u ms", static_cast<unsigned int>(end - start));
-                    printf(" | Visited states: %u", visitedStates);
-                    printf(" | Max queue size: %u\n", maxQueueSize);
-                }
-            }
+            dequeueStatesFromGPU(bestSolution.cost, toOffload, cutsetMaxSize, cutsetsSizes, cutsets, queue);
 
-            // Filter useless state
-            unsigned int filteredStates = 0;
-            unsigned int enquequedStates = 0;
-            unsigned int totalStates = 0;
-            for (unsigned int i = 0; i < toOffload->getSize(); i += 1)
-            {
-                unsigned int& cutsetSize = cutsetsSizes->at(i);
-                totalStates += cutsetSize;
-
-                unsigned int fullStateIdx = toOffload->at(i);
-                BB::FullState<DP::TSPState>& fullState = queue->at(fullStateIdx);
-                if (fullState.lowerBound > gUpperBound or fullState.state->selectedValues.getSize() == problem->vars.size)
-                {
-                    //printf("[INFO] Filtering cutset %d of size %d\n", i, cutsetSize);
-                    filteredStates += cutsetSize;
-                    cutsetSize = 0;
-                }
-            }
-            //printf("[INFO] Dequeue filtered %d/%d states\n", filteredStates, totalStates);
-
-
-            // Push cutsets
-            for (unsigned int i = 0; i < toOffload->getSize(); i += 1)
-            {
-                unsigned int& cutsetSize = cutsetsSizes->at(i);
-                if (cutsetSize > 0)
-                {
-                    unsigned int fullStateIdx = toOffload->at(i);
-                    BB::FullState<DP::TSPState>& fullState = queue->at(fullStateIdx);
-                    //printf("[INFO] Pushing cutset %d of size %d\n", i, cutsetSize);
-                    for (unsigned int j = 0; j < cutsetSize; j += 1)
-                    {
-                        queue->at(queue->validPrefixSize) = cutsets->at((cutsetMaxSize * i) + j);
-                        queue->validPrefixSize += 1;
-
-                        enquequedStates += 1;
-
-                        assert(queue->validPrefixSize <= CPU_QUEUE_SIZE);
-                    }
-                }
-            }
-            //printf("[INFO] Dequeue pushed %d/%d states\n", enquequedStates, totalStates);
-
-            toOffload->clear();
+            iterationsCount += 1;
         }
     }
-    while(queue->validPrefixSize > 0);
-
-    auto end = Chrono::now();
-    printf("[INFO] ----------                                                               \n");
-    printf("[INFO] Best solution: ");
-    bestSolution.selectedValues.print();
-    printf("[INFO] Value: %d\n", gUpperBound);
-    printf("[INFO] Time: %u ms\n", static_cast<unsigned int>(end - start));
-    printf("[INFO] Visited states: %u\n", visitedStates);
-    printf("[INFO] Max queue size: %u\n", maxQueueSize);
+    while(enqueuedStates > 0);
 
     return EXIT_SUCCESS;
 }
@@ -248,7 +184,7 @@ ManualVector<BB::FullState<DP::TSPState>>* fullStateBuffer(OP::TSPProblem const 
     // Init
     for(unsigned int fullStateIdx = 0; fullStateIdx < size; fullStateIdx +=1)
     {
-        fullStates[fullStateIdx].state = &states->at(fullStateIdx);
+        new (&fullStates[fullStateIdx]) BB::FullState<DP::TSPState>(false, &states->at(fullStateIdx));
     };
 
     new (buffer) ManualVector<BB::FullState<DP::TSPState>>(size, fullStatesMem);
@@ -281,16 +217,16 @@ RuntimeArray<DP::TSPState>* stateArray(OP::TSPProblem const * problem, unsigned 
     return array;
 }
 
-StaticVector<unsigned int>* uintVector(unsigned int size)
+ManualVector<unsigned int>* uintManualVector(unsigned int size)
 {
     // Malloc
     std::byte* storage = Memory::safeManagedMalloc(StaticVector<unsigned int>::sizeofStorage(size));
 
-    std::byte* vectorMem = Memory::safeManagedMalloc(sizeof(StaticVector<unsigned int>));
-    StaticVector<unsigned int>* vector = reinterpret_cast<StaticVector<unsigned int>*>(vectorMem);
+    std::byte* vectorMem = Memory::safeManagedMalloc(sizeof(ManualVector<unsigned int>));
+    ManualVector<unsigned int>* vector = reinterpret_cast<ManualVector<unsigned int>*>(vectorMem);
 
     // Init
-    new (vector) StaticVector<unsigned int>(size, storage);
+    new (vector) ManualVector<unsigned int>(size, storage);
 
     return vector;
 }
@@ -310,41 +246,78 @@ RuntimeArray<unsigned int>* uintArray(unsigned int size)
 }
 
 
-void prepareOffload(int& gUpperBound, ManualVector<BB::FullState<DP::TSPState>>* queue, StaticVector<unsigned int>* toOffload)
+unsigned int enqueueStatesToGPU(unsigned int globalUpperBound, ManualVector<BB::FullState<DP::TSPState>>* queue, ManualVector<unsigned int>* toOffload)
 {
-    unsigned int filteredStates = 0;
-    while(queue->validPrefixSize > 0 and not toOffload->isFull())
+    assert(toOffload->isEmptyValid());
+
+    unsigned int checkedSuffixSize = 0;
+    unsigned int checkedStatesCount = 0;
+    while(checkedSuffixSize < queue->validPrefixSize)
     {
-        BB::FullState<DP::TSPState>& fullState = queue->lastValid();
-
-        if(fullState.lowerBound < gUpperBound)
+        auto cmp = [=] (unsigned int& idx1, unsigned int& idx2)
         {
-            toOffload->pushBack(queue->validPrefixSize - 1);
-        }
-        else
+
+            DP::TSPState const * state1 = queue->at(idx1).state;
+            DP::TSPState const * state2 = queue->at(idx2).state;
+
+            double w1 = static_cast<double>(state1->cost) / static_cast<double>(state1->selectedValues.getSize());
+            double w2 = static_cast<double>(state2->cost) / static_cast<double>(state2->selectedValues.getSize());
+
+            return w1 < w2;
+        };
+
+        unsigned int fullStateIdx = queue->validPrefixSize - checkedSuffixSize - 1;
+        BB::FullState<DP::TSPState>& fullState = queue->at(fullStateIdx);
+
+        if (fullState.active)
         {
-            filteredStates +=1;
+            if(fullState.lowerBound < globalUpperBound and fullState.state->cost < globalUpperBound)
+            {
+                checkedStatesCount += 1;
+
+                toOffload->pushBackValid(fullStateIdx);
+                fullState.active = false;
+                std::push_heap(toOffload->beginValid(), toOffload->endValid(), cmp);
+
+                if (toOffload->isFullValid())
+                {
+                    std::pop_heap(toOffload->beginValid(), toOffload->endValid(), cmp);
+                    queue->at(toOffload->lastValid()).active = true;
+                    toOffload->popBackValid();
+                }
+            }
+            else
+            {
+                fullState.active = false;
+            }
         }
 
-        queue->validPrefixSize -= 1;
+        checkedSuffixSize += 1;
     }
-    //printf("[INFO] Enqueue filtered %d states\n", filteredStates);
+
+    printf("[INFO] Enqueued %u of %u (%u) states\r", toOffload->validPrefixSize, checkedStatesCount, queue->validPrefixSize);
+
+    return toOffload->validPrefixSize;
+}
+
+void doOffload(OP::TSPProblem const * problem, unsigned int width, ManualVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets)
+{
+        offload<<<toOffload->validPrefixSize, 32>>>(problem, width, toOffload, queue, solutions, cutsetsSizes, cutsets);
+        cudaDeviceSynchronize();
 }
 
 __global__
-void doOffload(OP::TSPProblem const * problem, unsigned int width, StaticVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets)
+void offload(OP::TSPProblem const * problem, unsigned int width, ManualVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets)
 {
     __shared__ unsigned int alignedSharedMem[1000];
     std::byte* sharedMem = reinterpret_cast<std::byte*>(alignedSharedMem);
 
     ONE_THREAD_IN_BLOCK
     {
-
         //MDD
-        auto start = Chrono::now();
-
-        BB::FullState<DP::TSPState>& queueFullState = queue->at(toOffload->at(blockIdx.x));
-        MDD::MDD mdd(MDD::MDD::Type::Relaxed, width, queueFullState.state, problem);
+        unsigned int fullStateIdx = toOffload->at(blockIdx.x);
+        BB::FullState<DP::TSPState>& enqueuedState = queue->at(fullStateIdx);
+        MDD::MDD mdd(MDD::MDD::Type::Relaxed, width, enqueuedState.state, problem);
 
         DP::TSPState* solution = &solutions->at(blockIdx.x);
         unsigned int cutsetMaxSize = width * MDD::MDD::calcFanout(problem);
@@ -352,50 +325,81 @@ void doOffload(OP::TSPProblem const * problem, unsigned int width, StaticVector<
 
         BB::FullState<DP::TSPState>* cutset = &cutsets->at(cutsetMaxSize * blockIdx.x);
         mdd.buildTopDown(solution, cutsetSize, cutset->state, sharedMem);
-        queueFullState.lowerBound = solution->cost;
+        enqueuedState.lowerBound = solution->cost;
 
         mdd.type = MDD::MDD::Type::Restricted;
         mdd.buildTopDown(solution, cutsetSize, cutset->state, sharedMem);
-        queueFullState.upperBound = solution->cost;
+        enqueuedState.upperBound = solution->cost;
 
-        for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < cutsetSize; cutsetStateIdx +=1)
+        for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < cutsetSize; cutsetStateIdx += 1)
         {
-            cutset[cutsetStateIdx].lowerBound = queueFullState.lowerBound;
-            cutset[cutsetStateIdx].upperBound = queueFullState.upperBound;
+            cutset[cutsetStateIdx].active = true;
         }
-
-        auto end = Chrono::now();
-
-        /*
-        printf("[INFO] == State\n");
-        if (queueFullState.upperBound < 2802)
-        {
-            mdd.print(queueFullState.level);
-        }
-        printf("[INFO] lowerbound = %d\n", queueFullState.lowerBound);
-        printf("[INFO] upperbound = %d\n", queueFullState.upperBound);
-        printf("[INFO] level = %d\n", queueFullState.level);
-        printf("[INFO] ");
-        queueFullState.state->selectedValues.print(false);
-        printf(" - %d - ", queueFullState.level);
-        queueFullState.state->admissibleValues.print();
-
-        printf("[INFO] == Cuteset\n");
-        for(int i = 0; i < queueFullState.cutsetSize; i +=1)
-        {
-            if (not cutset[i].state->active)
-            {
-                break;
-            }
-            printf("[INFO] ");
-            cutset[i].state->selectedValues.print(false);
-            printf(" - %d - ", cutset[i].level);
-            cutset[i].state->admissibleValues.print();
-        }
-         */
-
-        //printf("[INFO] State %d with bounds (%d,%d) and cutset %d explored in %d ms\n", blockIdx.x,  queueFullState.lowerBound, queueFullState.upperBound, cutsetSize, static_cast<unsigned int>(end - start));
-
-
     }
+}
+
+void checkForBestSolutions(uint64_t startTime, uint64_t& bestSolutionTime, DP::TSPState& bestSolution, ManualVector<unsigned int>* toOffload, ManualVector<BB::FullState<DP::TSPState>>* queue, RuntimeArray<DP::TSPState>* solutions)
+{
+    for(unsigned int i = 0; i < toOffload->validPrefixSize; i += 1)
+    {
+        unsigned int fullStateIdx = toOffload->at(i);
+        BB::FullState<DP::TSPState>& fullState = queue->at(fullStateIdx);
+        if (fullState.upperBound < bestSolution.cost)
+        {
+            bestSolution = solutions->at(i);
+            bestSolutionTime = Chrono::now();
+            printf("[INFO] New best solution: ");
+            bestSolution.selectedValues.print(false);
+            printf(" | Value: %d | Time %ld ms\n", bestSolution.cost, bestSolutionTime > startTime ? static_cast<long>(Chrono::now() - startTime) : 0);
+
+        }
+    }
+}
+
+unsigned int dequeueStatesFromGPU(unsigned int globalUpperBound, ManualVector<unsigned int>* toOffload, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, ManualVector<BB::FullState<DP::TSPState>>* cutsets, ManualVector<BB::FullState<DP::TSPState>>* queue)
+{
+    unsigned int checkedStatesCount = 0;
+    unsigned int dequeuedStatesCount = 0;
+    unsigned int activePrefixSize = 0;
+
+    for (unsigned int i = 0; i < toOffload->validPrefixSize; i += 1)
+    {
+        unsigned int enqueuedStateIdx = toOffload->at(i);
+        BB::FullState<DP::TSPState>& enqueuedState = queue->at(enqueuedStateIdx);
+        unsigned int cutsetSize = cutsetsSizes->at(i);
+
+        if(not enqueuedState.state->selectedValues.isFull())
+        {
+            for (unsigned int cutsetStateIdx = 0; cutsetStateIdx < cutsetSize; cutsetStateIdx += 1)
+            {
+                BB::FullState<DP::TSPState>& stateToDequeue = cutsets->at((cutsetMaxSize * i) + cutsetStateIdx);
+
+                while(queue->at(activePrefixSize).active)
+                {
+                    activePrefixSize += 1;
+                }
+
+                if(activePrefixSize < queue->validPrefixSize)
+                {
+                    queue->at(activePrefixSize) = stateToDequeue;
+                    activePrefixSize += 1;
+                }
+                else
+                {
+                    queue->pushBackValid(stateToDequeue);
+                }
+
+            }
+
+            dequeuedStatesCount += cutsetSize;
+        }
+
+        checkedStatesCount += cutsetSize;
+    }
+
+    //printf("[INFO] Dequeued %u of %u states\n", dequeuedStatesCount, checkedStatesCount);
+
+    toOffload->clearValid();
+
+    return dequeuedStatesCount;
 }

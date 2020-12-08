@@ -12,9 +12,9 @@ namespace DP
     class TSPState
     {
         public:
-            bool active : 1;
-            bool exact : 1;
-            uint32_t cost : 30;
+            bool active;
+            bool exact;
+            uint32_t cost;
             StaticVector<int32_t> selectedValues;
             StaticVector<int32_t> admissibleValues;
 
@@ -26,6 +26,8 @@ namespace DP
             __host__ __device__ bool isAdmissible(int value) const;
             __host__ __device__ bool isSelected(int value) const;
             __host__ __device__ void addToAdmissibles(int value);
+            __host__ __device__ void print();
+
 
     };
 }

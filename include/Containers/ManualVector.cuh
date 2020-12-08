@@ -31,11 +31,18 @@ class ManualVector
         __host__ __device__ T& operator[](unsigned int index) const;
         __host__ __device__ ManualVector<T>& operator=(ManualVector<T> const & other);
         __host__ __device__ bool operator==(ManualVector<T> const & other) const;
+        __host__ __device__ bool isEmptyValid() const;
+        __host__ __device__ bool isFullValid() const;
         __host__ __device__ T& at(unsigned int index) const;
         __host__ __device__ T& firstValid() const;
         __host__ __device__ T& lastValid() const;
         __host__ __device__ T* beginValid() const;
         __host__ __device__ T* endValid() const;
+        template<typename ... Args>
+        __host__ __device__ void emplaceBackValid(Args ... args);
+        __host__ __device__ void pushBackValid(T const & t);
+        __host__ __device__ void popBackValid();
+        __host__ __device__ void clearValid();
         __host__ __device__ void print(bool endline = true, bool compact = true) const;
         __host__ __device__ std::byte* getStorageEnd(size_t const alignment = 1) const;
         __host__ __device__ static std::size_t sizeofStorage(unsigned int capacity);
@@ -105,6 +112,20 @@ std::size_t ManualVector<T>::sizeofStorage(unsigned int capacity)
 
 template<typename T>
 __host__ __device__
+bool ManualVector<T>::isEmptyValid() const
+{
+    return validPrefixSize == 0;
+}
+
+template<typename T>
+__host__ __device__
+bool ManualVector<T>::isFullValid() const
+{
+    return validPrefixSize == capacity;
+}
+
+template<typename T>
+__host__ __device__
 T& ManualVector<T>::at(unsigned int index) const
 {
     return operator[](index);
@@ -136,6 +157,40 @@ __host__ __device__
 T* ManualVector<T>::endValid() const
 {
     return storage + validPrefixSize;
+}
+
+template<typename T>
+template<typename ... Args>
+__host__ __device__
+void ManualVector<T>::emplaceBackValid(Args ... args)
+{
+    assert(validPrefixSize < capacity);
+    new (&storage[validPrefixSize]) T(args ...);
+    validPrefixSize += 1;
+}
+
+template<typename T>
+__host__ __device__
+void ManualVector<T>::pushBackValid(T const & t)
+{
+    assert(validPrefixSize < capacity);
+    storage[validPrefixSize] = t;
+    validPrefixSize += 1;
+}
+
+template<typename T>
+__host__ __device__
+void ManualVector<T>::clearValid()
+{
+    validPrefixSize = 0;
+}
+
+template<typename T>
+__host__ __device__
+void ManualVector<T>::popBackValid()
+{
+    assert(validPrefixSize > 0);
+    validPrefixSize -= 1;
 }
 
 template<typename T>

@@ -101,6 +101,7 @@ void MDD::MDD::buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::
         //Count next states
         unsigned int* costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), UINT32_MAX);
         unsigned int costsCount = thrust::distance(costs.begin(), costsEnd);
+
         nextStatesCount = min(width, costsCount);
         nextStatesCount = level < problem->vars.size - 1 ? nextStatesCount : 1;
 
@@ -137,7 +138,6 @@ void MDD::MDD::buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::
                 DP::TSPModel::mergeNextState(problem, &states[currentStateIdx], value, &nextStates[nextStatesCount - 1]);
             }
         });
-
 
         //Add edges
         assert(costsCount <= indices.size);
