@@ -22,7 +22,7 @@ namespace DP
             __host__ __device__ TSPState(OP::TSPProblem const * problem, std::byte* storage);
             __host__ __device__ TSPState& operator=(TSPState const & other);
             __host__ __device__ static void reset(TSPState& state);
-            __host__ __device__ static std::size_t sizeofStorage(OP::TSPProblem const * problem);
+            __host__ __device__ static std::size_t sizeOfStorage(OP::TSPProblem const * problem);
             __host__ __device__ bool isAdmissible(int value) const;
             __host__ __device__ bool isSelected(int value) const;
             __host__ __device__ void addToAdmissibles(int value);

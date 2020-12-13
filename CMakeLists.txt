@@ -47,7 +47,7 @@ set(SOURCES
     src/OP/Problem.cuh
     src/OP/TSPProblem.cu
     src/OP/TSPProblem.cuh
-    src/BB/FullState.cuh)
+    src/BB/AugmentedState.cuh)
 
 # Add include path
 include_directories(include)

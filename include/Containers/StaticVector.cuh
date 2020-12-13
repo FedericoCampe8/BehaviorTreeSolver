@@ -6,104 +6,137 @@
 #include <cassert>
 #include <type_traits>
 
-
 #include <thrust/copy.h>
-#include <thrust/equal.h>
+#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
-#include <thrust/remove.h>
 
 #include <Utils/Memory.cuh>
 
 template<typename T>
 class StaticVector
 {
-    public:
-        uint32_t const capacity;
     private:
-        bool const owning : 1;
-        uint32_t size : 31;
+        enum Flag {Owning = 1};
+        unsigned int flags;
+        unsigned int size;
+        unsigned int const capacity;
         T * const storage;
 
     public:
-        __host__ __device__ StaticVector(unsigned int capacity);
+        __host__ __device__ StaticVector(unsigned int capacity, Memory::MallocType allocType = Memory::MallocType::Std);
         __host__ __device__ StaticVector(unsigned int capacity, std::byte* storage);
+        __host__ __device__ StaticVector(T* begin, T* end);
         __host__ __device__ ~StaticVector();
-        __host__ __device__ T& operator[](unsigned int index) const;
-        __host__ __device__ StaticVector<T>& operator=(StaticVector<T> const & other);
-        __host__ __device__ bool operator==(StaticVector<T> const & other) const;
-        __host__ __device__ unsigned int getSize() const;
-        __host__ __device__ bool isEmpty() const;
-        __host__ __device__ bool isFull() const;
-        __host__ __device__ void resize(unsigned int size);
-        __host__ __device__ T& at(unsigned int index) const;
-        __host__ __device__ T& front() const;
-        __host__ __device__ T& back() const;
-        __host__ __device__ T* begin() const;
-        __host__ __device__ T* end() const;
-        template<typename ... Args>  __host__ __device__ void emplaceBack(Args ... args);
-        __host__ __device__ void pushBack(T const & t);
-        __host__ __device__ void popBack();
-        __host__ __device__ void clear();
-        __host__ __device__ void remove(T const & t);
-        __host__ __device__ void print(bool endline = true, bool compact = true) const;
-        __host__ __device__ std::byte* getStorageEnd(size_t const alignment = 1) const;
-        __host__ __device__ static std::size_t sizeofStorage(unsigned int capacity);
+        __host__ __device__ inline T& at(unsigned int index) const;
+        __host__ __device__ inline T& back() const;
+        __host__ __device__ inline T* begin() const;
+        __host__ __device__ inline void clear();
+        __host__ __device__ inline T* end() const;
+        __host__ __device__ inline T& front() const;
+        __host__ __device__ inline unsigned int getCapacity() const;
+        __host__ __device__ inline unsigned int getSize() const;
+        __host__ __device__ inline bool isEmpty() const;
+        __host__ __device__ inline bool isFull() const;
     private:
-        __host__ __device__ T* mallocStorage();
+        __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType allocType);
+    public:
+        __host__ __device__ StaticVector<T>& operator=(StaticVector<T> const & other);
+        __host__ __device__ inline T& operator[](unsigned int index) const;
+        __host__ __device__ inline void popBack();
+        __host__ __device__ void print(bool endLine = true) const;
+        __host__ __device__ void pushBack(T const & t);
+        __host__ __device__ inline void resize(unsigned int size);
+        __host__ __device__ static inline std::size_t sizeOfStorage(unsigned int capacity);
+        __host__ __device__ inline std::byte* storageEnd() const;
 };
 
 template<typename T>
 __host__ __device__
-StaticVector<T>::StaticVector(unsigned int capacity) :
-    capacity(capacity),
-    owning(true),
+StaticVector<T>::StaticVector(unsigned int capacity, Memory::MallocType allocType) :
+    flags(Flag::Owning),
     size(0),
-    storage(mallocStorage())
+    capacity(capacity),
+    storage(mallocStorage(allocType))
 {}
 
 template<typename T>
 __host__ __device__
 StaticVector<T>::StaticVector(unsigned int capacity, std::byte* storage) :
-    capacity(capacity),
-    owning(false),
+    flags(0),
     size(0),
+    capacity(capacity),
     storage(reinterpret_cast<T*>(storage))
+{}
+
+template<typename T>
+__host__ __device__
+StaticVector<T>::StaticVector(T* begin, T* end) :
+    flags(0),
+    size(0),
+    capacity(thrust::distance(begin, end)),
+    storage(begin)
 {}
 
 template<typename T>
 __host__ __device__
 StaticVector<T>::~StaticVector()
 {
-    if(owning)
+    if(flags & Flag::Owning)
     {
-        std::free(storage);
+        free(storage);
     }
 }
 
 template<typename T>
 __host__ __device__
-T& StaticVector<T>::operator[](unsigned int index) const
+T& StaticVector<T>::at(unsigned int index) const
 {
     assert(size > 0);
     assert(index < capacity);
+
     return storage[index];
 }
 
 template<typename T>
 __host__ __device__
-StaticVector<T>& StaticVector<T>::operator=(StaticVector<T> const & other)
+T& StaticVector<T>::back() const
 {
-    assert(other.size <= capacity);
-    size = other.size;
-    thrust::copy(thrust::seq, other.begin(), other.end(), begin());
-    return *this;
+    return at(size - 1);
 }
 
 template<typename T>
 __host__ __device__
-bool StaticVector<T>::operator==(StaticVector<T> const & other) const
+T* StaticVector<T>::begin() const
 {
-    return size == other.size and thrust::equal(begin(), end(), other.begin());
+    return storage;
+}
+
+template<typename T>
+__host__ __device__
+void StaticVector<T>::clear()
+{
+    size = 0;
+}
+
+template<typename T>
+__host__ __device__
+T* StaticVector<T>::end() const
+{
+    return storage + size;
+}
+
+template<typename T>
+__host__ __device__
+T& StaticVector<T>::front() const
+{
+    return at(0);
+}
+
+template<typename T>
+__host__ __device__
+unsigned int StaticVector<T>::getCapacity() const
+{
+    return capacity;
 }
 
 template<typename T>
@@ -129,102 +162,59 @@ bool StaticVector<T>::isFull() const
 
 template<typename T>
 __host__ __device__
-std::size_t StaticVector<T>::sizeofStorage(unsigned int capacity)
+T* StaticVector<T>::mallocStorage(unsigned int capacity, Memory::MallocType allocType)
 {
-    return sizeof(T) * capacity;
+    std::byte* storage = Memory::safeMalloc(sizeOfStorage(capacity), allocType);
+    return reinterpret_cast<T*>(storage);
 }
 
 template<typename T>
 __host__ __device__
-void StaticVector<T>::resize(unsigned int size)
+StaticVector<T>& StaticVector<T>::operator=(StaticVector<T> const & other)
 {
-    this->size = size;
+    resize(other.size);
+    thrust::copy(
+#ifdef __CUDA_ARCH__
+        thrust::device,
+#else
+        thrust::host,
+#endif
+        other.begin(), other.end(), begin());
+    return *this;
 }
 
 template<typename T>
 __host__ __device__
-T& StaticVector<T>::at(unsigned int index) const
+T& StaticVector<T>::operator[](unsigned int index) const
 {
-    return operator[](index);
-}
-
-template<typename T>
-__host__ __device__
-T& StaticVector<T>::front() const
-{
-    return operator[](0);
-}
-
-template<typename T>
-__host__ __device__
-T& StaticVector<T>::back() const
-{
-    return operator[](size -1);
-}
-
-template<typename T>
-__host__ __device__
-T* StaticVector<T>::begin() const
-{
-    return storage;
-}
-
-template<typename T>
-__host__ __device__
-T* StaticVector<T>::end() const
-{
-    return storage + size;
-}
-
-template<typename T>
-template<typename ... Args>
-__host__ __device__
-void StaticVector<T>::emplaceBack(Args ... args)
-{
-    assert(size < capacity);
-    new (&storage[size]) T(args ...);
-    size += 1;
-}
-
-template<typename T>
-__host__ __device__
-void StaticVector<T>::clear()
-{
-    size = 0;
+    return at(index);
 }
 
 template<typename T>
 __host__ __device__
 void StaticVector<T>::popBack()
 {
-    assert(size > 0);
-    size -= 1;
+    resize(size - 1);
 }
+
 
 template<typename T>
 __host__ __device__
-void StaticVector<T>::print(bool endline, bool compact) const
+void StaticVector<T>::print(bool endLine) const
 {
     static_assert(std::is_integral<T>::value);
 
     printf("[");
     if(size > 0)
     {
-        printf("%d",storage[0]);
-        for (uint i = 1; i < size; i += 1)
+        printf("%d", at(0));
+        for (unsigned int i = 1; i < size; i += 1)
         {
-            printf(",%d", storage[i]);
-        }
-        if (not compact)
-        {
-            for (uint i = size; i < capacity; i += 1)
-            {
-                printf(",_");
-            }
+            printf(",%d", at(i));
         }
     }
     printf("]");
-    if (endline)
+    if (endLine)
     {
         printf("\n");
     }
@@ -234,31 +224,28 @@ template<typename T>
 __host__ __device__
 void StaticVector<T>::pushBack(T const & t)
 {
-    assert(size < capacity);
-    storage[size] = t;
-    size += 1;
+    resize(size + 1);
+    back() = t;
 }
 
 template<typename T>
 __host__ __device__
-T* StaticVector<T>::mallocStorage()
+void StaticVector<T>::resize(unsigned int size)
 {
-    std::byte* storage = Memory::safeMalloc(sizeofStorage(capacity));
-    return static_cast<T*>(storage);
+    assert(size <= capacity);
+    this->size = size;
 }
 
 template<typename T>
 __host__ __device__
-std::byte* StaticVector<T>::getStorageEnd(size_t const alignment) const
+std::size_t StaticVector<T>::sizeOfStorage(unsigned int capacity)
 {
-    return Memory::align(alignment,  reinterpret_cast<std::byte*>(storage + capacity));
+    return sizeof(T) * capacity;
 }
 
 template<typename T>
 __host__ __device__
-void StaticVector<T>::remove(T const & t)
+std::byte* StaticVector<T>::storageEnd() const
 {
-    T* end = &storage[size];
-    end = thrust::remove(thrust::seq, storage, end, t);
-    size = thrust::distance(storage, end);
+    return reinterpret_cast<std::byte*>(storage + capacity);
 }

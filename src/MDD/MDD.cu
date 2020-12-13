@@ -42,7 +42,7 @@ __device__
 void MDD::MDD::buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::TSPState * const cutset, std::byte* buffer)
 {
     //Current states buffer
-    unsigned int stateStorageSize = DP::TSPState::sizeofStorage(problem);
+    unsigned int stateStorageSize = DP::TSPState::sizeOfStorage(problem);
     RuntimeArray<DP::TSPState> states(width, buffer);
     RuntimeArray<std::byte> statesStorage(stateStorageSize * width, states.getStorageEnd(4));
     thrust::for_each(thrust::seq, states.begin(), states.end(), [=] (auto& state)

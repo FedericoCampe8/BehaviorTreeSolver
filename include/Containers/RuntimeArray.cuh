@@ -8,7 +8,6 @@
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
-#include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 
 #include <Utils/Memory.cuh>
@@ -16,102 +15,82 @@
 template<typename T>
 class RuntimeArray
 {
-
-    public:
-        uint32_t const size: 31;
     private:
-        bool const owning : 1;
+        enum Flag {Owning = 1};
+        unsigned int flags;
+        unsigned int capacity;
         T * const storage;
 
     public:
-        __host__ __device__ RuntimeArray(unsigned int size);
+        __host__ __device__ RuntimeArray(unsigned int capacity, Memory::MallocType allocType = Memory::MallocType::Std);
+        __host__ __device__ RuntimeArray(unsigned int capacity, std::byte* storage);
         __host__ __device__ RuntimeArray(T* begin, T* end);
-        __host__ __device__ RuntimeArray(unsigned int size, std::byte* storage);
         __host__ __device__ ~RuntimeArray();
-        __host__ __device__ T& operator[](unsigned int index) const;
-        __host__ __device__ RuntimeArray<T>& operator=(RuntimeArray<T> const & other);
-        __host__ __device__ bool operator==(RuntimeArray<T> const & other) const;
-        __host__ __device__ T& at(unsigned int index) const;
-        __host__ __device__ T* begin() const;
-        __host__ __device__ T* end() const;
-        __host__ __device__ void print(bool endline = true) const;
-        __host__ __device__ std::byte* getStorageEnd(size_t const alignment = 1) const;
-        __host__ __device__ void swap(RuntimeArray<T> & other);
-        __host__ __device__ static std::size_t sizeofStorage(unsigned int size);
+        __host__ __device__ inline T& at(unsigned int index) const;
+        __host__ __device__ inline T& back() const;
+        __host__ __device__ inline T* begin() const;
+        __host__ __device__ inline T* end() const;
+        __host__ __device__ inline T& front() const;
+        __host__ __device__ inline unsigned int getCapacity() const;
     private:
-        __host__ __device__ T* mallocStorage();
-        __host__ __device__ RuntimeArray(bool owning, unsigned int size, T* storage);
+        __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType allocType);
+    public:
+        __host__ __device__ RuntimeArray<T>& operator=(RuntimeArray<T> const & other);
+        __host__ __device__ inline T& operator[](unsigned int index) const;
+        __host__ __device__ void print(bool endLine = true) const;
+        __host__ __device__ static inline std::size_t sizeOfStorage(unsigned int capacity);
+        __host__ __device__ inline std::byte* storageEnd() const;
 };
 
 template<typename T>
 __host__ __device__
-RuntimeArray<T>::RuntimeArray(unsigned int size) :
-    size(size),
-    owning(true),
-    storage(mallocStorage())
+RuntimeArray<T>::RuntimeArray(unsigned int capacity, Memory::MallocType allocType) :
+    flags(Flag::Owning),
+    capacity(capacity),
+    storage(mallocStorage(capacity, allocType))
+{}
+
+template<typename T>
+__host__ __device__
+RuntimeArray<T>::RuntimeArray(unsigned int capacity, std::byte* storage) :
+    flags(0),
+    capacity(capacity),
+    storage(reinterpret_cast<T*>(storage))
 {}
 
 template<typename T>
 __host__ __device__
 RuntimeArray<T>::RuntimeArray(T* begin, T* end) :
-    RuntimeArray<T>(static_cast<unsigned int>(thrust::distance(begin,end)), begin)
-{}
-
-template<typename T>
-__host__ __device__
-RuntimeArray<T>::RuntimeArray(unsigned int size, std::byte* storage) :
-    size(size),
-    owning(false),
-    storage(reinterpret_cast<T*>(storage))
+    flags(0),
+    capacity(thrust::distance(begin,end)),
+    storage(begin)
 {}
 
 template<typename T>
 __host__ __device__
 RuntimeArray<T>::~RuntimeArray()
 {
-    if(owning)
+    if(flags & Flag::Owning)
     {
-        std::free(storage);
+        free(storage);
     }
-}
-
-template<typename T>
-__host__ __device__
-T& RuntimeArray<T>::operator[](unsigned int index) const
-{
-    assert(size > 0);
-    assert(index < size);
-    return storage[index];
-}
-
-template<typename T>
-__host__ __device__
-RuntimeArray<T> & RuntimeArray<T>::operator=(RuntimeArray<T> const & other)
-{
-    assert(other.size == size);
-    thrust::copy(thrust::seq, other.begin(), other.end(), begin());
-    return *this;
-}
-
-template<typename T>
-__host__ __device__
-bool RuntimeArray<T>::operator==(RuntimeArray<T> const & other) const
-{
-    return size == other.size and thrust::equal(begin(), end(), other.begin());
-}
-
-template<typename T>
-__host__ __device__
-std::size_t RuntimeArray<T>::sizeofStorage(unsigned int size)
-{
-    return sizeof(T) * size;
 }
 
 template<typename T>
 __host__ __device__
 T& RuntimeArray<T>::at(unsigned int index) const
 {
-    return operator[](index);
+    assert(capacity > 0);
+    assert(index < capacity);
+
+    return storage[index];
+}
+
+template<typename T>
+__host__ __device__
+T& RuntimeArray<T>::back() const
+{
+    return at(capacity - 1);
 }
 
 template<typename T>
@@ -125,26 +104,70 @@ template<typename T>
 __host__ __device__
 T* RuntimeArray<T>::end() const
 {
-    return storage + size;
+    return storage + capacity;
 }
 
 template<typename T>
 __host__ __device__
-void RuntimeArray<T>::print(bool endline) const
+T& RuntimeArray<T>::front() const
+{
+    return at(0);
+}
+
+template<typename T>
+__host__ __device__
+unsigned int RuntimeArray<T>::getCapacity() const
+{
+    return capacity;
+}
+
+template<typename T>
+__host__ __device__
+T* RuntimeArray<T>::mallocStorage(unsigned int capacity, Memory::MallocType allocType)
+{
+    std::byte* storage = Memory::safeMalloc(sizeOfStorage(capacity), allocType);
+    return reinterpret_cast<T*>(storage);
+}
+
+template<typename T>
+__host__ __device__
+RuntimeArray<T>& RuntimeArray<T>::operator=(RuntimeArray<T> const & other)
+{
+    assert(capacity >= other.capacity);
+    thrust::copy(
+#ifdef __CUDA_ARCH__
+            thrust::device,
+#else
+            thrust::host,
+#endif
+            other.begin(), other.end(), begin());
+    return *this;
+}
+
+template<typename T>
+__host__ __device__
+T& RuntimeArray<T>::operator[](unsigned int index) const
+{
+    return at(index);
+}
+
+template<typename T>
+__host__ __device__
+void RuntimeArray<T>::print(bool endLine) const
 {
     static_assert(std::is_integral<T>::value);
 
     printf("[");
-    if(size > 0)
+    if(capacity > 0)
     {
-        printf("%d", storage[0]);
-        for (uint i = 1; i < size; i += 1)
+        printf("%d", at(0));
+        for (unsigned int i = 1; i < capacity; i += 1)
         {
-            printf(",%d", storage[i]);
+            printf(",%d", at(i));
         }
     }
     printf("]");
-    if (endline)
+    if (endLine)
     {
         printf("\n");
     }
@@ -152,33 +175,14 @@ void RuntimeArray<T>::print(bool endline) const
 
 template<typename T>
 __host__ __device__
-T* RuntimeArray<T>::mallocStorage()
+std::size_t RuntimeArray<T>::sizeOfStorage(unsigned int capacity)
 {
-    std::byte* storage = Memory::safeMalloc(sizeofStorage(size));
-    return reinterpret_cast<T*>(storage);
+    return sizeof(T) * capacity;
 }
 
 template<typename T>
 __host__ __device__
-std::byte* RuntimeArray<T>::getStorageEnd(size_t const alignment) const
+std::byte* RuntimeArray<T>::storageEnd() const
 {
-    return Memory::align(alignment,reinterpret_cast<std::byte*>(storage + size));
+    return reinterpret_cast<std::byte*>(storage + capacity);
 }
-
-template<typename T>
-__host__ __device__
-void RuntimeArray<T>::swap(RuntimeArray<T>& other)
-{
-    RuntimeArray<T> tmp(owning, size, storage);
-    new (this) RuntimeArray<T>(other.owning, other.size, other.storage);
-    new (&other) RuntimeArray<T>(tmp.owning, tmp.size, tmp.storage);
-}
-
-template<typename T>
-__host__ __device__
-RuntimeArray<T>::RuntimeArray(bool owning, unsigned int size, T* storage) :
-    size(size),
-    owning(owning),
-    storage(storage)
-{}
-

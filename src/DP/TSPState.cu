@@ -14,7 +14,7 @@ DP::TSPState::TSPState(OP::TSPProblem const * problem, std::byte* storage) :
 {}
 
 __host__ __device__
-std::size_t DP::TSPState::sizeofStorage(OP::TSPProblem const * problem)
+std::size_t DP::TSPState::sizeOfStorage(OP::TSPProblem const * problem)
 {
     return StaticVector<int32_t>::sizeofStorage(problem->vars.size) * 2;
 }
