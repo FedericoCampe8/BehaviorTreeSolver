@@ -24,7 +24,7 @@ class StaticSet
         __host__ __device__ inline bool isFull() const;
         __host__ __device__ inline T& operator[](unsigned int index) const;
         __host__ __device__ void print(bool endLine = true) const;
-        __host__ __device__ void remove(T const * t);
+        __host__ __device__ void remove(T* t);
 };
 
 template<typename T>
@@ -116,7 +116,7 @@ void StaticSet<T>::print(bool endLine) const
 
 template<typename T>
 __host__ __device__
-void StaticSet<T>::remove(T const * t)
+void StaticSet<T>::remove(T* t)
 {
     assert(begin() <= t);
     assert(t < end());

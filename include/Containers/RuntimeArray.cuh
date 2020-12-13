@@ -19,7 +19,7 @@ class RuntimeArray
         enum Flag {Owning = 1};
         unsigned int flags;
         unsigned int capacity;
-        T * const storage;
+        T * storage;
 
     public:
         __host__ __device__ RuntimeArray(unsigned int capacity, Memory::MallocType allocType = Memory::MallocType::Std);
@@ -40,6 +40,7 @@ class RuntimeArray
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ static inline std::size_t sizeOfStorage(unsigned int capacity);
         __host__ __device__ inline std::byte* storageEnd() const;
+        __host__ __device__ void swap(RuntimeArray<T>& other);
 };
 
 template<typename T>
@@ -185,4 +186,13 @@ __host__ __device__
 std::byte* RuntimeArray<T>::storageEnd() const
 {
     return reinterpret_cast<std::byte*>(storage + capacity);
+}
+
+template<typename T>
+__host__ __device__
+void RuntimeArray<T>::swap(RuntimeArray<T>& other)
+{
+    thrust::swap(flags, other.flags);
+    thrust::swap(capacity, other.capacity);
+    thrust::swap(storage, other.storage);
 }

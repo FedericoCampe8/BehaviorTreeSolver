@@ -15,19 +15,8 @@
 #include "MDD.cuh"
 #include "Edge.cuh"
 
-using namespace DP;
-
-__device__
-MDD::MDD::MDD(Type type, unsigned int width, DP::TSPState const * top, OP::TSPProblem const * problem) :
-    type(type),
-    width(width),
-    fanout(calcFanout(problem)),
-    top(top),
-    problem(problem)
-{}
-
 __host__ __device__
-unsigned int MDD::MDD::calcFanout(OP::TSPProblem const * problem)
+unsigned int MDD::calcFanout(OP::TSPProblem const * problem)
 {
     unsigned int fanout = 0;
 
@@ -39,82 +28,87 @@ unsigned int MDD::MDD::calcFanout(OP::TSPProblem const * problem)
 }
 
 __device__
-void MDD::MDD::buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::TSPState * const cutset, std::byte* buffer)
+void MDD::buildMddTopDown(OP::TSPProblem const* problem, unsigned int maxWidth, MDDType type, DP::TSPState& top, unsigned int cutsetMaxSize, unsigned int& cutsetSize, DP::TSPState* cutset, DP::TSPState& bottom, std::byte* scratchpad)
 {
     //Current states buffer
+    RuntimeArray<DP::TSPState> currentStatesBuffer(maxWidth, scratchpad);
     unsigned int stateStorageSize = DP::TSPState::sizeOfStorage(problem);
-    RuntimeArray<DP::TSPState> states(width, buffer);
-    RuntimeArray<std::byte> statesStorage(stateStorageSize * width, states.getStorageEnd(4));
-    thrust::for_each(thrust::seq, states.begin(), states.end(), [=] (auto& state)
+    RuntimeArray<std::byte> currentStatesStorages(stateStorageSize * maxWidth,  Memory::align(4, currentStatesBuffer.storageEnd()));
+    for(unsigned int currentStateIdx = 0; currentStateIdx < currentStatesBuffer.getCapacity(); currentStateIdx += 1)
     {
-        unsigned int stateIdx = thrust::distance(states.begin(), &state);
-        new (&state) DP::TSPState(problem, &statesStorage[stateStorageSize * stateIdx]);
-    });
+        new (&currentStatesBuffer[currentStateIdx]) DP::TSPState(problem, &currentStatesStorages[stateStorageSize * currentStateIdx]);
+    };
 
     //Next states buffer
-    RuntimeArray<DP::TSPState> nextStates(width, statesStorage.getStorageEnd(4));
-    RuntimeArray<std::byte> nextStatesStorage(stateStorageSize * width , nextStates.getStorageEnd(4));
-    thrust::for_each(thrust::seq, nextStates.begin(), nextStates.end(), [=] (auto& nextState)
+    RuntimeArray<DP::TSPState> nextStatesBuffer(maxWidth, Memory::align(4, currentStatesStorages.storageEnd()));
+    RuntimeArray<std::byte> nextStatesStorage(stateStorageSize * maxWidth, Memory::align(4, nextStatesBuffer.storageEnd()));
+    for(unsigned int nextStateIdx = 0; nextStateIdx < nextStatesBuffer.getCapacity(); nextStateIdx += 1)
     {
-        unsigned int nextStateIdx = thrust::distance(nextStates.begin(), &nextState);
-        new (&nextState) DP::TSPState(problem , &nextStatesStorage[stateStorageSize * nextStateIdx]);
-    });
+        new (&nextStatesBuffer[nextStateIdx]) DP::TSPState(problem, &nextStatesStorage[stateStorageSize * nextStateIdx]);
+    };
+
+    //Cutset buffer
+    bool cutsetInitialized = false;
+    RuntimeArray<DP::TSPState> cutsetStatesBuffer(cutsetMaxSize, Memory::align(4, nextStatesStorage.storageEnd()));
+    RuntimeArray<std::byte> cutsetStatesStorage(stateStorageSize * cutsetMaxSize, Memory::align(4, cutsetStatesBuffer.storageEnd()));
+    for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < cutsetStatesBuffer.getCapacity(); cutsetStateIdx += 1)
+    {
+        new (&cutsetStatesBuffer[cutsetStateIdx]) DP::TSPState(problem, &cutsetStatesStorage[stateStorageSize * cutsetStateIdx]);
+    };
 
     //Edges buffer
-    RuntimeArray<Edge> edges(width * fanout, nextStatesStorage.getStorageEnd(4));
-    thrust::for_each(thrust::seq, edges.begin(), edges.end(), [=] (auto& edge)
+    unsigned int fanout = cutsetMaxSize / maxWidth;
+    RuntimeArray<Edge> edges(fanout * maxWidth, Memory::align(4, cutsetStatesStorage.storageEnd()));
+    for(unsigned int edgeIdx = 0; edgeIdx < edges.getCapacity(); edgeIdx += 1)
     {
-        new (&edge) Edge();
-    });
+        new (&edges[edgeIdx]) Edge();
+    };
 
     //Auxiliary information
-    unsigned int infoCount = fanout * width;
-    RuntimeArray<uint32_t> costs(infoCount, edges.getStorageEnd(4));
-    RuntimeArray<uint32_t> indices(infoCount, costs.getStorageEnd(4));
+    RuntimeArray<int> costs(fanout * maxWidth, Memory::align(4, edges.storageEnd()));
+    RuntimeArray<unsigned int> indices(fanout * maxWidth, Memory::align(4, costs.storageEnd()));
 
     //Root
-    states[0] = *top;
+    currentStatesBuffer[0] = top;
 
     //Build
-    bool cutsetInitialized = false;
-    unsigned int statesCount = 1;
+    unsigned int currentStatesCount = 1;
     unsigned int nextStatesCount = 0;
-    for(unsigned int level = top->selectedValues.getSize(); level < problem->vars.size; level += 1 )
+    for(unsigned int level = top.selectedValues.getSize(); level < problem->vars.getCapacity(); level += 1)
     {
         //Initialize indices
         thrust::sequence(thrust::seq, indices.begin(), indices.end());
 
         //Initialize costs
-        thrust::uninitialized_fill(thrust::seq, costs.begin(), costs.end(), UINT32_MAX);
+        thrust::uninitialized_fill(thrust::seq, costs.begin(), costs.end(), INT_MAX);
 
         //Calculate costs
-        assert(statesCount <= states.size);
-        thrust::for_each(thrust::seq, states.begin(), states.begin() + statesCount, [=] (auto& currentState)
+        assert(currentStatesCount <= currentStatesBuffer.getCapacity());
+        for(unsigned int currentStateIdx = 0; currentStateIdx < currentStatesCount; currentStateIdx += 1)
         {
-            unsigned int currentStateIdx = thrust::distance(states.begin(), &currentState);
-            DP::TSPModel::calcCosts(problem, level, &currentState, &costs[fanout * currentStateIdx]);
-        });
+            DP::TSPModel::calcCosts(problem, level, &currentStatesBuffer[currentStateIdx], &costs[fanout * currentStateIdx]);
+        }
 
         //Sort indices by costs
         thrust::sort_by_key(thrust::seq, costs.begin(), costs.end(), indices.begin());
 
         //Count next states
-        unsigned int* costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), UINT32_MAX);
+        int* costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), INT_MAX);
         unsigned int costsCount = thrust::distance(costs.begin(), costsEnd);
 
-        nextStatesCount = min(width, costsCount);
-        nextStatesCount = level < problem->vars.size - 1 ? nextStatesCount : 1;
+        nextStatesCount = min(maxWidth, costsCount);
+        nextStatesCount = level < problem->vars.getCapacity() - 1 ? nextStatesCount : 1;
 
         //Cutset
-        if(costsCount > width and type == MDD::Relaxed and (not cutsetInitialized))
+        if(costsCount > maxWidth and type == MDDType::Relaxed and (not cutsetInitialized))
         {
-            thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
+            thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (unsigned int& index)
             {
                 unsigned int currentStateIdx = index / fanout;
                 unsigned int edgeIdx =  index % fanout;
                 int value = problem->vars[level].minValue + edgeIdx;
                 unsigned int nextStateIdx = thrust::distance(indices.begin(), &index);
-                DP::TSPModel::makeNextState(problem, &states[currentStateIdx], value, costs[nextStateIdx], &cutset[nextStateIdx]);
+                DP::TSPModel::makeNextState(problem, &currentStatesBuffer[currentStateIdx], value, costs[nextStateIdx], &currentStatesBuffer[nextStateIdx]);
             });
 
             cutsetSize = costsCount;
@@ -122,8 +116,8 @@ void MDD::MDD::buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::
         }
 
         //Add states
-        assert(nextStatesCount <= indices.size);
-        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
+        assert(nextStatesCount <= indices.getCapacity());
+        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (unsigned int& index)
         {
             unsigned int currentStateIdx = index / fanout;
             unsigned int edgeIdx =  index % fanout;
@@ -131,17 +125,17 @@ void MDD::MDD::buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::
             unsigned int nextStateIdx = thrust::distance(indices.begin(), &index);
             if(nextStateIdx < nextStatesCount)
             {
-                DP::TSPModel::makeNextState(problem, &states[currentStateIdx], value, costs[nextStateIdx], &nextStates[nextStateIdx]);
+                DP::TSPModel::makeNextState(problem, &currentStatesBuffer[currentStateIdx], value, costs[nextStateIdx], &nextStatesBuffer[nextStateIdx]);
             }
             else if (type == Relaxed)
             {
-                DP::TSPModel::mergeNextState(problem, &states[currentStateIdx], value, &nextStates[nextStatesCount - 1]);
+                DP::TSPModel::mergeNextState(problem, &currentStatesBuffer[currentStateIdx], value, &nextStatesBuffer[nextStatesCount - 1]);
             }
         });
 
         //Add edges
-        assert(costsCount <= indices.size);
-        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
+        assert(costsCount <= indices.getCapacity());
+        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (unsigned int& index)
         {
             unsigned int nextStateIdx = thrust::distance(indices.begin(), &index);
             if(nextStateIdx < nextStatesCount)
@@ -155,19 +149,28 @@ void MDD::MDD::buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::
         });
 
         //Prepare for the next loop
-        states.swap(nextStates);
-        statesCount = nextStatesCount;
+        currentStatesBuffer.swap(nextStatesBuffer);
+        currentStatesCount = nextStatesCount;
         nextStatesCount = 0;
-        thrust::for_each(thrust::seq, nextStates.begin(), nextStates.end(), [=] (auto& state)
+        thrust::for_each(thrust::seq, nextStatesBuffer.begin(), nextStatesBuffer.end(), [=] (DP::TSPState& state)
         {
            DP::TSPState::reset(state);
         });
-        thrust::for_each(thrust::seq, edges.begin(), edges.end(), [=] (auto& edge)
+        thrust::for_each(thrust::seq, edges.begin(), edges.end(), [=] (Edge& edge)
         {
            Edge::reset(edge);
         });
     }
 
+    //Copy cutset
+    if (type == MDDType::Relaxed)
+    {
+        for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < cutsetSize; cutsetStateIdx += 1)
+        {
+            cutset[cutsetStateIdx] = cutsetStatesBuffer[cutsetStateIdx];
+        }
+    }
+
     //Copy bottom
-    *bottom = states[0];
+    bottom = currentStatesBuffer[0];
 }

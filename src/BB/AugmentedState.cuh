@@ -8,12 +8,13 @@ namespace BB
     class AugmentedState
     {
         public:
-            unsigned int lowerBound;
-            unsigned int upperBound;
+            int lowerBound;
+            int upperBound;
             T* const state;
 
         public:
             __host__ __device__ AugmentedState(T* state);
+            __host__ __device__ AugmentedState(int lowerBound, int upperBopund, T* state);
             __host__ __device__ AugmentedState<T>& operator=(AugmentedState<T> const & other);
 
     };
@@ -21,8 +22,16 @@ namespace BB
     template<typename T>
     __host__ __device__
     AugmentedState<T>::AugmentedState(T* state) :
-        lowerBound(INT32_MIN),
-        upperBound(INT32_MAX),
+        lowerBound(INT_MIN),
+        upperBound(INT_MAX),
+        state(state)
+    {}
+
+    template<typename T>
+    __host__ __device__
+    AugmentedState<T>::AugmentedState(int lowerBound, int upperBound, T* state) :
+        lowerBound(lowerBound),
+        upperBound(upperBound),
         state(state)
     {}
 

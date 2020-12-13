@@ -9,6 +9,7 @@
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
+#include <thrust/swap.h>
 
 #include <Utils/Memory.cuh>
 
@@ -19,8 +20,8 @@ class StaticVector
         enum Flag {Owning = 1};
         unsigned int flags;
         unsigned int size;
-        unsigned int const capacity;
-        T * const storage;
+        unsigned int capacity;
+        T * storage;
 
     public:
         __host__ __device__ StaticVector(unsigned int capacity, Memory::MallocType allocType = Memory::MallocType::Std);
@@ -48,6 +49,7 @@ class StaticVector
         __host__ __device__ inline void resize(unsigned int size);
         __host__ __device__ static inline std::size_t sizeOfStorage(unsigned int capacity);
         __host__ __device__ inline std::byte* storageEnd() const;
+        __host__ __device__ void swap(StaticVector<T>& other);
 };
 
 template<typename T>
@@ -56,7 +58,7 @@ StaticVector<T>::StaticVector(unsigned int capacity, Memory::MallocType allocTyp
     flags(Flag::Owning),
     size(0),
     capacity(capacity),
-    storage(mallocStorage(allocType))
+    storage(mallocStorage(capacity, allocType))
 {}
 
 template<typename T>
@@ -248,4 +250,14 @@ __host__ __device__
 std::byte* StaticVector<T>::storageEnd() const
 {
     return reinterpret_cast<std::byte*>(storage + capacity);
+}
+
+template<typename T>
+__host__ __device__
+void StaticVector<T>::swap(StaticVector<T>& other)
+{
+    thrust::swap(flags, other.flags);
+    thrust::swap(size, other.size);
+    thrust::swap(capacity, other.capacity);
+    thrust::swap(storage, other.storage);
 }

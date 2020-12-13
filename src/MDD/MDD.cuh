@@ -5,20 +5,7 @@
 
 namespace MDD
 {
-    class MDD
-    {
-        public:
-            enum Type { Relaxed, Restricted };
-            Type type;
-            unsigned int const width;
-            unsigned int const fanout;
-            DP::TSPState const * const top;
-            OP::TSPProblem const * const problem;
-
-        public:
-            __device__ MDD(Type type, unsigned int width, DP::TSPState const * top, OP::TSPProblem const * problem);
-            __device__ void buildTopDown(DP::TSPState* bottom, unsigned int& cutsetSize, DP::TSPState * const cutset, std::byte* buffer);
-
-            __host__ __device__ static unsigned int calcFanout(OP::TSPProblem const* problem);
-    };
+    enum MDDType {Relaxed, Restricted};
+    __device__ void buildMddTopDown(OP::TSPProblem const* problem, unsigned int maxWidth, MDDType type, DP::TSPState& top, unsigned int cutsetMaxSize, unsigned int& cutsetSize, DP::TSPState* cutset, DP::TSPState& bottom, std::byte* scratchpad);
+    __host__ __device__ unsigned int calcFanout(OP::TSPProblem const* problem);
 }

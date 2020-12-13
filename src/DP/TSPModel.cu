@@ -5,9 +5,8 @@
 #include "TSPModel.cuh"
 
 __host__
-void DP::TSPModel::makeRoot(OP::TSPProblem const * problem,  TSPState* root)
+void DP::TSPModel::makeRoot(OP::TSPProblem const * problem, TSPState* root)
 {
-    root->active = true;
     root->cost = 0;
     root->addToAdmissibles(problem->startLocation);
     root->addToAdmissibles(problem->endLocation);
@@ -18,7 +17,7 @@ void DP::TSPModel::makeRoot(OP::TSPProblem const * problem,  TSPState* root)
 }
 
 __device__
-void DP::TSPModel::calcCosts(OP::TSPProblem const * problem, unsigned int level, TSPState const * state, uint32_t* costs)
+void DP::TSPModel::calcCosts(OP::TSPProblem const * problem, unsigned int level, TSPState const * state, int* costs)
 {
     OP::Variable const & var = problem->vars[level];
     thrust::for_each(thrust::seq, state->admissibleValues.begin(), state->admissibleValues.end(), [=] (auto& value)
@@ -36,7 +35,7 @@ void DP::TSPModel::calcCosts(OP::TSPProblem const * problem, unsigned int level,
 }
 
 __device__
-void DP::TSPModel::makeNextState(OP::TSPProblem const * problem, TSPState const * state, int value, unsigned int cost, TSPState* nextState)
+void DP::TSPModel::makeNextState(OP::TSPProblem const * problem, TSPState const * state, int value, int cost, TSPState* nextState)
 {
     *nextState = *state;
     nextState->cost = cost;
@@ -55,14 +54,15 @@ void DP::TSPModel::makeNextState(OP::TSPProblem const * problem, TSPState const 
             nextState->addToAdmissibles(delivery);
         }
     }
-    nextState->admissibleValues.remove(value);
+    unsigned int* admissibleValuesBegin = nextState->admissibleValues.begin();
+    unsigned int* admissibleValuesEnd = nextState->admissibleValues.end();
+    admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValuesBegin, admissibleValuesEnd, value);
+    nextState->admissibleValues.resize(thrust::distance(admissibleValuesBegin, admissibleValuesEnd));
 }
 
 __device__
 void DP::TSPModel::mergeNextState(OP::TSPProblem const * problem, TSPState const * state, int value, TSPState* nextState)
 {
-    nextState->exact = false;
-
     // Merge admissible values
     thrust::for_each(thrust::seq, state->admissibleValues.begin(),  state->admissibleValues.end(), [=] (auto& admissibleValue)
     {
