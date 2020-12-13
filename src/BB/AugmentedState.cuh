@@ -10,14 +10,24 @@ namespace BB
         public:
             int lowerBound;
             int upperBound;
-            T* const state;
+            T* state;
 
         public:
+            __host__ __device__ AugmentedState(AugmentedState<T>&& other);
             __host__ __device__ AugmentedState(T* state);
             __host__ __device__ AugmentedState(int lowerBound, int upperBopund, T* state);
             __host__ __device__ AugmentedState<T>& operator=(AugmentedState<T> const & other);
+            __host__ __device__ AugmentedState<T>& operator=(AugmentedState<T>&& other);
 
     };
+
+    template<typename T>
+    __host__ __device__
+    AugmentedState<T>::AugmentedState(AugmentedState<T>&& other) :
+        lowerBound(other.lowerBound),
+        upperBound(other.upperBound),
+        state(other.state)
+    {}
 
     template<typename T>
     __host__ __device__
@@ -42,6 +52,16 @@ namespace BB
         lowerBound = other.lowerBound;
         upperBound = other.upperBound;
         *state = *other.state;
+        return *this;
+    }
+
+    template<typename T>
+    __host__ __device__
+    AugmentedState<T>& AugmentedState<T>::operator=(AugmentedState<T>&& other)
+    {
+        lowerBound = other.lowerBound;
+        upperBound = other.upperBound;
+        state = other.state;
         return *this;
     }
 }

@@ -46,16 +46,16 @@ void DP::TSPModel::makeNextState(OP::TSPProblem const * problem, TSPState const 
     bool isPickup = thrust::binary_search(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
     if (isPickup)
     {
-        uint16_t* pickup = thrust::lower_bound(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
-        uint16_t deliveryIdx = thrust::distance(problem->pickups.begin(), pickup);
-        uint16_t delivery = problem->deliveries[deliveryIdx];
+        unsigned int* pickup = thrust::lower_bound(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
+        unsigned int deliveryIdx = thrust::distance(problem->pickups.begin(), pickup);
+        unsigned int delivery = problem->deliveries[deliveryIdx];
         if(not nextState->isAdmissible(delivery))
         {
             nextState->addToAdmissibles(delivery);
         }
     }
-    unsigned int* admissibleValuesBegin = nextState->admissibleValues.begin();
-    unsigned int* admissibleValuesEnd = nextState->admissibleValues.end();
+    uint16_t* admissibleValuesBegin = nextState->admissibleValues.begin();
+    uint16_t* admissibleValuesEnd = nextState->admissibleValues.end();
     admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValuesBegin, admissibleValuesEnd, value);
     nextState->admissibleValues.resize(thrust::distance(admissibleValuesBegin, admissibleValuesEnd));
 }
@@ -75,9 +75,9 @@ void DP::TSPModel::mergeNextState(OP::TSPProblem const * problem, TSPState const
     bool isPickup = thrust::binary_search(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
     if (isPickup)
     {
-        uint16_t* pickup = thrust::lower_bound(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
-        uint16_t deliveryIdx = thrust::distance(problem->pickups.begin(), pickup);
-        uint16_t delivery = problem->deliveries[deliveryIdx];
+        unsigned int* pickup = thrust::lower_bound(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
+        unsigned int deliveryIdx = thrust::distance(problem->pickups.begin(), pickup);
+        unsigned int delivery = problem->deliveries[deliveryIdx];
         if(not nextState->isAdmissible(delivery))
         {
             nextState->addToAdmissibles(delivery);

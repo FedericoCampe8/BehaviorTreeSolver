@@ -12,9 +12,9 @@ namespace DP
     class TSPState
     {
         public:
-            int cost;
-            StaticVector<unsigned int> selectedValues;
-            StaticVector<unsigned int> admissibleValues;
+            int32_t cost;
+            StaticVector<uint16_t> selectedValues;
+            StaticVector<uint16_t> admissibleValues;
 
         public:
             __host__ __device__ TSPState(OP::TSPProblem const * problem, std::byte* storage);

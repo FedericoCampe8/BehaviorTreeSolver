@@ -16,7 +16,7 @@ namespace OP
         public:
             __host__ __device__ Problem(unsigned int varsCount, std::byte* storage);
             __device__ Problem& operator=(Problem const & other);
-            __host__ __device__ static std::size_t sizeofStorage(unsigned int varsCount);
+            __host__ __device__ static std::size_t sizeOfStorage(unsigned int varsCount);
 
     };
 }

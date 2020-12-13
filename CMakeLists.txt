@@ -36,8 +36,6 @@ set(SOURCES
     src/DP/TSPState.cuh
     src/DP/TSPModel.cu
     src/Main.cu
-    src/MDD/Edge.cu
-    src/MDD/Edge.cuh
     src/OP/Variable.cu
     src/OP/Variable.cuh
     src/DP/TSPModel.cuh

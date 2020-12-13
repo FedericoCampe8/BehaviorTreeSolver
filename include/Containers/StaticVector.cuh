@@ -175,13 +175,7 @@ __host__ __device__
 StaticVector<T>& StaticVector<T>::operator=(StaticVector<T> const & other)
 {
     resize(other.size);
-    thrust::copy(
-#ifdef __CUDA_ARCH__
-        thrust::device,
-#else
-        thrust::host,
-#endif
-        other.begin(), other.end(), begin());
+    thrust::copy(thrust::seq, other.begin(), other.end(), begin());
     return *this;
 }
 

@@ -9,7 +9,7 @@ OP::Problem::Problem(unsigned int varsCount, std::byte* storage):
 {}
 
 __host__ __device__
-std::size_t OP::Problem::sizeofStorage(unsigned int varsCount)
+std::size_t OP::Problem::sizeOfStorage(unsigned int varsCount)
 {
     return RuntimeArray<Variable>::sizeOfStorage(varsCount);
 }

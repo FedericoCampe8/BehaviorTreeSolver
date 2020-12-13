@@ -6,7 +6,7 @@
 
 __host__ __device__
 DP::TSPState::TSPState(OP::TSPProblem const * problem, std::byte* storage) :
-    cost(INT_MAX),
+    cost(INT32_MAX),
     selectedValues(problem->vars.getCapacity(), storage),
     admissibleValues(problem->vars.getCapacity(), selectedValues.storageEnd())
 {}
@@ -14,7 +14,7 @@ DP::TSPState::TSPState(OP::TSPProblem const * problem, std::byte* storage) :
 __host__ __device__
 std::size_t DP::TSPState::sizeOfStorage(OP::TSPProblem const * problem)
 {
-    return StaticVector<unsigned int>::sizeOfStorage(problem->vars.getCapacity()) * 2;
+    return StaticVector<uint16_t>::sizeOfStorage(problem->vars.getCapacity()) * 2;
 }
 
 __host__ __device__

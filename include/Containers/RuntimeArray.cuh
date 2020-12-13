@@ -135,13 +135,7 @@ __host__ __device__
 RuntimeArray<T>& RuntimeArray<T>::operator=(RuntimeArray<T> const & other)
 {
     assert(capacity >= other.capacity);
-    thrust::copy(
-#ifdef __CUDA_ARCH__
-            thrust::device,
-#else
-            thrust::host,
-#endif
-            other.begin(), other.end(), begin());
+    thrust::copy(thrust::seq, other.begin(), other.end(), begin());
     return *this;
 }
 

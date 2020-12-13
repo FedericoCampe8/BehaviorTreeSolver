@@ -17,7 +17,7 @@
 #include "DP/TSPModel.cuh"
 #include "BB/AugmentedState.cuh"
 
-#define QUEUE_MAX_SIZE 1000000
+#define QUEUE_MAX_SIZE 10000000
 
 using namespace std;
 using json = nlohmann::json;
@@ -50,6 +50,10 @@ __global__ void offload(OP::TSPProblem const * problem, unsigned int mddMaxWidth
 //Search
 bool checkForBetterSolutions(StateType* bestSolution, StaticVector<AugmentedStateType>* offloadQueue, RuntimeArray<StateType>* bottomStatesBuffer);
 
+//Debug
+void printQueue(StaticVector<AugmentedStateType>* queue);
+void printCutsets(StaticVector<AugmentedStateType>* offloadQueue, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, RuntimeArray<AugmentedStateType>* cutsetsBuffer);
+
 int main(int argc, char ** argv)
 {
     char const * problemFileName = argv[1];
@@ -58,7 +62,7 @@ int main(int argc, char ** argv)
 
     setupGPU();
 
-    auto* const problem = parseGrubHubInstance(problemFileName);
+    OP::TSPProblem* problem = parseGrubHubInstance(problemFileName);
 
     //Main queue
     RuntimeArray<StateType>* states = getArrayOfStates(problem, QUEUE_MAX_SIZE, Memory::MallocType::Std);
@@ -99,35 +103,51 @@ int main(int argc, char ** argv)
     {
         prepareOffloadQueue(bestSolution, mainQueueBuffer, mainQueue, offloadQueueBuffer, offloadQueue);
 
+        //printf("[DEBUG] Offload queue: ");
+        //printQueue(offloadQueue);
+
         if (not offloadQueue->isEmpty())
         {
             offload<<<offloadQueue->getSize(),1>>>(problem, mddMaxWidth, offloadQueueBuffer, offloadQueue, cutsetMaxSize, cutsetsSizes, cutsetsBuffer, bottomStatesBuffer);
             cudaDeviceSynchronize();
 
+            //printf("[DEBUG] Cutsets: ");
+            //printCutsets(offloadQueue, cutsetMaxSize, cutsetsSizes, cutsetsBuffer);
+
             visitedStatesCount += offloadQueue->getSize();
 
             if(checkForBetterSolutions(bestSolution, offloadQueue, bottomStatesBuffer))
             {
-                printf("[INFO] Better solution found: \n");
+                printf("[INFO] Better solution found: ");
                 bestSolution->selectedValues.print(false);
                 printf(" | Value: %d", bestSolution->cost);
                 printf(" | Time %lu ms", Chrono::now() - startTime);
-                printf(" | Iteration: %u", iterationsCount);
+                printf(" | Iterations: %u", iterationsCount);
                 printf(" | Visited states: %u\n", visitedStatesCount);
+            }
+            else
+            {
+                printf("[INFO] Time %lu ms", Chrono::now() - startTime);
+                printf(" | Iterations: %u", iterationsCount);
+                printf(" | State to visit: %u", mainQueue->getSize());
+                printf(" | Visited states: %u\r", visitedStatesCount);
             }
 
             updateMainQueue(bestSolution, mainQueueBuffer, mainQueue, offloadQueue, cutsetMaxSize, cutsetsSizes, cutsetsBuffer);
+
+            //printf("[DEBUG] Main queue: ");
+            //printQueue(mainQueue);
 
             iterationsCount += 1;
         }
     }
     while(not offloadQueue->isEmpty());
 
-    printf("[INFO] Best solution found: \n");
+    printf("Best solution found: ");
     bestSolution->selectedValues.print(false);
     printf(" | Value: %d", bestSolution->cost);
     printf(" | Time %lu ms", Chrono::now() - startTime);
-    printf(" | Iteration: %u", iterationsCount);
+    printf(" | Iterations: %u", iterationsCount);
     printf(" | Visited states: %u\n", visitedStatesCount);
 
     return EXIT_SUCCESS;
@@ -156,12 +176,10 @@ OP::TSPProblem * parseGrubHubInstance(char const * problemFileName)
 
     //Alloc
     unsigned int varsCount = problemJson["nodes"].size();
-    std::size_t problemSize = sizeof(OP::TSPProblem);
-    std::size_t problemStorageSize = OP::TSPProblem::sizeofStorage(varsCount);
-    std::byte* mem = Memory::safeManagedMalloc(problemSize + problemStorageSize);
-    OP::TSPProblem* problem = reinterpret_cast<OP::TSPProblem*>(mem);
-    byte* problemStorage = mem + problemSize;
-
+    std::byte* problemMem = Memory::safeMalloc(sizeof(OP::TSPProblem), Memory::MallocType::Managed);
+    OP::TSPProblem* problem = reinterpret_cast<OP::TSPProblem*>(problemMem);
+    std::size_t problemStorageSize = OP::TSPProblem::sizeOfStorage(varsCount);
+    std::byte* problemStorage = Memory::safeMalloc(problemStorageSize, Memory::MallocType::Managed);
     new (problem) OP::TSPProblem(varsCount, problemStorage);
 
     //Variables
@@ -249,7 +267,7 @@ RuntimeArray<AugmentedStateType>* getArrayOfAugmentedState(RuntimeArray<StateTyp
     //Array of augmented states
     std::byte* arrayMem = Memory::safeMalloc(sizeof(RuntimeArray<AugmentedStateType>), mallocType);
     RuntimeArray<AugmentedStateType>* array = reinterpret_cast<RuntimeArray<AugmentedStateType>*>(arrayMem);
-    new (array) StaticVector<AugmentedStateType>(states->getCapacity(), mallocType);
+    new (array) RuntimeArray<AugmentedStateType>(states->getCapacity(), mallocType);
 
     //Init augmented states
     thrust::for_each(thrust::host, array->begin(), array->end(), [=] (AugmentedStateType& aState)
@@ -288,7 +306,7 @@ StateType* getState(OP::TSPProblem const * problem, Memory::MallocType mallocTyp
 
 bool queueCmp(AugmentedStateType const& aState1, AugmentedStateType const & aState2)
 {
-    return aState1.state->cost < aState2.state->cost;
+    return aState1.state->cost > aState2.state->cost;
 }
 
 bool queueChk(StateType const * bestSolution, AugmentedStateType const & aState)
@@ -327,7 +345,7 @@ void prepareOffloadQueue(StateType const * bestSolution, StaticSet<StateType>* m
 __global__
 void offload(OP::TSPProblem const * problem, unsigned int mddMaxWidth, RuntimeArray<StateType>* offloadQueueBuffer, StaticVector<AugmentedStateType>* offloadQueue, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, RuntimeArray<AugmentedStateType>* cutsetsBuffer, RuntimeArray<StateType>* bottomStatesBuffer)
 {
-    __shared__ unsigned int alignedSharedMem[1000];
+    __shared__ unsigned int alignedSharedMem[2000];
     std::byte* sharedMem = reinterpret_cast<std::byte*>(alignedSharedMem);
 
     ONE_THREAD_IN_BLOCK
@@ -343,7 +361,7 @@ void offload(OP::TSPProblem const * problem, unsigned int mddMaxWidth, RuntimeAr
 
         //Build MDDs
         MDD::buildMddTopDown(problem, mddMaxWidth, MDD::MDDType::Relaxed, top, cutsetMaxSize, cutsetSize, cutset, bottom, sharedMem);
-        lowerBound= bottom.cost;
+        lowerBound = bottom.cost;
         MDD::buildMddTopDown(problem, mddMaxWidth, MDD::MDDType::Restricted, top, cutsetMaxSize, cutsetSize, cutset, bottom, sharedMem);
         upperBound = bottom.cost;
 
@@ -373,16 +391,51 @@ bool checkForBetterSolutions(StateType* bestSolution, StaticVector<AugmentedStat
     return foundBetterSolution;
 }
 
+void printQueue(StaticVector<AugmentedStateType>* queue)
+{
+    if(not queue->isEmpty())
+    {
+        queue->at(0).state->selectedValues.print(false);
+        for(unsigned int i = 1; i < queue->getSize(); i += 1)
+        {
+            printf(",");
+            queue->at(i).state->selectedValues.print(false);
+        }
+    }
+    printf("\n");
+}
+
+void printCutsets(StaticVector<AugmentedStateType>* offloadQueue, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, RuntimeArray<AugmentedStateType>* cutsetsBuffer)
+{
+    if(not offloadQueue->isEmpty())
+    {
+        for(unsigned int idx = 0; idx < offloadQueue->getSize(); idx += 1)
+        {
+            unsigned int cutsetSize = cutsetsSizes->at(idx);
+            if(cutsetSize > 0)
+            {
+                AugmentedStateType* cutset = &cutsetsBuffer->at(cutsetMaxSize * idx);
+                cutset[0].state->selectedValues.print(false);
+                for (unsigned int cutsetStateIdx = 1; cutsetStateIdx < cutsetSize; cutsetStateIdx += 1)
+                {
+                    printf(",");
+                    cutset[cutsetStateIdx].state->selectedValues.print(false);
+                }
+            }
+        }
+    }
+    printf("\n");
+}
+
 void updateMainQueue(StateType const * bestSolution, StaticSet<StateType>* mainQueueBuffer, StaticVector<AugmentedStateType>* mainQueue, StaticVector<AugmentedStateType>* offloadQueue, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, RuntimeArray<AugmentedStateType>* cutsetsBuffer)
 {
     for(unsigned int idx = 0; idx < offloadQueue->getSize(); idx += 1)
     {
-        AugmentedStateType& offloadQueueAugmentedState = offloadQueue->at(idx);
-        if(queueChk(bestSolution, offloadQueueAugmentedState))
+        AugmentedStateType* cutsetBegin = &cutsetsBuffer->at(cutsetMaxSize * idx);
+        AugmentedStateType* cutsetEnd = cutsetBegin + cutsetsSizes->at(idx);
+        for(AugmentedStateType* cutsetState = cutsetBegin; cutsetState != cutsetEnd; cutsetState +=1)
         {
-            AugmentedStateType* cutsetBegin = &cutsetsBuffer->at(cutsetMaxSize * idx);
-            AugmentedStateType* cutsetEnd = cutsetBegin + cutsetsSizes->at(idx);
-            for(AugmentedStateType* cutsetState = cutsetBegin; cutsetState != cutsetEnd; cutsetState +=1)
+            if(queueChk(bestSolution, *cutsetState))
             {
                 StateType* cutsetStateOnQueue = mainQueueBuffer->add(*cutsetState->state);
                 mainQueue->resize(mainQueue->getSize() + 1);
