@@ -25,6 +25,7 @@ class StaticSet
         __host__ __device__ inline T& operator[](unsigned int index) const;
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ void remove(T* t);
+        __host__ __device__ void reset();
 };
 
 template<typename T>
@@ -123,4 +124,18 @@ void StaticSet<T>::remove(T* t)
 
     unsigned int elementIdx = thrust::distance(begin(), t);
     invalids->pushBack(elementIdx);
+}
+
+template<typename T>
+__host__ __device__
+void StaticSet<T>::reset()
+{
+    invalids->resize(invalids->getCapacity());
+    thrust::sequence(
+#ifdef __CUDA_ARCH__
+        thrust::device,
+#else
+        thrust::host,
+#endif
+        invalids->begin(), invalids->end());
 }

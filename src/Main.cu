@@ -17,7 +17,7 @@
 #include "DP/TSPModel.cuh"
 #include "BB/AugmentedState.cuh"
 
-#define QUEUE_MAX_SIZE 10000000
+#define QUEUE_MAX_SIZE 1000000
 
 using namespace std;
 using json = nlohmann::json;
@@ -45,6 +45,7 @@ void updateMainQueue(StateType const * bestSolution, StaticSet<StateType>* mainQ
 
 //Offload
 void prepareOffloadQueue(StateType const * bestSolution, StaticSet<StateType>* mainQueueBuffer, StaticVector<AugmentedStateType>* mainQueue, RuntimeArray<StateType>* offloadQueueBuffer, StaticVector<AugmentedStateType>* offloadQueue);
+void reduceAndPrepareOffloadQueue(OP::TSPProblem const * problem, StaticSet<StateType>* mainQueueBuffer, StaticVector<AugmentedStateType>* mainQueue, RuntimeArray<StateType>* offloadQueueBuffer, StaticVector<AugmentedStateType>* offloadQueue);
 __global__ void offload(OP::TSPProblem const * problem, unsigned int mddMaxWidth, RuntimeArray<StateType>* offloadQueueBuffer, StaticVector<AugmentedStateType>* offloadQueue, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, RuntimeArray<AugmentedStateType>* cutsetsBuffer, RuntimeArray<StateType>* bottomStatesBuffer);
 
 //Search
@@ -101,7 +102,15 @@ int main(int argc, char ** argv)
     uint64_t startTime = Chrono::now();
     do
     {
-        prepareOffloadQueue(bestSolution, mainQueueBuffer, mainQueue, offloadQueueBuffer, offloadQueue);
+        if(mainQueue->getSize() - gpuMaxParallelism + cutsetMaxSize * gpuMaxParallelism < mainQueue->getCapacity())
+        {
+            prepareOffloadQueue(bestSolution, mainQueueBuffer, mainQueue, offloadQueueBuffer, offloadQueue);
+        }
+        else
+        {
+            reduceAndPrepareOffloadQueue(problem, mainQueueBuffer, mainQueue, offloadQueueBuffer, offloadQueue);
+        }
+
 
         //printf("[DEBUG] Offload queue: ");
         //printQueue(offloadQueue);
@@ -340,6 +349,88 @@ void prepareOffloadQueue(StateType const * bestSolution, StaticSet<StateType>* m
         mainQueueBuffer->remove(mainQueueAugmentedState.state);
         mainQueue->popBack();
     }
+}
+
+void reduceAndPrepareOffloadQueue(OP::TSPProblem const * problem, StaticSet<StateType>* mainQueueBuffer, StaticVector<AugmentedStateType>* mainQueue, RuntimeArray<StateType>* offloadQueueBuffer, StaticVector<AugmentedStateType>* offloadQueue)
+{
+    auto reduceCmp = [=] (AugmentedStateType const& aState1, AugmentedStateType const & aState2) -> bool
+    {
+        unsigned int level1 = aState1.state->selectedValues.getSize();
+        unsigned int level2 = aState2.state->selectedValues.getSize();
+
+        if(level1 < level2)
+        {
+            return true;
+        }
+        else if (level1 == level2)
+        {
+            unsigned int cost1 = aState1.state->cost;
+            unsigned int cost2 = aState2.state->cost;
+
+            return cost1 < cost2;
+        }
+        else
+        {
+            return false;
+        }
+    };
+
+    std::sort(mainQueue->begin(), mainQueue->end(), reduceCmp);
+
+    RuntimeArray<unsigned int> levelsSizes(problem->vars.getCapacity(), Memory::MallocType::Std);
+    thrust::fill(levelsSizes.begin(), levelsSizes.end(), 0);
+
+    for(unsigned int i = 0; i < mainQueue->getSize(); i += 1)
+    {
+        unsigned int stateLevel = mainQueue->at(i).state->selectedValues.getSize();
+        levelsSizes.at(stateLevel) += 1;
+    }
+
+    RuntimeArray<unsigned int> levelsBegins(problem->vars.getCapacity(), Memory::MallocType::Std);
+    RuntimeArray<unsigned int> levelsEnds(problem->vars.getCapacity(), Memory::MallocType::Std);
+
+    levelsBegins.at(0) = 0;
+    levelsEnds.at(0) = levelsSizes.at(0);
+    for(unsigned int i = 1; i < levelsSizes.getCapacity(); i += 1)
+    {
+       levelsBegins.at(i) = levelsEnds.at(i - 1);
+       levelsEnds.at(i) = levelsBegins.at(i) + levelsSizes.at(i);
+    }
+
+    unsigned int notEmptyLevels = 0;
+    for(unsigned int i = 1; i < levelsSizes.getCapacity(); i += 1)
+    {
+        if(levelsSizes.at(i) > 0)
+        {
+            notEmptyLevels += 1;
+        }
+    }
+
+    unsigned int elementsPerLevel = offloadQueue->getCapacity() / notEmptyLevels;
+    offloadQueue->clear();
+    for(unsigned int i = 1; i < levelsSizes.getCapacity(); i += 1)
+    {
+        unsigned int levelSize = levelsSizes.at(i);
+        if(levelSize > 0)
+        {
+            unsigned int step = (levelSize / elementsPerLevel) + 1;
+            for(unsigned int stateIdx = levelsBegins.at(i); stateIdx < levelsEnds.at(i); stateIdx += step)
+            {
+                AugmentedStateType& mainQueueAugmentedState = mainQueue->at(stateIdx);
+
+                //Copy state to offload queue
+                offloadQueue->resize(offloadQueue->getSize() + 1);
+                unsigned int offloadQueueIdx = offloadQueue->getSize() - 1;
+                StateType* offloadQueueState = &offloadQueueBuffer->at(offloadQueueIdx);
+                *offloadQueueState = *mainQueueAugmentedState.state;
+                AugmentedStateType* offloadQueueAugmentedState = &offloadQueue->at(offloadQueueIdx);
+                new (offloadQueueAugmentedState) AugmentedStateType(mainQueueAugmentedState.lowerBound, mainQueueAugmentedState.upperBound, offloadQueueState);
+            }
+        }
+    }
+
+    mainQueue->clear();
+    mainQueueBuffer->reset();
 }
 
 __global__
