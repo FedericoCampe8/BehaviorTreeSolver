@@ -10,8 +10,8 @@ template<typename T>
 class StaticSet
 {
     private:
-        RuntimeArray<T>* const elements;
-        StaticVector<unsigned int>* const invalids;
+        RuntimeArray<T>* elements;
+        StaticVector<unsigned int>* invalids;
 
     public:
         __host__ __device__ StaticSet(RuntimeArray<T>* elements, StaticVector<unsigned int>* invalids);
@@ -26,6 +26,7 @@ class StaticSet
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ void remove(T* t);
         __host__ __device__ void reset();
+        __host__ __device__ void swap(StaticSet<T>& other);
 };
 
 template<typename T>
@@ -138,4 +139,11 @@ void StaticSet<T>::reset()
         thrust::host,
 #endif
         invalids->begin(), invalids->end());
+}
+template<typename T>
+__host__ __device__
+void StaticSet<T>::swap(StaticSet<T>& other)
+{
+    thrust::swap(elements, other.elements);
+    thrust::swap(invalids, other.invalids);
 }
