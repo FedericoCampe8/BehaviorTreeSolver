@@ -345,7 +345,7 @@ void prepareOffloadQueue(StateType const * bestSolution, StaticSet<StateType>* m
 __global__
 void offload(OP::TSPProblem const * problem, unsigned int mddMaxWidth, RuntimeArray<StateType>* offloadQueueBuffer, StaticVector<AugmentedStateType>* offloadQueue, unsigned int cutsetMaxSize, RuntimeArray<unsigned int>* cutsetsSizes, RuntimeArray<AugmentedStateType>* cutsetsBuffer, RuntimeArray<StateType>* bottomStatesBuffer)
 {
-    __shared__ unsigned int alignedSharedMem[2000];
+    __shared__ unsigned int alignedSharedMem[200];
     std::byte* sharedMem = reinterpret_cast<std::byte*>(alignedSharedMem);
 
     ONE_THREAD_IN_BLOCK

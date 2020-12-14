@@ -13,8 +13,8 @@ namespace DP
     {
         public:
             int32_t cost;
-            StaticVector<uint16_t> selectedValues;
-            StaticVector<uint16_t> admissibleValues;
+            StaticVector<uint8_t> selectedValues;
+            StaticVector<uint8_t> admissibleValues;
 
         public:
             __host__ __device__ TSPState(OP::TSPProblem const * problem, std::byte* storage);

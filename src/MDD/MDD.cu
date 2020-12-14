@@ -48,8 +48,8 @@ void MDD::buildMddTopDown(OP::TSPProblem const* problem, unsigned int maxWidth, 
 
     //Auxiliary information
     unsigned int fanout = cutsetMaxSize / maxWidth;
-    RuntimeArray<int32_t> costs(fanout * maxWidth, Memory::align(4, nextStatesStorage.storageEnd()));
-    RuntimeArray<uint32_t> indices(fanout * maxWidth, Memory::align(4, costs.storageEnd()));
+    RuntimeArray<int16_t> costs(fanout * maxWidth, Memory::align(4, nextStatesStorage.storageEnd()));
+    RuntimeArray<uint8_t> indices(fanout * maxWidth, Memory::align(4, costs.storageEnd()));
 
     //Root
     currentStatesBuffer[0] = top;
@@ -69,7 +69,7 @@ void MDD::buildMddTopDown(OP::TSPProblem const* problem, unsigned int maxWidth, 
         //Initialize costs
         for(unsigned int i = 0; i < costs.getCapacity(); i +=1)
         {
-            costs.at(i) = INT32_MAX;
+            costs.at(i) = INT16_MAX;
         }
 
         //Calculate costs
@@ -83,7 +83,7 @@ void MDD::buildMddTopDown(OP::TSPProblem const* problem, unsigned int maxWidth, 
         thrust::sort_by_key(thrust::seq, costs.begin(), costs.end(), indices.begin());
 
         //Count next states
-        int* costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), INT32_MAX);
+        auto* costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), INT16_MAX);
         unsigned int costsCount = thrust::distance(costs.begin(), costsEnd);
 
         nextStatesCount = min(maxWidth, costsCount);
@@ -92,7 +92,7 @@ void MDD::buildMddTopDown(OP::TSPProblem const* problem, unsigned int maxWidth, 
         //Cutset
         if(costsCount > maxWidth and type == MDDType::Relaxed and (not cutsetInitialized))
         {
-            thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (unsigned int& index)
+            thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
             {
                 unsigned int currentStateIdx = index / fanout;
                 unsigned int edgeIdx = index % fanout;
@@ -107,7 +107,7 @@ void MDD::buildMddTopDown(OP::TSPProblem const* problem, unsigned int maxWidth, 
 
         //Add states
         assert(nextStatesCount <= indices.getCapacity());
-        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (unsigned int& index)
+        thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (auto& index)
         {
             unsigned int currentStateIdx = index / fanout;
             unsigned int edgeIdx =  index % fanout;

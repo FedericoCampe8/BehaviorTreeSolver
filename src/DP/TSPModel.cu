@@ -17,7 +17,7 @@ void DP::TSPModel::makeRoot(OP::TSPProblem const * problem, TSPState* root)
 }
 
 __device__
-void DP::TSPModel::calcCosts(OP::TSPProblem const * problem, unsigned int level, TSPState const * state, int* costs)
+void DP::TSPModel::calcCosts(OP::TSPProblem const * problem, unsigned int level, TSPState const * state, int16_t* costs)
 {
     OP::Variable const & var = problem->vars[level];
     thrust::for_each(thrust::seq, state->admissibleValues.begin(), state->admissibleValues.end(), [=] (auto& value)
@@ -54,8 +54,8 @@ void DP::TSPModel::makeNextState(OP::TSPProblem const * problem, TSPState const 
             nextState->addToAdmissibles(delivery);
         }
     }
-    uint16_t* admissibleValuesBegin = nextState->admissibleValues.begin();
-    uint16_t* admissibleValuesEnd = nextState->admissibleValues.end();
+    uint8_t* admissibleValuesBegin = nextState->admissibleValues.begin();
+    uint8_t* admissibleValuesEnd = nextState->admissibleValues.end();
     admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValuesBegin, admissibleValuesEnd, value);
     nextState->admissibleValues.resize(thrust::distance(admissibleValuesBegin, admissibleValuesEnd));
 }
