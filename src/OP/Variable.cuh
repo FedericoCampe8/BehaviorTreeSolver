@@ -1,16 +1,19 @@
 #pragma once
 
+#include <cstdint>
+
 namespace OP
 {
     class Variable
     {
         public:
-            int minValue;
-            int maxValue;
+            using ValueType = uint8_t;
+
+            ValueType minValue;
+            ValueType maxValue;
 
         public:
-            __host__ Variable(int minValue, int maxValue);
-            __device__ Variable& operator=(Variable const & other);
-            __host__ __device__ static unsigned int cardinality(Variable const & var);
+            Variable(ValueType minValue, ValueType maxValue);
+            static unsigned int cardinality(Variable const & variable);
     };
 }

@@ -22,7 +22,7 @@ class RuntimeArray
         T * storage;
 
     public:
-        __host__ __device__ RuntimeArray(unsigned int capacity, Memory::MallocType allocType = Memory::MallocType::Std);
+        __host__ __device__ RuntimeArray(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ RuntimeArray(unsigned int capacity, std::byte* storage);
         __host__ __device__ RuntimeArray(T* begin, T* end);
         __host__ __device__ ~RuntimeArray();
@@ -33,22 +33,22 @@ class RuntimeArray
         __host__ __device__ inline T& front() const;
         __host__ __device__ inline unsigned int getCapacity() const;
     private:
-        __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType allocType);
+        __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
     public:
         __host__ __device__ RuntimeArray<T>& operator=(RuntimeArray<T> const & other);
+        __host__ __device__ RuntimeArray<T>& operator=(RuntimeArray<T>&& other);
         __host__ __device__ inline T& operator[](unsigned int index) const;
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ static inline std::size_t sizeOfStorage(unsigned int capacity);
         __host__ __device__ inline std::byte* storageEnd() const;
-        __host__ __device__ void swap(RuntimeArray<T>& other);
 };
 
 template<typename T>
 __host__ __device__
-RuntimeArray<T>::RuntimeArray(unsigned int capacity, Memory::MallocType allocType) :
+RuntimeArray<T>::RuntimeArray(unsigned int capacity, Memory::MallocType mallocType) :
     flags(Flag::Owning),
     capacity(capacity),
-    storage(mallocStorage(capacity, allocType))
+    storage(mallocStorage(capacity, mallocType))
 {}
 
 template<typename T>
@@ -124,9 +124,9 @@ unsigned int RuntimeArray<T>::getCapacity() const
 
 template<typename T>
 __host__ __device__
-T* RuntimeArray<T>::mallocStorage(unsigned int capacity, Memory::MallocType allocType)
+T* RuntimeArray<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
 {
-    std::byte* storage = Memory::safeMalloc(sizeOfStorage(capacity), allocType);
+    std::byte* storage = Memory::safeMalloc(sizeOfStorage(capacity), mallocType);
     return reinterpret_cast<T*>(storage);
 }
 
@@ -136,6 +136,15 @@ RuntimeArray<T>& RuntimeArray<T>::operator=(RuntimeArray<T> const & other)
 {
     assert(capacity >= other.capacity);
     thrust::copy(thrust::seq, other.begin(), other.end(), begin());
+    return *this;
+}
+
+template<typename T>
+__host__ __device__
+RuntimeArray<T>& RuntimeArray<T>::operator=(RuntimeArray<T>&& other)
+{
+    capacity = other.capacity;
+    storage = other.storage;
     return *this;
 }
 
@@ -180,13 +189,4 @@ __host__ __device__
 std::byte* RuntimeArray<T>::storageEnd() const
 {
     return reinterpret_cast<std::byte*>(storage + capacity);
-}
-
-template<typename T>
-__host__ __device__
-void RuntimeArray<T>::swap(RuntimeArray<T>& other)
-{
-    thrust::swap(flags, other.flags);
-    thrust::swap(capacity, other.capacity);
-    thrust::swap(storage, other.storage);
 }

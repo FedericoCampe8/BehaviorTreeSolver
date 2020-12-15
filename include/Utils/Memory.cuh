@@ -9,11 +9,12 @@
 
 namespace Memory
 {
-    enum MallocType {Std, Managed};
-    __host__ __device__ inline std::byte* safeMalloc(std::size_t size, MallocType type = Std);
+    enum MallocType : uint8_t {Std, Managed};
+
+    __host__ __device__ inline std::byte* safeMalloc(std::size_t size, MallocType type);
     __host__ __device__ inline std::byte* safeStdMalloc(std::size_t size);
     __host__            inline std::byte* safeManagedMalloc(std::size_t size);
-    __host__ __device__ inline std::byte* align(std::size_t const alignment, std::byte const* ptr);
+    __host__ __device__ inline std::byte* align(std::size_t const alignment, std::byte const * ptr);
 
     __host__ __device__
     std::byte* safeMalloc(std::size_t size, MallocType type)
@@ -24,6 +25,7 @@ namespace Memory
             case Std:
                 return safeStdMalloc(size);
             default:
+                assert(false);
                 return nullptr;
         }
 #else
@@ -34,6 +36,7 @@ namespace Memory
             case Managed:
                 return safeManagedMalloc(size);
             default:
+                assert(false);
                 return nullptr;
         }
 #endif

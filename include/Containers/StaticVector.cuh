@@ -17,14 +17,14 @@ template<typename T>
 class StaticVector
 {
     private:
-        enum Flag {Owning = 1};
+        enum Flags {Owning = 1};
         unsigned int flags;
         unsigned int size;
         unsigned int capacity;
         T * storage;
 
     public:
-        __host__ __device__ StaticVector(unsigned int capacity, Memory::MallocType allocType = Memory::MallocType::Std);
+        __host__ __device__ StaticVector(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ StaticVector(unsigned int capacity, std::byte* storage);
         __host__ __device__ StaticVector(T* begin, T* end);
         __host__ __device__ ~StaticVector();
@@ -39,9 +39,10 @@ class StaticVector
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
     private:
-        __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType allocType);
+        __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
     public:
         __host__ __device__ StaticVector<T>& operator=(StaticVector<T> const & other);
+        __host__ __device__ StaticVector<T>& operator=(StaticVector<T>&& other);
         __host__ __device__ inline T& operator[](unsigned int index) const;
         __host__ __device__ inline void popBack();
         __host__ __device__ void print(bool endLine = true) const;
@@ -49,16 +50,15 @@ class StaticVector
         __host__ __device__ inline void resize(unsigned int size);
         __host__ __device__ static inline std::size_t sizeOfStorage(unsigned int capacity);
         __host__ __device__ inline std::byte* storageEnd() const;
-        __host__ __device__ void swap(StaticVector<T>& other);
 };
 
 template<typename T>
 __host__ __device__
-StaticVector<T>::StaticVector(unsigned int capacity, Memory::MallocType allocType) :
-    flags(Flag::Owning),
+StaticVector<T>::StaticVector(unsigned int capacity, Memory::MallocType mallocType) :
+    flags(Flags::Owning),
     size(0),
     capacity(capacity),
-    storage(mallocStorage(capacity, allocType))
+    storage(mallocStorage(capacity, mallocType))
 {}
 
 template<typename T>
@@ -73,29 +73,22 @@ StaticVector<T>::StaticVector(unsigned int capacity, std::byte* storage) :
 template<typename T>
 __host__ __device__
 StaticVector<T>::StaticVector(T* begin, T* end) :
-    flags(0),
+    flags(0)
     size(0),
-    capacity(thrust::distance(begin, end)),
+    capacity(thrust::distance(begin,end)),
     storage(begin)
 {}
 
 template<typename T>
 __host__ __device__
 StaticVector<T>::~StaticVector()
-{
-    if(flags & Flag::Owning)
-    {
-        free(storage);
-    }
-}
+{}
 
 template<typename T>
 __host__ __device__
 T& StaticVector<T>::at(unsigned int index) const
 {
-    assert(size > 0);
-    assert(index < capacity);
-
+    assert(index < size);
     return storage[index];
 }
 
@@ -164,9 +157,9 @@ bool StaticVector<T>::isFull() const
 
 template<typename T>
 __host__ __device__
-T* StaticVector<T>::mallocStorage(unsigned int capacity, Memory::MallocType allocType)
+T* StaticVector<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
 {
-    std::byte* storage = Memory::safeMalloc(sizeOfStorage(capacity), allocType);
+    std::byte* storage = Memory::safeMalloc(sizeOfStorage(capacity), mallocType);
     return reinterpret_cast<T*>(storage);
 }
 
@@ -176,6 +169,17 @@ StaticVector<T>& StaticVector<T>::operator=(StaticVector<T> const & other)
 {
     resize(other.size);
     thrust::copy(thrust::seq, other.begin(), other.end(), begin());
+    return *this;
+}
+
+template<typename T>
+__host__ __device__
+StaticVector<T>& StaticVector<T>::operator=(StaticVector<T>&& other)
+{
+    flags = other.flags;
+    size = other.size;
+    capacity = other.capacity
+    storage = other.storage;
     return *this;
 }
 
@@ -192,7 +196,6 @@ void StaticVector<T>::popBack()
 {
     resize(size - 1);
 }
-
 
 template<typename T>
 __host__ __device__
@@ -244,14 +247,4 @@ __host__ __device__
 std::byte* StaticVector<T>::storageEnd() const
 {
     return reinterpret_cast<std::byte*>(storage + capacity);
-}
-
-template<typename T>
-__host__ __device__
-void StaticVector<T>::swap(StaticVector<T>& other)
-{
-    thrust::swap(flags, other.flags);
-    thrust::swap(size, other.size);
-    thrust::swap(capacity, other.capacity);
-    thrust::swap(storage, other.storage);
 }

@@ -3036,10 +3036,10 @@ namespace detail
 //
 // Every trait in this file expects a non CV-qualified type.
 // The only exceptions are in the 'aliases for detected' section
-// (i.e. those of the form: decltype(T::member_function(std::declval<T>())))
+// (i.e. those of the form: decltype(ProblemType::member_function(std::declval<ProblemType>())))
 //
-// In this case, T has to be properly CV-qualified to constraint the function arguments
-// (e.g. to_json(BasicJsonType&, const T&))
+// In this case, ProblemType has to be properly CV-qualified to constraint the function arguments
+// (e.g. to_json(BasicJsonType&, const ProblemType&))
 
 template<typename> struct is_basic_json : std::false_type {};
 
@@ -3096,13 +3096,13 @@ using from_json_function = decltype(T::from_json(std::declval<Args>()...));
 template<typename T, typename U>
 using get_template_function = decltype(std::declval<T>().template get<U>());
 
-// trait checking if JSONSerializer<T>::from_json(json const&, udt&) exists
+// trait checking if JSONSerializer<ProblemType>::from_json(json const&, udt&) exists
 template<typename BasicJsonType, typename T, typename = void>
 struct has_from_json : std::false_type {};
 
-// trait checking if j.get<T> is valid
+// trait checking if j.get<ProblemType> is valid
 // use this trait instead of std::is_constructible or std::is_convertible,
-// both rely on, or make use of implicit conversions, and thus fail when T
+// both rely on, or make use of implicit conversions, and thus fail when ProblemType
 // has several constructors/operator= (see https://github.com/nlohmann/json/issues/958)
 template <typename BasicJsonType, typename T>
 struct is_getable
@@ -3121,7 +3121,7 @@ struct has_from_json < BasicJsonType, T,
         const BasicJsonType&, T&>::value;
 };
 
-// This trait checks if JSONSerializer<T>::from_json(json const&) exists
+// This trait checks if JSONSerializer<ProblemType>::from_json(json const&) exists
 // this overload is used for non-default-constructible user-defined-types
 template<typename BasicJsonType, typename T, typename = void>
 struct has_non_default_from_json : std::false_type {};
@@ -3136,8 +3136,8 @@ struct has_non_default_from_json < BasicJsonType, T, enable_if_t < !is_basic_jso
         const BasicJsonType&>::value;
 };
 
-// This trait checks if BasicJsonType::json_serializer<T>::to_json exists
-// Do not evaluate the trait when T is a basic_json type, to avoid template instantiation infinite recursion.
+// This trait checks if BasicJsonType::json_serializer<ProblemType>::to_json exists
+// Do not evaluate the trait when ProblemType is a basic_json type, to avoid template instantiation infinite recursion.
 template<typename BasicJsonType, typename T, typename = void>
 struct has_to_json : std::false_type {};
 
@@ -10013,7 +10013,7 @@ class binary_reader
             }
         }
 
-        // step 2: convert array into number of type T and return
+        // step 2: convert array into number of type ProblemType and return
         std::memcpy(&result, vec.data(), sizeof(NumberType));
         return true;
     }
@@ -22652,8 +22652,8 @@ class basic_json
     [comparison function](https://github.com/mariokonrad/marnav/blob/master/include/marnav/math/floatingpoint.hpp#L34-#L39)
     could be used, for instance
     @code {.cpp}
-    template<typename T, typename = typename std::enable_if<std::is_floating_point<T>::value, T>::type>
-    inline bool is_same(T a, T b, T epsilon = std::numeric_limits<T>::epsilon()) noexcept
+    template<typename ProblemType, typename = typename std::enable_if<std::is_floating_point<ProblemType>::value, ProblemType>::type>
+    inline bool is_same(ProblemType a, ProblemType b, ProblemType epsilon = std::numeric_limits<ProblemType>::epsilon()) noexcept
     {
         return std::abs(a - b) <= epsilon;
     }
@@ -23756,7 +23756,7 @@ class basic_json
     JSON value type | value/range                       | UBJSON type | marker
     --------------- | --------------------------------- | ----------- | ------
     null            | `null`                            | null        | `Z`
-    boolean         | `true`                            | true        | `T`
+    boolean         | `true`                            | true        | `ProblemType`
     boolean         | `false`                           | false       | `F`
     number_integer  | -9223372036854775808..-2147483649 | int64       | `L`
     number_integer  | -2147483648..-32769               | int32       | `l`
@@ -24248,7 +24248,7 @@ class basic_json
     no-op       | *no value, next value is read*          | `N`
     null        | `null`                                  | `Z`
     false       | `false`                                 | `F`
-    true        | `true`                                  | `T`
+    true        | `true`                                  | `ProblemType`
     float32     | number_float                            | `d`
     float64     | number_float                            | `D`
     uint8       | number_unsigned                         | `U`
