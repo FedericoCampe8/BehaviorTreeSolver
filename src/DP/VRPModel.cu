@@ -1,91 +1,107 @@
 #include <thrust/for_each.h>
 #include <thrust/binary_search.h>
 
+#include "../OP/VRProblem.cuh"
+#include "VRPState.cuh"
 #include "VRPModel.cuh"
 
-void DP::VRPModel::makeRoot(OP::VRP const & vrProblem, VRPState& root)
+DP::VRPModel::VRPModel(OP::Problem const * problem) :
+    Model(problem)
+{}
+
+
+void DP::VRPModel::makeRoot(State* root) const
 {
-    root.cost = 0;
-    thrust::for_each(thrust::seq, vrProblem.pickups.begin(), vrProblem.pickups.end(), [&] (OP::Variable::ValueType& pickup)
+    OP::VRProblem const * const vrProblem = reinterpret_cast<OP::VRProblem const *>(problem);
+    VRPState* const vrRoot = reinterpret_cast<VRPState*>(root);
+
+    vrRoot->cost = 0;
+    thrust::for_each(thrust::seq, vrProblem->pickups.begin(), vrProblem->pickups.end(), [&] (uint8_t& pickup)
     {
-         root.admissibleValues.pushBack(pickup);
+         vrRoot->admissibleValues.pushBack(pickup);
     });
 }
 
 __host__ __device__
-void DP::VRPModel::calcCosts(OP::VRP const & vrProblem, unsigned int variableIdx, VRPState const & state, VRPState::CostType* costs)
+void DP::VRPModel::calcCosts(unsigned int variableIdx, State const * state, uint32_t* costs) const
 {
-    OP::Variable const & variable = vrProblem.variables[variableIdx];
-    for(OP::Variable::ValueType value = variable.minValue; value <= variable.maxValue; value += 1)
+    OP::VRProblem const * const vrProblem = reinterpret_cast<OP::VRProblem const *>(problem);
+    VRPState const * const vrState = reinterpret_cast<VRPState const *>(state);
+
+    OP::Variable const & variable = vrProblem->variables[variableIdx];
+    for(uint8_t value = variable.minValue; value <= variable.maxValue; value += 1)
     {
-        VRPState::CostType& cost = costs[value - variable.minValue];
-        if(state.isAdmissible(value))
+        uint32_t& cost = costs[value - variable.minValue];
+        if(vrState->isAdmissible(value))
         {
-            cost = state.cost;
-            if(not state.selectedValues.isEmpty())
+            cost = vrState->cost;
+            if(not vrState->selectedValues.isEmpty())
             {
-                costs += vrProblem.getDistance(state.selectedValues.back(), value);
+                costs += vrProblem->getDistance(vrState->selectedValues.back(), value);
             }
         }
         else
         {
-            cost = VRPState::MaxCost;
+            cost = State::MaxCost;
         }
     }
 }
 
 __host__ __device__
-void DP::VRPModel::makeState(OP::VRP const & vrProblem, VRPState const & parentState, OP::Variable::ValueType selectedValue, VRPState::CostType childStateCost, VRPState& childState)
+void DP::VRPModel::makeState(State const * parentState, unsigned int selectedValue, unsigned int childStateCost, State* childState) const
 {
+    VRPState const * const vrParentState = reinterpret_cast<VRPState const *>(parentState);
+    VRPState* const vrChildState = reinterpret_cast<VRPState*>(childState);
+
     // Initialize child state
-    childState = parentState;
-    childState.cost = childStateCost;
+    *vrChildState = *vrParentState;
+    vrChildState->cost = childStateCost;
 
     // Remove value from admissible values
-    assert(childState.isAdmissible(selectedValue));
-    thrust::remove(thrust::seq, childState.admissibleValues.begin(), childState.admissibleValues.end(), selectedValue);
-    childState.admissibleValues.popBack();
+    assert(vrChildState->isAdmissible(selectedValue));
+    thrust::remove(thrust::seq, vrChildState->admissibleValues.begin(), vrChildState->admissibleValues.end(), static_cast<uint8_t>(selectedValue));
+    vrChildState->admissibleValues.popBack();
 
     // Add value to selected values
-    if (not childState.isSelected(selectedValue))
+    if (not vrChildState->isSelected(selectedValue))
     {
-        childState.selectedValues.pushBack(selectedValue);
+        vrChildState->selectedValues.pushBack(static_cast<uint8_t>(selectedValue));
     }
 
-    // If the value is a pickup, add the corresponding delivery
-    OP::Variable::ValueType* pickup = thrust::lower_bound(thrust::seq, vrProblem.pickups.begin(), vrProblem.pickups.end(), value);
-    if (pickup != vrProblem.pickups.end())
-    {
-        unsigned int deliveryIdx = thrust::distance(vrProblem.pickups.begin(), pickup);
-        OP::Variable::ValueType delivery = vrProblem.deliveries[deliveryIdx];
-        if(not childState.isAdmissible(delivery))
-        {
-            childState.admissibleValues.pushBack(delivery);
-        }
-    }
+    ifPickupAddDelivery(selectedValue, vrChildState);
 }
 
 __host__ __device__
-void DP::VRPModel::mergeNextState(OP::VRP const & vrProblem, VRPState const & parentState, OP::Variable::ValueType selectedValue, VRPState& childState)
+void DP::VRPModel::mergeNextState(State const * parentState, unsigned int selectedValue, State* childState) const
 {
+    VRPState const * const vrParentState = reinterpret_cast<VRPState const *>(parentState);
+    VRPState* const vrChildState = reinterpret_cast<VRPState*>(childState);
+
     // Merge admissible values
-    thrust::for_each(thrust::seq, parentState.admissibleValues.begin(), parentState.admissibleValues.end(), [=] (OP::Variable::ValueType& admissibleValue)
+    thrust::for_each(thrust::seq, vrParentState->admissibleValues.begin(), vrParentState->admissibleValues.end(), [&] (uint8_t& admissibleValue)
     {
-        if (admissibleValue != selectedValue and (not childState.isAdmissible(admissibleValue)))
+        if (admissibleValue != selectedValue and (not vrChildState->isAdmissible(admissibleValue)))
         {
-            childState.admissibleValues.pushBack(admissibleValue);
+            vrChildState->admissibleValues.pushBack(admissibleValue);
         }
     });
 
-    // If the value is a pickup, add the corresponding delivery
-    OP::Variable::ValueType* pickup = thrust::lower_bound(thrust::seq, vrProblem.pickups.begin(), vrProblem.pickups.end(), value);
-    if (pickup != vrProblem.pickups.end())
+    ifPickupAddDelivery(selectedValue, vrChildState);
+}
+
+__host__ __device__
+void DP::VRPModel::ifPickupAddDelivery(unsigned int selectedValue, VRPState* state) const
+{
+    OP::VRProblem const * const vrProblem = reinterpret_cast<OP::VRProblem const *>(problem);
+
+    uint8_t * const pickup = thrust::lower_bound(thrust::seq, vrProblem->pickups.begin(), vrProblem->pickups.end(), static_cast<uint8_t>(selectedValue));
+    if (pickup != vrProblem->pickups.end())
     {
-        unsigned int deliveryIdx = thrust::distance(vrProblem.pickups.begin(), pickup);
-        OP::Variable::ValueType delivery = vrProblem.deliveries[deliveryIdx];
-        if(not childState.isAdmissible(delivery))
+        unsigned int deliveryIdx = thrust::distance(vrProblem->pickups.begin(), pickup);
+        uint8_t delivery = vrProblem->deliveries[deliveryIdx];
+        if(not state->isAdmissible(delivery))
         {
-            childState.admissibleValues.pushBack(delivery);
+            state->admissibleValues.pushBack(delivery);
         }
     }
 }

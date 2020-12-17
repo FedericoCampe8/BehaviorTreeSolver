@@ -7,13 +7,11 @@ namespace OP
     class Variable
     {
         public:
-            using ValueType = uint8_t;
-
-            ValueType minValue;
-            ValueType maxValue;
+            uint8_t minValue;
+            uint8_t maxValue;
 
         public:
-            Variable(ValueType minValue, ValueType maxValue);
+            Variable(unsigned int minValue, unsigned int maxValue);
             static unsigned int cardinality(Variable const & variable);
     };
 }

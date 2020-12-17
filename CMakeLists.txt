@@ -32,17 +32,16 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 # Add sources
 set(SOURCES
-    src/DP/VRPState.cu
     src/DP/VRPState.cuh
     src/DP/VRPModel.cu
     src/Main.cu
     src/OP/Variable.cu
     src/OP/Variable.cuh
     src/DP/VRPModel.cuh
-    src/MDD/MetaMDD.cuh
-    src/OP/VRP.cu
-    src/OP/VRP.cuh
-    src/BB/AugmentedState.cuh src/Misc/Helpers.cuh)
+    src/DD/MDD.cuh
+    src/OP/VRProblem.cu
+    src/OP/VRProblem.cuh
+    src/BB/AugmentedState.cuh src/Misc/Helpers.cuh src/OP/Problem.cu src/OP/Problem.cuh src/DP/State.cu src/DP/State.cuh src/DP/Model.cuh src/DP/Model.cu)
 
 # Add include path
 include_directories(include)

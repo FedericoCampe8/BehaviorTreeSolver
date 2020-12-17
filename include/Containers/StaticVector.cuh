@@ -1,15 +1,12 @@
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
-#include <cstdio>
 #include <cassert>
-#include <type_traits>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
-#include <thrust/execution_policy.h>
-#include <thrust/swap.h>
 
 #include <Utils/Memory.cuh>
 
@@ -18,15 +15,19 @@ class StaticVector
 {
     private:
         enum Flags {Owning = 1};
-        unsigned int flags;
-        unsigned int size;
-        unsigned int capacity;
+
+    private:
+        uint32_t flags;
+        uint32_t size;
+        uint32_t capacity;
+        std::byte padding[4]; // 64bit aligned
         T * storage;
 
     public:
         __host__ __device__ StaticVector(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ StaticVector(unsigned int capacity, std::byte* storage);
         __host__ __device__ StaticVector(T* begin, T* end);
+        __host__ __device__ StaticVector(StaticVector<T>&& other);
         __host__ __device__ ~StaticVector();
         __host__ __device__ inline T& at(unsigned int index) const;
         __host__ __device__ inline T& back() const;
@@ -73,10 +74,19 @@ StaticVector<T>::StaticVector(unsigned int capacity, std::byte* storage) :
 template<typename T>
 __host__ __device__
 StaticVector<T>::StaticVector(T* begin, T* end) :
-    flags(0)
+    flags(0),
     size(0),
     capacity(thrust::distance(begin,end)),
     storage(begin)
+{}
+
+template<typename T>
+__host__ __device__
+StaticVector<T>::StaticVector(StaticVector<T>&& other) :
+    flags(other.flags),
+    size(other.size),
+    capacity(other.capacity),
+    storage(other.storage)
 {}
 
 template<typename T>
@@ -178,7 +188,7 @@ StaticVector<T>& StaticVector<T>::operator=(StaticVector<T>&& other)
 {
     flags = other.flags;
     size = other.size;
-    capacity = other.capacity
+    capacity = other.capacity,
     storage = other.storage;
     return *this;
 }

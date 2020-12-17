@@ -1,14 +1,12 @@
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
-#include <cstdio>
 #include <cassert>
-#include <type_traits>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 
 #include <thrust/copy.h>
 #include <thrust/distance.h>
-#include <thrust/execution_policy.h>
 
 #include <Utils/Memory.cuh>
 
@@ -16,15 +14,18 @@ template<typename T>
 class RuntimeArray
 {
     private:
-        enum Flag {Owning = 1};
-        unsigned int flags;
-        unsigned int capacity;
+        enum Flags {Owning = 1};
+
+    private:
+        uint32_t flags;
+        uint32_t capacity;
         T * storage;
 
     public:
         __host__ __device__ RuntimeArray(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ RuntimeArray(unsigned int capacity, std::byte* storage);
         __host__ __device__ RuntimeArray(T* begin, T* end);
+        __host__ __device__ RuntimeArray(RuntimeArray<T>&& other);
         __host__ __device__ ~RuntimeArray();
         __host__ __device__ inline T& at(unsigned int index) const;
         __host__ __device__ inline T& back() const;
@@ -46,7 +47,7 @@ class RuntimeArray
 template<typename T>
 __host__ __device__
 RuntimeArray<T>::RuntimeArray(unsigned int capacity, Memory::MallocType mallocType) :
-    flags(Flag::Owning),
+    flags(Flags::Owning),
     capacity(capacity),
     storage(mallocStorage(capacity, mallocType))
 {}
@@ -69,9 +70,17 @@ RuntimeArray<T>::RuntimeArray(T* begin, T* end) :
 
 template<typename T>
 __host__ __device__
+RuntimeArray<T>::RuntimeArray(RuntimeArray<T>&& other) :
+    flags(other.flags),
+    capacity(other.capacity),
+    storage(other.storage)
+{}
+
+template<typename T>
+__host__ __device__
 RuntimeArray<T>::~RuntimeArray()
 {
-    if(flags & Flag::Owning)
+    if(flags & Flags::Owning)
     {
         free(storage);
     }
@@ -162,7 +171,7 @@ void RuntimeArray<T>::print(bool endLine) const
     static_assert(std::is_integral<T>::value);
 
     printf("[");
-    if(capacity > 0)
+    if (capacity > 0)
     {
         printf("%d", at(0));
         for (unsigned int i = 1; i < capacity; i += 1)

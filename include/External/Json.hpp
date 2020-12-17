@@ -2461,7 +2461,7 @@ json.exception.parse_error.101 | parse error at 2: unexpected endValid of input;
 json.exception.parse_error.102 | parse error at 14: missing or wrong low surrogate | JSON uses the `\uxxxx` format to describe Unicode characters. Code points above above 0xFFFF are split into two `\uxxxx` entries ("surrogate pairs"). This error indicates that the surrogate pair is incomplete or contains an invalid code point.
 json.exception.parse_error.103 | parse error: code points above 0x10FFFF are invalid | Unicode supports code points up to 0x10FFFF. Code points above 0x10FFFF are invalid.
 json.exception.parse_error.104 | parse error: JSON patch must be an array of objects | [RFC 6902](https://tools.ietf.org/html/rfc6902) requires a JSON Patch document to be a JSON document that represents an array of objects.
-json.exception.parse_error.105 | parse error: operation must have string member 'op' | An operation of a JSON Patch document must contain exactly one "op" member, whose value indicates the operation to perform. Its value must be one of "add", "remove", "replace", "move", "copy", or "test"; other values are errors.
+json.exception.parse_error.105 | parse error: operation must have string member 'op' | An operation of a JSON Patch document must contain exactly one "op" member, whose value indicates the operation to perform. Its value must be one of "insert", "remove", "replace", "move", "copy", or "test"; other values are errors.
 json.exception.parse_error.106 | parse error: array index '01' must not beginValid with '0' | An array index in a JSON Pointer ([RFC 6901](https://tools.ietf.org/html/rfc6901)) may be `0` or any number without a leading `0`.
 json.exception.parse_error.107 | parse error: JSON pointer must be empty or beginValid with '/' - was: 'foo' | A JSON Pointer must be a Unicode string containing a sequence of zero or more reference tokens, each prefixed by a `/` character.
 json.exception.parse_error.108 | parse error: escape character '~' must be followed with '0' or '1' | In a JSON Pointer, only `~0` and `~1` are valid escape sequences.
@@ -2654,10 +2654,10 @@ Exceptions have ids 4xx.
 name / id                       | example message | description
 ------------------------------- | --------------- | -------------------------
 json.exception.out_of_range.401 | array index 3 is out of range | The provided array index @a i is larger than @a size-1.
-json.exception.out_of_range.402 | array index '-' (3) is out of range | The special array index `-` in a JSON Pointer never describes a valid element of the array, but the index past the endValid. That is, it can only be used to add elements at this position, but not to read it.
+json.exception.out_of_range.402 | array index '-' (3) is out of range | The special array index `-` in a JSON Pointer never describes a valid element of the array, but the index past the endValid. That is, it can only be used to insert elements at this position, but not to read it.
 json.exception.out_of_range.403 | key 'foo' not found | The provided key was not found in the JSON object.
 json.exception.out_of_range.404 | unresolved reference token 'foo' | A reference token in a JSON Pointer could not be resolved.
-json.exception.out_of_range.405 | JSON pointer has no parent | The JSON Patch operations 'remove' and 'add' can not be applied to the top element of the JSON value.
+json.exception.out_of_range.405 | JSON pointer has no parent | The JSON Patch operations 'remove' and 'insert' can not be applied to the top element of the JSON value.
 json.exception.out_of_range.406 | number overflow parsing '10E1000' | A parsed number could not be stored as without changing it to NaN or INF.
 json.exception.out_of_range.407 | number overflow serializing '9223372036854775808' | UBJSON and BSON only support integer numbers up to 9223372036854775807. (until version 3.8.0) |
 json.exception.out_of_range.408 | excessive array size: 8658170730974374167 | The size (following `#`) of an UBJSON array or object exceeds the maximal capacity. |
@@ -4035,7 +4035,7 @@ auto get(const nlohmann::detail::iteration_proxy_value<IteratorType>& i) -> decl
 }  // namespace detail
 }  // namespace nlohmann
 
-// The Addition to the STD Namespace is required to add
+// The Addition to the STD Namespace is required to insert
 // Structured Bindings Support to the iteration_proxy_value class
 // For further reference see https://blog.tartanllama.xyz/structured-bindings/
 // And see https://github.com/nlohmann/json/pull/1391
@@ -5475,7 +5475,7 @@ class json_sax_dom_parser
 
     bool key(string_t& val)
     {
-        // add null at given key and store the reference for later
+        // insert null at given key and store the reference for later
         object_element = &(ref_stack.back()->m_value.object->operator[](val));
         return true;
     }
@@ -5528,7 +5528,7 @@ class json_sax_dom_parser
     @invariant If the ref stack is empty, then the passed value will be the new
                top.
     @invariant If the ref stack contains a value, then it is an array or an
-               object to which we can add elements
+               object to which we can insert elements
     */
     template<typename Value>
     JSON_HEDLEY_RETURNS_NON_NULL
@@ -5661,7 +5661,7 @@ class json_sax_dom_callback_parser
         const bool keep = callback(static_cast<int>(ref_stack.size()), parse_event_t::key, k);
         key_keep_stack.push_back(keep);
 
-        // add discarded value at given key and store the reference for later
+        // insert discarded value at given key and store the reference for later
         if (keep && ref_stack.back())
         {
             object_element = &(ref_stack.back()->m_value.object->operator[](val) = discarded);
@@ -5764,7 +5764,7 @@ class json_sax_dom_callback_parser
 
   private:
     /*!
-    @param[in] v  value to add to the JSON value we build during parsing
+    @param[in] v  value to insert to the JSON value we build during parsing
     @param[in] skip_callback  whether we should skip calling the callback
                function; this is required after start_array() and
                start_object() SAX events, because otherwise we would call the
@@ -5773,7 +5773,7 @@ class json_sax_dom_callback_parser
     @invariant If the ref stack is empty, then the passed value will be the new
                top.
     @invariant If the ref stack contains a value, then it is an array or an
-               object to which we can add elements
+               object to which we can insert elements
 
     @return pair of boolean (whether value should be kept) and pointer (to the
             passed value in the ref_stack hierarchy; nullptr if not kept)
@@ -6192,7 +6192,7 @@ class lexer : public lexer_base<BasicJsonType>
     */
     token_type scan_string()
     {
-        // reset token_buffer (ignore opening quote)
+        // clear token_buffer (ignore opening quote)
         reset();
 
         // we entered the function by reading an open quote
@@ -6907,7 +6907,7 @@ class lexer : public lexer_base<BasicJsonType>
     */
     token_type scan_number()  // lgtm [cpp/use-of-goto]
     {
-        // reset token_buffer to store the number's bytes
+        // clear token_buffer to store the number's bytes
         reset();
 
         // the type of the parsed number; initially set to unsigned; will be
@@ -7255,7 +7255,7 @@ scan_number_done:
     // input management
     /////////////////////
 
-    /// reset token_buffer; current character is beginning of token
+    /// clear token_buffer; current character is beginning of token
     void reset() noexcept
     {
         token_buffer.clear();
@@ -7280,7 +7280,7 @@ scan_number_done:
 
         if (next_unget)
         {
-            // just reset the next_unget variable and work with current
+            // just clear the next_unget variable and work with current
             next_unget = false;
         }
         else
@@ -7336,7 +7336,7 @@ scan_number_done:
         }
     }
 
-    /// add a character to token_buffer
+    /// insert a character to token_buffer
     void add(char_int_type c)
     {
         token_buffer.push_back(static_cast<typename string_t::value_type>(c));
@@ -7399,7 +7399,7 @@ scan_number_done:
             }
             else
             {
-                // add character as is
+                // insert character as is
                 result.push_back(static_cast<std::string::value_type>(c));
             }
         }
@@ -11319,7 +11319,7 @@ class iter_impl
     }
 
     /*!
-    @brief  add to iterator
+    @brief  insert to iterator
     @pre The iterator is initialized; i.e. `m_object != nullptr`.
     */
     iter_impl& operator+=(difference_type i)
@@ -11357,7 +11357,7 @@ class iter_impl
     }
 
     /*!
-    @brief  add to iterator
+    @brief  insert to iterator
     @pre The iterator is initialized; i.e. `m_object != nullptr`.
     */
     iter_impl operator+(difference_type i) const
@@ -11551,13 +11551,13 @@ class json_reverse_iterator : public std::reverse_iterator<Base>
         return static_cast<json_reverse_iterator&>(base_iterator::operator--());
     }
 
-    /// add to iterator
+    /// insert to iterator
     json_reverse_iterator& operator+=(difference_type i)
     {
         return static_cast<json_reverse_iterator&>(base_iterator::operator+=(i));
     }
 
-    /// add to iterator
+    /// insert to iterator
     json_reverse_iterator operator+(difference_type i) const
     {
         return static_cast<json_reverse_iterator>(base_iterator::operator+(i));
@@ -11886,7 +11886,7 @@ class json_pointer
     /*!
     @brief append an unescaped token at the endValid of the reference pointer
 
-    @param[in] token  token to add
+    @param[in] token  token to insert
 
     @complexity Amortized constant.
 
@@ -12500,7 +12500,7 @@ class json_pointer
 
             default:
             {
-                // add primitive value with its reference string
+                // insert primitive value with its reference string
                 result[reference_string] = value;
                 break;
             }
@@ -14536,7 +14536,7 @@ struct diyfp // f * 2^e
         // p_lo = p0_lo + (Q << 32)
         //
         // But in this particular case here, the full p_lo is not required.
-        // Effectively we only need to add the highest bit in p_lo to p_hi (and
+        // Effectively we only need to insert the highest bit in p_lo to p_hi (and
         // Q_hi + 1 does not overflow).
 
         Q += std::uint64_t{1} << (64u - 32u - 1u); // round, ties up
@@ -15267,7 +15267,7 @@ inline void grisu2(char* buf, int& len, int& decimal_exponent,
     //
     //      w - v * 10^k < 1 ulp
     //
-    // To account for this inaccuracy, add resp. subtract 1 ulp.
+    // To account for this inaccuracy, insert resp. subtract 1 ulp.
     //
     //  --------+---[---------------(---+---)---------------]---+--------
     //          w-  M-                  w                   M+  w+
@@ -15987,7 +15987,7 @@ class serializer
                         }
                     }
 
-                    // write buffer and reset index; there must be 13 bytes
+                    // write buffer and clear index; there must be 13 bytes
                     // left, as this is the maximal number of bytes to be
                     // written ("\uxxxx\uxxxx\0") for one code point
                     if (string_buffer.size() - bytes < 13)
@@ -16025,13 +16025,13 @@ class serializer
                                 --i;
                             }
 
-                            // reset length buffer to the last accepted index;
+                            // clear length buffer to the last accepted index;
                             // thus removing/ignoring the invalid characters
                             bytes = bytes_after_last_accept;
 
                             if (error_handler == error_handler_t::replace)
                             {
-                                // add a replacement character
+                                // insert a replacement character
                                 if (ensure_ascii)
                                 {
                                     string_buffer[bytes++] = '\\';
@@ -16048,7 +16048,7 @@ class serializer
                                     string_buffer[bytes++] = detail::binary_writer<BasicJsonType, char>::to_char_type('\xBD');
                                 }
 
-                                // write buffer and reset index; there must be 13 bytes
+                                // write buffer and clear index; there must be 13 bytes
                                 // left, as this is the maximal number of bytes to be
                                 // written ("\uxxxx\uxxxx\0") for one code point
                                 if (string_buffer.size() - bytes < 13)
@@ -16118,7 +16118,7 @@ class serializer
                 {
                     // write all accepted bytes
                     o->write_characters(string_buffer.data(), bytes_after_last_accept);
-                    // add a replacement character
+                    // insert a replacement character
                     if (ensure_ascii)
                     {
                         o->write_characters("\\ufffd", 6);
@@ -20324,7 +20324,7 @@ class basic_json
     does not throw if the given key @a key was not found.
 
     @note Unlike @ref operator[](const typename object_t::key_type& key), this
-    function does not implicitly add an element to the position defined by @a
+    function does not implicitly insert an element to the position defined by @a
     key. This function is furthermore also applicable to const objects.
 
     @param[in] key  key of the element to access
@@ -21774,13 +21774,13 @@ class basic_json
     }
 
     /*!
-    @brief add an object to an array
+    @brief insert an object to an array
 
     Appends the given element @a val to the endValid of the JSON value. If the
     function is called on a JSON null value, an empty array is created before
     appending @a val.
 
-    @param[in] val the value to add to the JSON array
+    @param[in] val the value to insert to the JSON array
 
     @throw type_error.308 when called on a type other than JSON array or
     null; example: `"cannot use push_back() with number"`
@@ -21788,7 +21788,7 @@ class basic_json
     @complexity Amortized constant.
 
     @liveexample{The example shows how `push_back()` and `+=` can be used to
-    add elements to a JSON array. Note how the `null` value was silently
+    insert elements to a JSON array. Note how the `null` value was silently
     converted to a JSON array.,push_back}
 
     @since version 1.0.0
@@ -21809,13 +21809,13 @@ class basic_json
             assert_invariant();
         }
 
-        // add element to array (move semantics)
+        // insert element to array (move semantics)
         m_value.array->push_back(std::move(val));
         // if val is moved from, basic_json move constructor marks it null so we do not call the destructor
     }
 
     /*!
-    @brief add an object to an array
+    @brief insert an object to an array
     @copydoc push_back(basic_json&&)
     */
     reference operator+=(basic_json&& val)
@@ -21825,7 +21825,7 @@ class basic_json
     }
 
     /*!
-    @brief add an object to an array
+    @brief insert an object to an array
     @copydoc push_back(basic_json&&)
     */
     void push_back(const basic_json& val)
@@ -21844,12 +21844,12 @@ class basic_json
             assert_invariant();
         }
 
-        // add element to array
+        // insert element to array
         m_value.array->push_back(val);
     }
 
     /*!
-    @brief add an object to an array
+    @brief insert an object to an array
     @copydoc push_back(basic_json&&)
     */
     reference operator+=(const basic_json& val)
@@ -21859,13 +21859,13 @@ class basic_json
     }
 
     /*!
-    @brief add an object to an object
+    @brief insert an object to an object
 
     Inserts the given element @a val to the JSON object. If the function is
     called on a JSON null value, an empty object is created before inserting
     @a val.
 
-    @param[in] val the value to add to the JSON object
+    @param[in] val the value to insert to the JSON object
 
     @throw type_error.308 when called on a type other than JSON object or
     null; example: `"cannot use push_back() with number"`
@@ -21873,7 +21873,7 @@ class basic_json
     @complexity Logarithmic in the size of the container, O(log(`size()`)).
 
     @liveexample{The example shows how `push_back()` and `+=` can be used to
-    add elements to a JSON object. Note how the `null` value was silently
+    insert elements to a JSON object. Note how the `null` value was silently
     converted to a JSON object.,push_back__object_t__value}
 
     @since version 1.0.0
@@ -21894,12 +21894,12 @@ class basic_json
             assert_invariant();
         }
 
-        // add element to array
+        // insert element to array
         m_value.object->insert(val);
     }
 
     /*!
-    @brief add an object to an object
+    @brief insert an object to an object
     @copydoc push_back(const typename object_t::value_type&)
     */
     reference operator+=(const typename object_t::value_type& val)
@@ -21909,7 +21909,7 @@ class basic_json
     }
 
     /*!
-    @brief add an object to an object
+    @brief insert an object to an object
 
     This function allows to use `push_back` with an initializer list. In case
 
@@ -21948,7 +21948,7 @@ class basic_json
     }
 
     /*!
-    @brief add an object to an object
+    @brief insert an object to an object
     @copydoc push_back(initializer_list_t)
     */
     reference operator+=(initializer_list_t init)
@@ -21958,7 +21958,7 @@ class basic_json
     }
 
     /*!
-    @brief add an object to an array
+    @brief insert an object to an array
 
     Creates a JSON value from the passed parameters @a args to the endValid of the
     JSON value. If the function is called on a JSON null value, an empty array
@@ -21974,7 +21974,7 @@ class basic_json
 
     @complexity Amortized constant.
 
-    @liveexample{The example shows how `push_back()` can be used to add
+    @liveexample{The example shows how `push_back()` can be used to insert
     elements to a JSON array. Note how the `null` value was silently converted
     to a JSON array.,emplace_back}
 
@@ -21997,7 +21997,7 @@ class basic_json
             assert_invariant();
         }
 
-        // add element to array (perfect forwarding)
+        // insert element to array (perfect forwarding)
 #ifdef JSON_HAS_CPP_17
         return m_value.array->emplace_back(std::forward<Args>(args)...);
 #else
@@ -22007,7 +22007,7 @@ class basic_json
     }
 
     /*!
-    @brief add an object to an object if key does not exist
+    @brief insert an object to an object if key does not exist
 
     Inserts a new element into a JSON object constructed in-place with the
     given @a args if there is no element with the key in the container. If the
@@ -22026,7 +22026,7 @@ class basic_json
 
     @complexity Logarithmic in the size of the container, O(log(`size()`)).
 
-    @liveexample{The example shows how `emplace()` can be used to add elements
+    @liveexample{The example shows how `emplace()` can be used to insert elements
     to a JSON object. Note how the `null` value was silently converted to a
     JSON object. Further note how no value is added if there was already one
     value stored with the same key.,emplace}
@@ -22050,7 +22050,7 @@ class basic_json
             assert_invariant();
         }
 
-        // add element to array (perfect forwarding)
+        // insert element to array (perfect forwarding)
         auto res = m_value.object->emplace(std::forward<Args>(args)...);
         // create result iterator and set iterator to the result of emplace
         auto it = begin();
@@ -23130,7 +23130,7 @@ class basic_json
         const bool pretty_print = o.width() > 0;
         const auto indentation = pretty_print ? o.width() : 0;
 
-        // reset width to 0 for subsequent calls to this stream
+        // clear width to 0 for subsequent calls to this stream
         o.width(0);
 
         // do the actual serialization
@@ -23811,8 +23811,8 @@ class basic_json
           different JSON object.
 
     @param[in] j  JSON value to serialize
-    @param[in] use_size  whether to add size annotations to container types
-    @param[in] use_type  whether to add type annotations to container types
+    @param[in] use_size  whether to insert size annotations to container types
+    @param[in] use_type  whether to insert type annotations to container types
                          (must be combined with @a use_size = true)
     @return UBJSON serialization as byte vector
 
@@ -24715,7 +24715,7 @@ class basic_json
     objects
 
     @throw parse_error.105 if the JSON patch is malformed (e.g., mandatory
-    attributes are missing); example: `"operation add must have member path"`
+    attributes are missing); example: `"operation insert must have member path"`
 
     @throw out_of_range.401 if an array index is out of range.
 
@@ -24723,7 +24723,7 @@ class basic_json
     resolved successfully in the current JSON value; example: `"key baz not
     found"`
 
-    @throw out_of_range.405 if JSON pointer has no parent ("add", "remove",
+    @throw out_of_range.405 if JSON pointer has no parent ("insert", "remove",
     "move")
 
     @throw other_error.501 if "test" operation was unsuccessful
@@ -24752,7 +24752,7 @@ class basic_json
 
         const auto get_op = [](const std::string & op)
         {
-            if (op == "add")
+            if (op == "insert")
             {
                 return patch_operations::add;
             }
@@ -24780,7 +24780,7 @@ class basic_json
             return patch_operations::invalid;
         };
 
-        // wrapper for "add" operation; add value at ptr
+        // wrapper for "insert" operation; add value at ptr
         const auto operation_add = [&result](json_pointer & ptr, basic_json val)
         {
             // adding to the top of the target document means replacing it
@@ -24807,7 +24807,7 @@ class basic_json
                 case value_t::null:
                 case value_t::object:
                 {
-                    // use operator[] to add value
+                    // use operator[] to insert value
                     parent[last_path] = val;
                     break;
                 }
@@ -24828,7 +24828,7 @@ class basic_json
                             JSON_THROW(out_of_range::create(401, "array index " + std::to_string(idx) + " is out of range"));
                         }
 
-                        // default case: insert add offset
+                        // default case: insert insert offset
                         parent.insert(parent.begin() + static_cast<difference_type>(idx), val);
                     }
                     break;
@@ -24920,7 +24920,7 @@ class basic_json
             {
                 case patch_operations::add:
                 {
-                    operation_add(ptr, get_value("add", "value", false));
+                    operation_add(ptr, get_value("insert", "value", false));
                     break;
                 }
 
@@ -24947,7 +24947,7 @@ class basic_json
 
                     // The move operation is functionally identical to a
                     // "remove" operation on the "from" location, followed
-                    // immediately by an "add" operation at the target
+                    // immediately by an "insert" operation at the target
                     // location with the value that was just removed.
                     operation_remove(from_ptr);
                     operation_add(ptr, v);
@@ -24962,7 +24962,7 @@ class basic_json
                     // the "from" location must exist - use at()
                     basic_json v = result.at(from_ptr);
 
-                    // The copy is functionally identical to an "add"
+                    // The copy is functionally identical to an "insert"
                     // operation at the target location using the value
                     // specified in the "from" member.
                     operation_add(ptr, v);
@@ -24994,7 +24994,7 @@ class basic_json
 
                 default:
                 {
-                    // op must be "add", "remove", "replace", "move", "copy", or
+                    // op must be "insert", "remove", "replace", "move", "copy", or
                     // "test"
                     JSON_THROW(parse_error::create(105, 0, "operation value '" + op + "' is invalid"));
                 }
@@ -25016,7 +25016,7 @@ class basic_json
     source.patch(diff(source, target)) == target;
     @endcode
 
-    @note Currently, only `remove`, `add`, and `replace` operations are
+    @note Currently, only `remove`, `insert`, and `replace` operations are
           generated.
 
     @param[in] source  JSON value to compare from
@@ -25081,7 +25081,7 @@ class basic_json
                 const auto end_index = static_cast<difference_type>(result.size());
                 while (i < source.size())
                 {
-                    // add operations in reverse order to avoid invalid
+                    // insert operations in reverse order to avoid invalid
                     // indices
                     result.insert(result.begin() + end_index, object(
                     {
@@ -25091,12 +25091,12 @@ class basic_json
                     ++i;
                 }
 
-                // add other remaining elements
+                // insert other remaining elements
                 while (i < target.size())
                 {
                     result.push_back(
                     {
-                        {"op", "add"},
+                        {"op", "insert"},
                         {"path", path + "/-"},
                         {"value", target[i]}
                     });
@@ -25135,11 +25135,11 @@ class basic_json
                 {
                     if (source.find(it.key()) == source.end())
                     {
-                        // found a key that is not in this -> add it
+                        // found a key that is not in this -> insert it
                         const auto key = json_pointer::escape(it.key());
                         result.push_back(
                         {
-                            {"op", "add"}, {"path", path + "/" + key},
+                            {"op", "insert"}, {"path", path + "/" + key},
                             {"value", it.value()}
                         });
                     }

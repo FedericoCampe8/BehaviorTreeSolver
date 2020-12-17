@@ -1,6 +1,6 @@
 #include "Variable.cuh"
 
-OP::Variable::Variable(ValueType minValue, ValueType maxValue) :
+OP::Variable::Variable(unsigned int minValue, unsigned int maxValue) :
     minValue(minValue),
     maxValue(maxValue)
 {}

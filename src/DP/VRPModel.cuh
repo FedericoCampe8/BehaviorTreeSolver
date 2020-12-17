@@ -1,15 +1,24 @@
 #pragma once
 
-#include "../OP/VRP.cuh"
+#include "Model.cuh"
 #include "VRPState.cuh"
 
 namespace DP
 {
-    class VRPModel
+    class VRPModel : public Model
     {
-        static void makeRoot(OP::VRP const & vrProblem, VRPState& root);
-        __host__ __device__ static void calcCosts(OP::VRP const & vrProblem, unsigned int variableIdx, VRPState const & state, VRPState::CostType* costs);
-        __host__ __device__ static void makeState(OP::VRP const & vrProblem, VRPState const & parentState, OP::Variable::ValueType selectedValue, VRPState::CostType childStateCost, VRPState& childState);
-        __host__ __device__ static void mergeNextState(OP::VRP const & vrProblem, VRPState const & parentState, OP::Variable::ValueType selectedValue, VRPState& childState);
+        public:
+            using StateType = VRPState;
+
+        public:
+            VRPModel(OP::Problem const * problem);
+
+            void makeRoot(State* root) const;
+            __host__ __device__ void calcCosts(unsigned int variableIdx, State const * state, uint32_t* costs) const;
+            __host__ __device__ void makeState(State const * parentState, unsigned int selectedValue, unsigned int childStateCost, State* childState) const;
+            __host__ __device__ void mergeNextState(State const * parentState, unsigned int selectedValue, State* childState) const;
+
+        private:
+            __host__ __device__ void ifPickupAddDelivery(unsigned int selectedValue, VRPState* state) const;
     };
 }

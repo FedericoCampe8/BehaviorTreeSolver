@@ -6,19 +6,18 @@
 namespace Misc
 {
     template<typename T>
-    T* getRawArrayOfStates(unsigned int variablesCount, unsigned int size, Memory::MallocType mallocType);
+    unsigned int getSizeOfRawArrayOfStates(unsigned int variablesCount, unsigned int size);
 
     template<typename T>
     T* getRawArrayOfStates(unsigned int variablesCount, unsigned int size, std::byte* memory);
 }
 
 template<typename T>
-T* Misc::getRawArrayOfStates<T>(unsigned int variablesCount, unsigned int size, Memory::MallocType mallocType)
+unsigned int Misc::getSizeOfRawArrayOfStates<T>(unsigned int variablesCount, unsigned int size)
 {
     unsigned int stateSize = sizeof(T);
     unsigned int stateStorageSize = T::sizeOfStorage(variablesCount);
-    std::byte* memory = Memory::safeMalloc(stateSize * size  + stateStorageSize * size, mallocType);
-    return getRawArrayOfStates<T>(variablesCount,size, memory);
+    return (stateSize * size)  + (stateStorageSize * size);
 }
 
 template<typename T>
@@ -34,4 +33,6 @@ T* Misc::getRawArrayOfStates<T>(unsigned int variablesCount, unsigned int size, 
     {
         new (&states[stateIdx]) T(variablesCount, &statesStorages[stateStorageSize * stateIdx]);
     };
+
+    return states;
 }
