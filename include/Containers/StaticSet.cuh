@@ -19,15 +19,14 @@ class StaticSet
 
     public:
         __host__ __device__ StaticSet(unsigned int capacity, Memory::MallocType mallocType);
-        __host__ __device__ StaticSet(StaticSet<T>&& other);
         __host__ __device__ inline T& at(unsigned int index) const;
         __host__ __device__ void clear();
         __host__ __device__ inline void erase(T const * t);
         __host__ __device__ inline unsigned int getCapacity() const;
+        __host__ __device__ inline unsigned int indexOf(T const * t) const;
         __host__ __device__ T* insert(T const & t);
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
-        __host__ __device__ T& operator=(StaticSet<T>&& other) const;
         __host__ __device__ inline T& operator[](unsigned int index) const;
 };
 
@@ -40,14 +39,6 @@ StaticSet<T>::StaticSet(unsigned int capacity, Memory::MallocType mallocType) :
     invalids.resize(capacity);
     thrust::sequence(thrust::seq, invalids.begin(), invalids.end());
 }
-
-template<typename T>
-__host__ __device__
-StaticSet<T>::StaticSet(StaticSet<T>&& other) :
-    elements(std::move(other.elements)),
-    invalids(std::move(other.invalids))
-{}
-
 
 template<typename T>
 __host__ __device__
@@ -81,6 +72,16 @@ unsigned int StaticSet<T>::getCapacity() const
 {
     return elements.getCapacity();
 }
+
+template<typename T>
+__host__ __device__
+unsigned int StaticSet<T>::indexOf(T const * t) const
+{
+    assert(elements.begin() <= t);
+    assert()
+    return elements.getCapacity();
+}
+
 
 template<typename T>
 __host__ __device__

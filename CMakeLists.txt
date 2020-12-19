@@ -41,7 +41,7 @@ set(SOURCES
     src/DD/MDD.cuh
     src/OP/VRProblem.cu
     src/OP/VRProblem.cuh
-    src/BB/AugmentedState.cuh src/Misc/Helpers.cuh src/OP/Problem.cu src/OP/Problem.cuh src/DP/State.cu src/DP/State.cuh src/DP/Model.cuh src/DP/Model.cu)
+    src/BB/AugmentedState.cuh src/Misc/Helpers.cuh src/OP/Problem.cu src/OP/Problem.cuh src/DP/State.cu src/DP/State.cuh src/DP/Model.cuh src/DP/Model.cu src/BB/QueuesManage.cuh)
 
 # Add include path
 include_directories(include)

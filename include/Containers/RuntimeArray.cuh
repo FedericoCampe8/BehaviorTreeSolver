@@ -33,6 +33,7 @@ class RuntimeArray
         __host__ __device__ inline T* end() const;
         __host__ __device__ inline T& front() const;
         __host__ __device__ inline unsigned int getCapacity() const;
+        __host__ __device__ inline unsigned int indexOf(T const * t) const;
     private:
         __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
     public:
@@ -129,6 +130,16 @@ __host__ __device__
 unsigned int RuntimeArray<T>::getCapacity() const
 {
     return capacity;
+}
+
+template<typename T>
+__host__ __device__
+unsigned int RuntimeArray<T>::indexOf(T const * t) const
+{
+    assert(begin() <= t);
+    assert(t < end());
+
+    return thrust::distance(begin(), t);
 }
 
 template<typename T>

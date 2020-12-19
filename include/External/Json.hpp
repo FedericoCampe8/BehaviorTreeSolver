@@ -836,13 +836,13 @@ struct position_t
     #undef JSON_HEDLEY_DIAGNOSTIC_POP
 #endif
 #if defined(__clang__)
-    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("clang diagnostic push")
+    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("clang diagnostic enqueue")
     #define JSON_HEDLEY_DIAGNOSTIC_POP _Pragma("clang diagnostic pop")
 #elif JSON_HEDLEY_INTEL_VERSION_CHECK(13,0,0)
-    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("warning(push)")
+    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("warning(enqueue)")
     #define JSON_HEDLEY_DIAGNOSTIC_POP _Pragma("warning(pop)")
 #elif JSON_HEDLEY_GCC_VERSION_CHECK(4,6,0)
-    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic push")
+    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic enqueue")
     #define JSON_HEDLEY_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
 #elif \
     JSON_HEDLEY_MSVC_VERSION_CHECK(15,0,0) || \
@@ -850,7 +850,7 @@ struct position_t
     #define JSON_HEDLEY_DIAGNOSTIC_PUSH __pragma(warning(push))
     #define JSON_HEDLEY_DIAGNOSTIC_POP __pragma(warning(pop))
 #elif JSON_HEDLEY_ARM_VERSION_CHECK(5,6,0)
-    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("push")
+    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("enqueue")
     #define JSON_HEDLEY_DIAGNOSTIC_POP _Pragma("pop")
 #elif \
     JSON_HEDLEY_TI_VERSION_CHECK(15,12,0) || \
@@ -862,7 +862,7 @@ struct position_t
     #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("diag_push")
     #define JSON_HEDLEY_DIAGNOSTIC_POP _Pragma("diag_pop")
 #elif JSON_HEDLEY_PELLES_VERSION_CHECK(2,90,0)
-    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("warning(push)")
+    #define JSON_HEDLEY_DIAGNOSTIC_PUSH _Pragma("warning(enqueue)")
     #define JSON_HEDLEY_DIAGNOSTIC_POP _Pragma("warning(pop)")
 #else
     #define JSON_HEDLEY_DIAGNOSTIC_PUSH

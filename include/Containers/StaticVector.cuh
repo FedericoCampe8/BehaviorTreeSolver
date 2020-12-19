@@ -37,6 +37,7 @@ class StaticVector
         __host__ __device__ inline T& front() const;
         __host__ __device__ inline unsigned int getCapacity() const;
         __host__ __device__ inline unsigned int getSize() const;
+        __host__ __device__ inline unsigned int indexOf(T const * t) const;
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
     private:
@@ -149,6 +150,16 @@ __host__ __device__
 unsigned int StaticVector<T>::getSize() const
 {
     return size;
+}
+
+template<typename T>
+__host__ __device__
+unsigned int StaticVector<T>::indexOf(T const * t) const
+{
+    assert(begin() <= t);
+    assert(t < end());
+
+    return thrust::distance(begin(), t);
 }
 
 template<typename T>
