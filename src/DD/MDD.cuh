@@ -7,7 +7,6 @@
 #include <thrust/swap.h>
 
 #include "../DP/State.cuh"
-#include "../Misc/Helpers.cuh"
 #include "../OP/Problem.cuh"
 
 namespace DD
@@ -22,43 +21,57 @@ namespace DD
             unsigned int width;
             unsigned int fanout;
             unsigned int scratchpadMemSize;
-            T const model;
+            T const & model;
 
         public:
-            MDD(OP::Problem const * problem, unsigned int width);
-            __host__ __device__ void buildTopDown(Type type, DP::State* top, unsigned int& cutsetSize, DP::State* cutsetBuffer, DP::State* bottom, std::byte* scratchpadMem);
+            MDD(T const & model, unsigned int width);
+            __host__ __device__ void buildTopDown(Type type, T::StateType& top, Vector<T::StateType>& cutset, DP::State& bottom, std::byte* scratchpadMem) const;
         private:
-            static unsigned int calcFanout(OP::Problem const * problem);
+            static unsigned int calcFanout(T::ProblemType const & problem);
             unsigned int calcScratchpadMemSize() const;
 
     };
 
     template<typename T>
-    MDD<T>::MDD(OP::Problem const * problem, unsigned int width) :
+    MDD<T>::MDD(T const & model, unsigned int width) :
         width(width),
-        fanout(calcFanout(problem)),
-        model(problem),
+        fanout(calcFanout(model.problem)),
+        model(model),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 
 
     template<typename T>
     __host__ __device__
-    void MDD<T>::buildTopDown(Type type, DP::State* top, unsigned int& cutsetSize, DP::State* cutsetBuffer, DP::State* bottom, std::byte* scratchpadMem)
+    void MDD<T>::buildTopDown(Type type, T::StateType& top, Vector<T::StateType>& cutset, DP::State& bottom, std::byte* scratchpadMem) const
     {
-        unsigned int const variablesCount = model->problem->variables.getCapacity();
+        std::byte* freeScratchpadMem = scratchpadMem;
 
-        // Current states buffer
-        T::StateType* rawArrayOfStates = Misc::getRawArrayOfStates<T::StateType>(variablesCount, width, scratchpadMem);
-        RuntimeArray<T::StateType> currentStatesBuffer(width, reinterpret_cast<std::byte*>(rawArrayOfStates));
+        // Current states currentStatesBuffer
+        Array<T::StateType> currentStatesBuffer(width, freeScratchpadMem);
+        freeScratchpadMem = Memory::align(4, currentStatesBuffer.storageEnd());
 
-        // Next states buffer
-        rawArrayOfStates = Misc::getRawArrayOfStates<T::StateType>(variablesCount, width, currentStatesBuffer.storageEnd());
-        RuntimeArray<T::StateType> nextStatesBuffer(width, reinterpret_cast<std::byte*>(rawArrayOfStates));
+        unsigned int storageSize = T::StateType::sizeOfStorage(model.problem);
+        for(unsigned int stateIdx = 0; stateIdx < currentStatesBuffer.getCapacity(); stateIdx += 1)
+        {
+            new (&currentStatesBuffer[stateIdx]) T::StateType(model.problem, freeScratchpadMem);
+            freeScratchpadMem += storageSize;
+        }
+        freeScratchpadMem = Memory::align(4, freeScratchpadMem);
+
+        // Next states currentStatesBuffer
+        Array<T::StateType> nextStatesBuffer(width, freeScratchpadMem);
+        freeScratchpadMem = Memory::align(4, nextStatesBuffer.storageEnd());
+        for(unsigned int stateIdx = 0; stateIdx < nextStatesBuffer.getCapacity(); stateIdx += 1)
+        {
+            new (&nextStatesBuffer[stateIdx]) T::StateType(model.problem, freeScratchpadMem);
+            freeScratchpadMem += storageSize;
+        }
+        freeScratchpadMem = Memory::align(4, freeScratchpadMem);
 
         // Auxiliary information
-        RuntimeArray<uint32_t> costs(fanout * width, Memory::align(4, nextStatesBuffer.storageEnd()));
-        RuntimeArray<uint8_t> indices(fanout * width, Memory::align(4, costs.storageEnd()));
+        Array<uint32_t> costs(fanout * width, freeScratchpadMem);
+        Array<uint8_t> indices(fanout * width, costs.storageEnd());
 
         assert(indices.storageEnd() < scratchpadMem + scratchpadMemSize);
 
@@ -69,7 +82,8 @@ namespace DD
         bool cutsetInitialized = false;
         unsigned int currentStatesCount = 1;
         unsigned int nextStatesCount = 0;
-        for(unsigned int variableIdx = top->selectedValues.getSize(); variableIdx <variablesCount; variableIdx += 1)
+        unsigned int const variablesCount = model.problem.variables.getCapacity();
+        for(unsigned int variableIdx = top->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
         {
             // Initialize indices
             thrust::sequence(thrust::seq, indices.begin(), indices.end());
@@ -99,41 +113,41 @@ namespace DD
             // Save cutset
             if(type == Type::Relaxed and (not cutsetInitialized) and costsCount > width)
             {
-                thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (uint8_t& index)
+                cutset.resize(costsCount);
+
+                for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < costsCount; cutsetStateIdx += 1)
                 {
+                    unsigned int const index = indices[cutsetStateIdx];
                     unsigned int const currentStateIdx = index / fanout;
                     unsigned int const edgeIdx = index % fanout;
-                    unsigned int const selectedValue = model->problem->variables[variableIdx].minValue + edgeIdx;
-                    unsigned int const cutsetStateIdx = thrust::distance(indices.begin(), &index);
-                    model.makeState(&currentStatesBuffer[currentStateIdx], selectedValue, costs[cutsetStateIdx], &cutsetBuffer[cutsetStateIdx]);
-                });
+                    unsigned int const selectedValue = model.problem.variables[variableIdx].minValue + edgeIdx;
+                    model.makeState(&currentStatesBuffer[currentStateIdx], selectedValue, costs[cutsetStateIdx], &cutset[cutsetStateIdx]);
+                };
 
-                cutsetSize = costsCount;
                 cutsetInitialized = true;
             }
 
             // Add next states
             assert(nextStatesCount <= indices.getCapacity());
-            thrust::for_each(thrust::seq, indices.begin(), indices.begin() + costsCount, [=] (uint8_t& index)
+            for(unsigned int nextStateIdx = 0; nextStateIdx < costsCount; nextStateIdx += 1)
             {
+                unsigned int const index = indices[nextStateIdx];
                 unsigned int const currentStateIdx = index / fanout;
                 unsigned int const edgeIdx =  index % fanout;
-                unsigned int const selectedValue = model->problem->variables[variableIdx].minValue + edgeIdx;
-                unsigned int const nextStateIdx = thrust::distance(indices.begin(), &index);
+                unsigned int const selectedValue = model.problem.variables[variableIdx].minValue + edgeIdx;
                 if(nextStateIdx < nextStatesCount)
                 {
                     model.makeState(&currentStatesBuffer[currentStateIdx], selectedValue, costs[nextStateIdx], &nextStatesBuffer[nextStateIdx]);
                 }
                 else if (type == Type::Relaxed)
                 {
-                    model.mergeNextState(&currentStatesBuffer[currentStateIdx], selectedValue, &nextStatesBuffer[nextStatesCount - 1]);
+                    model.mergeState(&currentStatesBuffer[currentStateIdx], selectedValue, &nextStatesBuffer[nextStatesCount - 1]);
                 }
-            });
+            }
 
             //Prepare for the next loop
-            thrust::swap(currentStatesBuffer, nextStatesBuffer);
+            Array<T::StateType>::swap(currentStatesBuffer, nextStatesBuffer);
             currentStatesCount = nextStatesCount;
-            nextStatesCount = 0;
         }
 
         //Copy bottom
@@ -141,20 +155,26 @@ namespace DD
     }
 
     template<typename T>
-    unsigned int MDD<T>::calcFanout(OP::Problem const * problem)
+    unsigned int MDD<T>::calcFanout(T::ProblemType const & problem)
     {
-        return thrust::transform_reduce(thrust::seq, problem->variables.begin(), problem->variables.end(), OP::Variable::cardinality, 0, thrust::maximum<unsigned int>());
+        return thrust::transform_reduce(thrust::seq, problem.variables.begin(), problem.variables.end(), OP::Variable::cardinality, 0, thrust::maximum<unsigned int>());
     }
 
     template<typename T>
     __host__ __device__
     unsigned int MDD<T>::calcScratchpadMemSize() const
     {
-        unsigned int const variablesCount = model->problem->variables.getCapacity();
+        unsigned int const variablesCount = model.problem.variables.getCapacity();
+        unsigned int const stateSize = sizeof(T::StateType);
+        unsigned int const stateStorageSize = T::StateType::sizeOfStorage(variablesCount);
 
         return
-            Misc::getSizeOfRawArrayOfStates(variablesCount, width) * 2 + // currentStatesBuffer, nextStatesBuffer
-            sizeof(uint32_t) * width * fanout + // costs
-            sizeof(uint8_t) * width * fanout; // indices
+            stateSize * width + // Current states
+            stateStorageSize * width  +
+            stateSize * width + // Next states
+            stateStorageSize * width  +
+            sizeof(uint32_t) * width * fanout + // Costs
+            sizeof(uint8_t) * width * fanout + // Indices
+            4 * 6; // Alignment
     }
 }

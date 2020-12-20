@@ -2,29 +2,30 @@
 
 #include <cstdint>
 #include <utility>
-
 #include <thrust/distance.h>
 #include <thrust/sequence.h>
-
-#include <Containers/RuntimeArray.cuh>
-#include <Containers/StaticVector.cuh>
+#include <Containers/Array.cuh>
+#include <Containers/Vector.cuh>
 #include <Utils/Memory.cuh>
 
 template<typename T>
-class StaticSet
+class Buffer
 {
     private:
-        RuntimeArray<T> elements;
-        StaticVector<uint32_t> invalids;
+        Array<T> elements;
+        Vector<uint32_t> invalids;
 
     public:
-        __host__ __device__ StaticSet(unsigned int capacity, Memory::MallocType mallocType);
+        __host__ __device__ Buffer(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ inline T& at(unsigned int index) const;
+        __host__ __device__ inline T* begin() const;
         __host__ __device__ void clear();
+        __host__ __device__ inline T* end() const;
         __host__ __device__ inline void erase(T const * t);
         __host__ __device__ inline unsigned int getCapacity() const;
-        __host__ __device__ inline unsigned int indexOf(T const * t) const;
-        __host__ __device__ T* insert(T const & t);
+        __host__ __device__ inline unsigned int getSize() const;
+        __host__ __device__ inline unsigned int indexOf(T const & t) const;
+        __host__ __device__ T& insert(T const & t);
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
         __host__ __device__ inline T& operator[](unsigned int index) const;
@@ -32,24 +33,30 @@ class StaticSet
 
 template<typename T>
 __host__ __device__
-StaticSet<T>::StaticSet(unsigned int capacity, Memory::MallocType mallocType) :
+Buffer<T>::Buffer(unsigned int capacity, Memory::MallocType mallocType) :
     elements(capacity, mallocType),
     invalids(capacity, mallocType)
 {
-    invalids.resize(capacity);
-    thrust::sequence(thrust::seq, invalids.begin(), invalids.end());
+    clear();
 }
 
 template<typename T>
 __host__ __device__
-T& StaticSet<T>::at(unsigned int index) const
+T& Buffer<T>::at(unsigned int index) const
 {
     return elements.at(index);
 }
 
 template<typename T>
 __host__ __device__
-void StaticSet<T>::clear()
+T* Buffer<T>::begin() const
+{
+    return elements.begin();
+}
+
+template<typename T>
+__host__ __device__
+void Buffer<T>::clear()
 {
     invalids.resize(invalids.getCapacity());
     thrust::sequence(thrust::seq, invalids.begin(), invalids.end());
@@ -57,7 +64,14 @@ void StaticSet<T>::clear()
 
 template<typename T>
 __host__ __device__
-void StaticSet<T>::erase(T const * t)
+T* Buffer<T>::end() const
+{
+    return elements.end();
+}
+
+template<typename T>
+__host__ __device__
+void Buffer<T>::erase(T const * t)
 {
     assert(elements.begin() <= t);
     assert(t < elements.end());
@@ -68,24 +82,31 @@ void StaticSet<T>::erase(T const * t)
 
 template<typename T>
 __host__ __device__
-unsigned int StaticSet<T>::getCapacity() const
+unsigned int Buffer<T>::getCapacity() const
 {
     return elements.getCapacity();
 }
 
 template<typename T>
 __host__ __device__
-unsigned int StaticSet<T>::indexOf(T const * t) const
+unsigned int Buffer<T>::getSize() const
 {
-    assert(elements.begin() <= t);
-    assert()
-    return elements.getCapacity();
+    return elements.getCapacity() - invalids.getSize();
+}
+
+template<typename T>
+__host__ __device__
+unsigned int Buffer<T>::indexOf(T const & t) const
+{
+    assert(elements.begin() <= &t);
+    assert(&t < elements.end());
+    return thrust::distance(elements.end(),&t);
 }
 
 
 template<typename T>
 __host__ __device__
-T* StaticSet<T>::insert(T const & t)
+T& Buffer<T>::insert(T const & t)
 {
     assert(not isFull());
 
@@ -93,26 +114,26 @@ T* StaticSet<T>::insert(T const & t)
     invalids.popBack();
     T& element = element.at(elementIdx);
     element = t;
-    return &element;
+    return element;
 }
 
 template<typename T>
 __host__ __device__
-bool StaticSet<T>::isEmpty() const
+bool Buffer<T>::isEmpty() const
 {
     return invalids.isFull();
 }
 
 template<typename T>
 __host__ __device__
-bool StaticSet<T>::isFull() const
+bool Buffer<T>::isFull() const
 {
     return invalids.isEmpty();
 }
 
 template<typename T>
 __host__ __device__
-T& StaticSet<T>::operator[](unsigned int index) const
+T& Buffer<T>::operator[](unsigned int index) const
 {
     return elements[index];
 }

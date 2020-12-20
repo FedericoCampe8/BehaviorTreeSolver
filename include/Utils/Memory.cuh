@@ -3,18 +3,19 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cassert>
-
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 
 namespace Memory
 {
-    enum MallocType : uint8_t {Std, Managed};
+    enum MallocType {Std, Managed};
 
     __host__ __device__ inline std::byte* safeMalloc(std::size_t size, MallocType type);
+    __host__ __device__ inline std::byte* align(std::size_t const alignment, std::byte const * ptr);
+
     __host__ __device__ inline std::byte* safeStdMalloc(std::size_t size);
     __host__            inline std::byte* safeManagedMalloc(std::size_t size);
-    __host__ __device__ inline std::byte* align(std::size_t const alignment, std::byte const * ptr);
+
 
     __host__ __device__
     std::byte* safeMalloc(std::size_t size, MallocType type)

@@ -2,8 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-
-#include <Containers/StaticVector.cuh>
+#include <Containers/Vector.cuh>
 
 #include "../OP/Problem.cuh"
 
@@ -16,14 +15,19 @@ namespace DP
 
         public:
             uint32_t cost;
-            StaticVector<uint8_t> selectedValues;
-            StaticVector<uint8_t> admissibleValues;
+            Vector<uint8_t> selectedValues;
+            Vector<uint8_t> admissibleValues;
 
         public:
-            __host__ __device__ State(unsigned int variablesCount, std::byte* storage);
+            // Storage
+            __host__ __device__ static std::byte* mallocStorages(unsigned int statesCount, OP::Problem const & problem, Memory::MallocType mallocType);
+            __host__ __device__ static std::size_t sizeOfStorage(OP::Problem const & problem);
+            __host__ __device__ std::byte* storageEnd() const;
+
+            // State
+            __host__ __device__ State(OP::Problem const & problem, std::byte* storage);
             __host__ __device__ bool isAdmissible(unsigned int value) const;
             __host__ __device__ bool isSelected(unsigned int value) const;
             __host__ __device__ State& operator=(State const & other);
-            __host__ __device__ static std::size_t sizeOfStorage(unsigned int variablesCount);
     };
 }

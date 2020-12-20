@@ -2,9 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
-
-#include <Containers/RuntimeArray.cuh>
-#include <Containers/StaticVector.cuh>
+#include <Containers/Array.cuh>
+#include <Containers/Vector.cuh>
 
 #include "Problem.cuh"
 
@@ -15,15 +14,14 @@ namespace OP
         public:
             uint8_t start;
             uint8_t end;
-            std::byte padding[2]; // 32bit aligned
-            StaticVector<uint8_t> pickups;
-            StaticVector<uint8_t> deliveries;
-            RuntimeArray<uint16_t> distances;
+            std::byte padding[4]; // 64bit aligned
+            Vector<uint8_t> pickups;
+            Vector<uint8_t> deliveries;
+            Array<uint16_t> distances;
 
         public:
-            VRProblem(unsigned int variablesCount, std::byte* storage);
+            VRProblem(unsigned int variablesCount, Memory::MallocType mallocType);
             __host__ __device__ unsigned int getDistance(unsigned int from, unsigned int to) const;
-            static std::size_t sizeOfStorage(unsigned int variablesCount);
     };
 }
 
