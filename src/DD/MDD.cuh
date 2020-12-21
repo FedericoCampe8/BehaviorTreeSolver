@@ -11,7 +11,7 @@
 
 namespace DD
 {
-    template<typename T>
+    template<typename ModelType, typename ProblemType, typename StateType>
     class MDD
     {
         public:
@@ -21,50 +21,49 @@ namespace DD
             unsigned int width;
             unsigned int fanout;
             unsigned int scratchpadMemSize;
-            T const & model;
+            ModelType const & model;
 
         public:
-            MDD(T const & model, unsigned int width);
-            __host__ __device__ void buildTopDown(Type type, T::StateType& top, Vector<T::StateType>& cutset, DP::State& bottom, std::byte* scratchpadMem) const;
+            MDD(ModelType const & model, unsigned int width);
+            __host__ __device__ void buildTopDown(Type type, StateType const & top, Vector<StateType>& cutset, StateType& bottom, std::byte* scratchpadMem) const;
         private:
-            static unsigned int calcFanout(T::ProblemType const & problem);
+            static unsigned int calcFanout(ProblemType const & problem);
             unsigned int calcScratchpadMemSize() const;
 
     };
 
-    template<typename T>
-    MDD<T>::MDD(T const & model, unsigned int width) :
+    template<typename ModelType, typename ProblemType, typename StateType>
+    MDD<ModelType,ProblemType,StateType>::MDD(ModelType const & model, unsigned int width) :
         width(width),
         fanout(calcFanout(model.problem)),
         model(model),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 
-
-    template<typename T>
+    template<typename ModelType, typename ProblemType, typename StateType>
     __host__ __device__
-    void MDD<T>::buildTopDown(Type type, T::StateType& top, Vector<T::StateType>& cutset, DP::State& bottom, std::byte* scratchpadMem) const
+    void MDD<ModelType,ProblemType,StateType>::buildTopDown(Type type, StateType const & top, Vector<StateType>& cutset, StateType& bottom, std::byte* scratchpadMem) const
     {
         std::byte* freeScratchpadMem = scratchpadMem;
 
         // Current states currentStatesBuffer
-        Array<T::StateType> currentStatesBuffer(width, freeScratchpadMem);
+        Array<StateType> currentStatesBuffer(width, freeScratchpadMem);
         freeScratchpadMem = Memory::align(4, currentStatesBuffer.storageEnd());
 
-        unsigned int storageSize = T::StateType::sizeOfStorage(model.problem);
+        unsigned int storageSize = StateType::sizeOfStorage(model.problem);
         for(unsigned int stateIdx = 0; stateIdx < currentStatesBuffer.getCapacity(); stateIdx += 1)
         {
-            new (&currentStatesBuffer[stateIdx]) T::StateType(model.problem, freeScratchpadMem);
+            new (&currentStatesBuffer[stateIdx]) StateType(model.problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
         freeScratchpadMem = Memory::align(4, freeScratchpadMem);
 
         // Next states currentStatesBuffer
-        Array<T::StateType> nextStatesBuffer(width, freeScratchpadMem);
+        Array<StateType> nextStatesBuffer(width, freeScratchpadMem);
         freeScratchpadMem = Memory::align(4, nextStatesBuffer.storageEnd());
         for(unsigned int stateIdx = 0; stateIdx < nextStatesBuffer.getCapacity(); stateIdx += 1)
         {
-            new (&nextStatesBuffer[stateIdx]) T::StateType(model.problem, freeScratchpadMem);
+            new (&nextStatesBuffer[stateIdx]) StateType(model.problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
         freeScratchpadMem = Memory::align(4, freeScratchpadMem);
@@ -76,33 +75,33 @@ namespace DD
         assert(indices.storageEnd() < scratchpadMem + scratchpadMemSize);
 
         // Root
-        currentStatesBuffer[0] = *reinterpret_cast<T::StateType>(top);
+        currentStatesBuffer[0] = top;
 
         // Build
         bool cutsetInitialized = false;
         unsigned int currentStatesCount = 1;
         unsigned int nextStatesCount = 0;
         unsigned int const variablesCount = model.problem.variables.getCapacity();
-        for(unsigned int variableIdx = top->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
+        for(unsigned int variableIdx = top.selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
         {
             // Initialize indices
             thrust::sequence(thrust::seq, indices.begin(), indices.end());
 
             // Initialize costs
-            thrust::fill(costs.begin(), costs.end(), T::StateType::MaxCost);
+            thrust::fill(costs.begin(), costs.end(), StateType::MaxCost);
 
             // Calculate costs
             assert(currentStatesCount <= currentStatesBuffer.getCapacity());
             for(unsigned int currentStateIdx = 0; currentStateIdx < currentStatesCount; currentStateIdx += 1)
             {
-                model.calcCosts(variableIdx, &currentStatesBuffer[currentStateIdx], &costs[fanout * currentStateIdx]);
+                model.calcCosts(variableIdx, currentStatesBuffer[currentStateIdx], &costs[fanout * currentStateIdx]);
             }
 
             // Sort indices by costs
             thrust::sort_by_key(thrust::seq, costs.begin(), costs.end(), indices.begin());
 
             // Count next states
-            uint32_t* const costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), T::StateType::MaxCost);
+            uint32_t* const costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), StateType::MaxCost);
             unsigned int const costsCount = thrust::distance(costs.begin(), costsEnd);
             nextStatesCount = min(width, costsCount);
             if(variableIdx == variablesCount - 1)
@@ -121,7 +120,7 @@ namespace DD
                     unsigned int const currentStateIdx = index / fanout;
                     unsigned int const edgeIdx = index % fanout;
                     unsigned int const selectedValue = model.problem.variables[variableIdx].minValue + edgeIdx;
-                    model.makeState(&currentStatesBuffer[currentStateIdx], selectedValue, costs[cutsetStateIdx], &cutset[cutsetStateIdx]);
+                    model.makeState(currentStatesBuffer[currentStateIdx], selectedValue, costs[cutsetStateIdx], cutset[cutsetStateIdx]);
                 };
 
                 cutsetInitialized = true;
@@ -137,36 +136,34 @@ namespace DD
                 unsigned int const selectedValue = model.problem.variables[variableIdx].minValue + edgeIdx;
                 if(nextStateIdx < nextStatesCount)
                 {
-                    model.makeState(&currentStatesBuffer[currentStateIdx], selectedValue, costs[nextStateIdx], &nextStatesBuffer[nextStateIdx]);
+                    model.makeState(currentStatesBuffer[currentStateIdx], selectedValue, costs[nextStateIdx], nextStatesBuffer[nextStateIdx]);
                 }
                 else if (type == Type::Relaxed)
                 {
-                    model.mergeState(&currentStatesBuffer[currentStateIdx], selectedValue, &nextStatesBuffer[nextStatesCount - 1]);
+                    model.mergeState(currentStatesBuffer[currentStateIdx], selectedValue, nextStatesBuffer[nextStatesCount - 1]);
                 }
             }
 
             //Prepare for the next loop
-            Array<T::StateType>::swap(currentStatesBuffer, nextStatesBuffer);
+            Array<StateType>::swap(currentStatesBuffer, nextStatesBuffer);
             currentStatesCount = nextStatesCount;
         }
 
         //Copy bottom
-        bottom = *currentStatesBuffer[0];
+        bottom = currentStatesBuffer[0];
     }
 
-    template<typename T>
-    unsigned int MDD<T>::calcFanout(T::ProblemType const & problem)
+    template<typename ModelType, typename ProblemType, typename StateType>
+    unsigned int MDD<ModelType,ProblemType,StateType>::calcFanout(ProblemType const & problem)
     {
         return thrust::transform_reduce(thrust::seq, problem.variables.begin(), problem.variables.end(), OP::Variable::cardinality, 0, thrust::maximum<unsigned int>());
     }
 
-    template<typename T>
-    __host__ __device__
-    unsigned int MDD<T>::calcScratchpadMemSize() const
+    template<typename ModelType, typename ProblemType, typename StateType>
+    unsigned int MDD<ModelType,ProblemType,StateType>::calcScratchpadMemSize() const
     {
-        unsigned int const variablesCount = model.problem.variables.getCapacity();
-        unsigned int const stateSize = sizeof(T::StateType);
-        unsigned int const stateStorageSize = T::StateType::sizeOfStorage(variablesCount);
+        unsigned int const stateSize = sizeof(StateType);
+        unsigned int const stateStorageSize = StateType::sizeOfStorage(model.problem);
 
         return
             stateSize * width + // Current states

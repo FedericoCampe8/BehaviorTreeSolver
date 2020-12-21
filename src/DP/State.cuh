@@ -11,7 +11,7 @@ namespace DP
     class State
     {
         public:
-            static const uint32_t MaxCost = UINT32_MAX;
+            enum {MaxCost = UINT32_MAX};
 
         public:
             uint32_t cost;

@@ -80,7 +80,7 @@ Vector<T>::Vector(unsigned int capacity, Memory::MallocType mallocType) :
     flags(Flags::Owning),
     size(0),
     capacity(capacity),
-    storage(mallocStorage(capacity,mallocType))
+    storage(reinterpret_cast<T*>(mallocStorage(capacity,mallocType)))
 {}
 
 template<typename T>

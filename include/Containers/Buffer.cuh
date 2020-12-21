@@ -24,7 +24,7 @@ class Buffer
         __host__ __device__ inline void erase(T const * t);
         __host__ __device__ inline unsigned int getCapacity() const;
         __host__ __device__ inline unsigned int getSize() const;
-        __host__ __device__ inline unsigned int indexOf(T const & t) const;
+        __host__ __device__ inline unsigned int indexOf(T& t) const;
         __host__ __device__ T& insert(T const & t);
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
@@ -96,7 +96,7 @@ unsigned int Buffer<T>::getSize() const
 
 template<typename T>
 __host__ __device__
-unsigned int Buffer<T>::indexOf(T const & t) const
+unsigned int Buffer<T>::indexOf(T& t) const
 {
     assert(elements.begin() <= &t);
     assert(&t < elements.end());
@@ -112,9 +112,8 @@ T& Buffer<T>::insert(T const & t)
 
     unsigned int const elementIdx = invalids.back();
     invalids.popBack();
-    T& element = element.at(elementIdx);
-    element = t;
-    return element;
+    elements.at(elementIdx) = t;
+    return elements.at(elementIdx);
 }
 
 template<typename T>

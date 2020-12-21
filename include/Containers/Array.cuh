@@ -70,7 +70,7 @@ __host__ __device__
 Array<T>::Array(unsigned int capacity, Memory::MallocType mallocType) :
     flags(Flags::Owning),
     capacity(capacity),
-    storage(mallocStorage(capacity,mallocType))
+    storage(reinterpret_cast<T*>(mallocStorage(capacity,mallocType)))
 {}
 
 template<typename T>
@@ -153,14 +153,6 @@ unsigned int Array<T>::indexOf(T const * t) const
     assert(t < end());
 
     return thrust::distance(begin(), t);
-}
-
-template<typename T>
-__host__ __device__
-T* Array<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
-{
-    std::byte* storage = Memory::safeMalloc(sizeOfStorage(capacity), mallocType);
-    return reinterpret_cast<T*>(storage);
 }
 
 template<typename T>

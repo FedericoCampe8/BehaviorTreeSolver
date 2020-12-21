@@ -10,12 +10,11 @@
 
 namespace BB
 {
-    template<typename T>
+    template<typename ModelType, typename ProblemType, typename StateType>
     class MainQueue
     {
-        private:
-            using StateType = T::StateType;
-            using QueuedStateType = BB::QueuedState<StateType>;
+        public:
+            typedef bool (*Comparator) (QueuedState<StateType> const & s0, QueuedState<StateType> const & t1);
 
         private:
             Buffer<StateType> statesBuffer;
@@ -23,40 +22,40 @@ namespace BB
             Array<unsigned int> bufferToCpuHeap;
             Array<unsigned int> bufferToGpuHeap;
 
-            MaxHeap<QueuedStateType> cpuHeap;
-            MaxHeap<QueuedStateType> gpuHeap;
+            MaxHeap<QueuedState<StateType>> cpuHeap;
+            MaxHeap<QueuedState<StateType>> gpuHeap;
 
         public:
-            MainQueue(DD::MDD<T> const & mdd, unsigned int queuesSize, MaxHeap::Comparator cpuCmp, MaxHeap::Comparator gpuCmp);
-            void dequeue(QueuedStateType const & state);
+            MainQueue(DD::MDD<ModelType,ProblemType,StateType> const & mdd, unsigned int queuesSize, Comparator cpuCmp, Comparator gpuCmp);
+            void dequeue(QueuedState<StateType> const & state);
             void enqueue(unsigned int lowerbound, unsigned int upperbound, StateType const & state);
             unsigned int getCapacity() const;
             unsigned int getSize() const;
-            QueuedStateType& getStateForCpu() const;
-            QueuedStateType& getStateForGpu() const;
+            QueuedState<StateType>& getStateForCpu() const;
+            QueuedState<StateType>& getStateForGpu() const;
             bool isEmpty();
             bool isFull();
     };
 
-    template<typename T>
-    MainQueue<T>::MainQueue(DD::MDD<T> const & mdd, unsigned int queuesSize, MaxHeap::Comparator cpuCmp, MaxHeap::Comparator gpuCmp) :
+    template<typename ModelType, typename ProblemType, typename StateType>
+    MainQueue<ModelType,ProblemType,StateType>::MainQueue(DD::MDD<ModelType,ProblemType,StateType> const & mdd, unsigned int queuesSize, Comparator cpuCmp, Comparator gpuCmp) :
         statesBuffer(queuesSize, Memory::MallocType::Std),
         bufferToCpuHeap(queuesSize, Memory::MallocType::Std),
         bufferToGpuHeap(queuesSize, Memory::MallocType::Std),
         cpuHeap(queuesSize, cpuCmp, Memory::MallocType::Std),
         gpuHeap(queuesSize, gpuCmp, Memory::MallocType::Std)
     {
-        T::ProblemType const & problem = mdd.model.problem;
-        unsigned int storageSize =  T::StateType::sizeOfStorage(problem);
-        std::byte* storages = T::StateType::mallocStorages(statesBuffer.getCapacity(), problem, Memory::MallocType::Std);
+        ProblemType const & problem = mdd.model.problem;
+        unsigned int storageSize =  StateType::sizeOfStorage(problem);
+        std::byte* storages = StateType::mallocStorages(statesBuffer.getCapacity(), problem, Memory::MallocType::Std);
         for(unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
         {
-            new (&statesBuffer[stateIdx]) T::StateType(problem, &storages[storageSize * stateIdx]);
+            new (&statesBuffer[stateIdx]) StateType(problem, &storages[storageSize * stateIdx]);
         }
     }
 
-    template<typename T>
-    void MainQueue<T>::dequeue(QueuedStateType const & queuesState)
+    template<typename ModelType, typename ProblemType, typename StateType>
+    void MainQueue<ModelType,ProblemType,StateType>::dequeue(QueuedState<StateType> const & queuesState)
     {
         unsigned int const bufferIdx = statesBuffer.indexOf(queuesState.state);
 
@@ -67,57 +66,57 @@ namespace BB
         gpuHeap.erase(gpuHeapIdx);
     }
 
-    template<typename T>
-    void MainQueue<T>::enqueue(unsigned int lowerbound, unsigned int upperbound, StateType const & t)
+    template<typename ModelType, typename ProblemType, typename StateType>
+    void MainQueue<ModelType,ProblemType,StateType>::enqueue(unsigned int lowerbound, unsigned int upperbound, StateType const & state)
     {
-        T& state = statesBuffer.insert(t);
-        unsigned int const bufferIdx = statesBuffer.indexOf(state);
+        StateType& bufferedState = statesBuffer.insert(state);
+        unsigned int const bufferIdx = statesBuffer.indexOf(bufferedState);
 
         unsigned int * const cpuHeapIdx = &bufferToCpuHeap[bufferIdx];
         *cpuHeapIdx = cpuHeap.getSize();
-        QueuedStateType cpuToEnqueue(cpuHeapIdx, lowerbound, upperbound, state);
+        QueuedState<StateType> cpuToEnqueue(cpuHeapIdx, lowerbound, upperbound, bufferedState);
         cpuHeap.pushBack(cpuToEnqueue);
         cpuHeap.insertBack();
 
         unsigned int * const gpuHeapIdx = &bufferToGpuHeap[bufferIdx];
         *gpuHeapIdx = gpuHeap.getSize();
-        QueuedState<T> gpuToEnqueue(gpuHeapIdx, lowerbound, upperbound, state);
+        QueuedState<StateType> gpuToEnqueue(gpuHeapIdx, lowerbound, upperbound, bufferedState);
         gpuHeap.pushBack(gpuToEnqueue);
         gpuHeap.insertBack();
     }
 
-    template<typename T>
-    unsigned int MainQueue<T>::getCapacity() const
+    template<typename ModelType, typename ProblemType, typename StateType>
+    unsigned int MainQueue<ModelType,ProblemType,StateType>::getCapacity() const
     {
-        statesBuffer.getCapacity();
+        return statesBuffer.getCapacity();
     }
 
-    template<typename T>
-    unsigned int MainQueue<T>::getSize() const
+    template<typename ModelType, typename ProblemType, typename StateType>
+    unsigned int MainQueue<ModelType,ProblemType,StateType>::getSize() const
     {
-        statesBuffer.getSize();
+        return statesBuffer.getSize();
     }
 
-    template<typename T>
-    QueuedStateType& MainQueue<T>::getStateForCpu() const
+    template<typename ModelType, typename ProblemType, typename StateType>
+    QueuedState<StateType>& MainQueue<ModelType,ProblemType,StateType>::getStateForCpu() const
     {
         return cpuHeap.front();
     }
 
-    template<typename T>
-    QueuedStateType& MainQueue<T>::getStateForGpu() const
+    template<typename ModelType, typename ProblemType, typename StateType>
+    QueuedState<StateType>& MainQueue<ModelType,ProblemType,StateType>::getStateForGpu() const
     {
         return gpuHeap.front();
     }
 
-    template<typename T>
-    bool MainQueue<T>::isEmpty()
+    template<typename ModelType, typename ProblemType, typename StateType>
+    bool MainQueue<ModelType,ProblemType,StateType>::isEmpty()
     {
         return statesBuffer.isEmpty();
     }
 
-    template<typename T>
-    bool MainQueue<T>::isFull()
+    template<typename ModelType, typename ProblemType, typename StateType>
+    bool MainQueue<ModelType,ProblemType,StateType>::isFull()
     {
         return statesBuffer.isFull();
     }

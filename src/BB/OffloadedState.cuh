@@ -4,21 +4,21 @@
 
 namespace BB
 {
-    template<typename T>
+    template<typename StateType>
     class OffloadedState
     {
         public:
             // Search information
             unsigned int lowerbound;
             unsigned int upperbound;
-            Vector<T> cutset;
-            T& upperboundState;
+            Vector<StateType> cutset;
+            StateType& upperboundState;
 
             // State
-            T const & state;
+            StateType const & state;
 
         public:
-            OffloadedState(unsigned int cutsetMaxSize, T* cutsetBuffer, T& upperbound, T const & state);
+            OffloadedState(unsigned int cutsetMaxSize, StateType* cutsetBuffer, StateType& upperbound, StateType const & state);
 
     };
 

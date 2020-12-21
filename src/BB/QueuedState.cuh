@@ -2,7 +2,7 @@
 
 namespace BB
 {
-    template<typename T>
+    template<typename StateType>
     class QueuedState
     {
         public:
@@ -14,31 +14,27 @@ namespace BB
             unsigned int upperbound;
 
             // State
-            T& state;
+            StateType& state;
 
         public:
-           QueuedState(unsigned int* heapIdx, unsigned int lowerBound, unsigned int upperBound, T const & state);
-           QueuedState<T>& operator=(QueuedState<T> const & other);
+           QueuedState(unsigned int* heapIdx, unsigned int lowerBound, unsigned int upperBound, StateType& state);
+           QueuedState<StateType>& operator=(QueuedState<StateType> const & other);
     };
 
-    template<typename T>
-    QueuedState<T>::QueuedState(unsigned int* heapIdx, unsigned int lowerBound, unsigned int upperBound, T const & state) :
+    template<typename StateType>
+    QueuedState<StateType>::QueuedState(unsigned int* heapIdx, unsigned int lowerBound, unsigned int upperBound, StateType& state) :
         heapIdx(heapIdx),
         lowerbound(lowerBound),
         upperbound(upperBound),
-        cost(state.cost),
-        selectedValuesCount(state.selectedValues().getSize()),
         state(state)
     {}
 
-    template<typename T>
-    QueuedState<T>& QueuedState<T>::operator=(QueuedState<T> const & other)
+    template<typename StateType>
+    QueuedState<StateType>& QueuedState<StateType>::operator=(QueuedState<StateType> const & other)
     {
         *heapIdx = *other.heapIdx;
         lowerbound = other.lowerbound;
         upperbound = other.upperbound;
-        cost = other.cost;
-        selectedValuesCount = other.selectedValuesCount;
         state = other.state;
         return *this;
     }

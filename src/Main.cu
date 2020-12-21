@@ -19,63 +19,61 @@
 using namespace std;
 using json = nlohmann::json;
 
-using namespace BB;
+using namespace Memory;
 using namespace Chrono;
+
+using namespace BB;
 using namespace DD;
 using namespace DP;
-using namespace Memory;
+
 using namespace OP;
 
 using ModelType = VRPModel;
-using ProblemType = ModelType::ProblemType;
-using StateType = ModelType::StateType;
+using ProblemType = VRProblem;
+using StateType = VRPState;
 
 // Auxiliary functions
 void configGPU();
 OP::VRProblem* parseGrubHubInstance(char const * problemFileName, Memory::MallocType mallocType);
 
+// Comparators
+template<typename StateType>
+bool hasBiggerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
+
+template<typename StateType>
+bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
+
 // Queues
-template<typename T>
-bool dummyCmp(QueuedState<T> const & queuedState0, QueuedState<T> const & queuedState1);
-
-template<typename T>
-void updateMainQueue(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQueue<T>& offloadQueue);
-
-// Search
-template<typename T>
 bool boundsChk(unsigned int bestCost, unsigned int lowerbound, unsigned int upperbound, unsigned int cost);
 
-template<typename T>
-bool boundsChk(unsigned int bestCost, QueuedState<T> const & queuedState);
+template<typename ProblemType, typename StateType, typename ModelType>
+void updateMainQueue(unsigned int bestCost, MainQueue<ProblemType,StateType,ModelType>& mainQueue, OffloadQueue<ProblemType,StateType,ModelType>& offloadQueue);
 
-template<typename T>
-bool boundsChk(unsigned int bestCost, OffloadedState<T> const & offloadedState);
-
-template<typename T>
-bool checkForBetterSolutions(T::StateType& bestSolution, OffloadQueue<T>& offloadQueue);
+// Search
+template<typename ModelType, typename ProblemType, typename StateType>
+bool checkForBetterSolutions(StateType& bestSolution, OffloadQueue<ModelType,ProblemType,StateType>& offloadQueue);
 
 // Offload
-template<typename T>
-void prepareOffloadCpu(unsigned int bestCost, MainQueue<T>& queueManager, OffloadQueue<T>& cpuQueue);
+template<typename ModelType, typename ProblemType, typename StateType>
+void prepareOffloadCpu(unsigned int bestCost, MainQueue<ModelType,ProblemType,StateType>& mainQueue, OffloadQueue<ModelType, ProblemType, StateType>& cpuQueue);
 
-template<typename T>
-void prepareOffloadGpu(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQueue<T>& gpuQueue);
+template<typename ModelType, typename ProblemType, typename StateType>
+void prepareOffloadGpu(unsigned int bestCost, MainQueue<ModelType,ProblemType,StateType>& mainQueue, OffloadQueue<ModelType,ProblemType,StateType>& gpuQueue);
 
-template<typename T>
-void doOffloadCpu(DD::MDD<T> const & mdd, OffloadQueue<T>& cpuQueue, std::byte* scratchpadMem);
+template<typename ModelType, typename ProblemType, typename StateType>
+void doOffloadCpu(DD::MDD<ModelType,ProblemType,StateType> const & mdd, OffloadQueue<ModelType,ProblemType,StateType>& cpuQueue, std::byte* scratchpadMem);
 
-template<typename T>
-void doOffloadGpu(DD::MDD<T> const & mdd, OffloadQueue<T>& gpuQueue);
+template<typename ModelType, typename ProblemType, typename StateType>
+void doOffloadGpu(DD::MDD<ModelType,ProblemType,StateType> const & mdd, OffloadQueue<ModelType,ProblemType,StateType>& gpuQueue);
 
-template<typename T>
-__host__ __device__ void doOffload(DD::MDD<T> const & mdd, BB::OffloadedState<T::StateType>& offloadedState, std::byte* scratchpadMem);
+template<typename ModelType, typename ProblemType, typename StateType>
+__host__ __device__ void doOffload(DD::MDD<ModelType,ProblemType,StateType> const & mdd, BB::OffloadedState<StateType>& offloadedState, std::byte* scratchpadMem);
 
-template<typename T>
-__global__ void doOffloadKernel(DD::MDD<T> const & mdd, Vector<BB::OffloadedState<T::StateType>>& queue);
+template<typename ModelType, typename ProblemType, typename StateType>
+__global__ void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const & mdd, Vector<BB::OffloadedState<StateType>>& queue);
 
 // Debug
 void printElapsedTime(uint64_t elapsedTimeMs);
-
 
 int main(int argc, char ** argv)
 {
@@ -105,10 +103,10 @@ int main(int argc, char ** argv)
     new (model) ModelType(*problem);
 
     // MDD
-    memorySize = sizeof(MDD<ModelType>);
+    memorySize = sizeof(MDD<ModelType,ProblemType,StateType>);
     memory = safeMalloc(memorySize, gpuDataMallocType);
-    MDD<ModelType>* const mdd = reinterpret_cast<MDD<ModelType>*>(memory);
-    new (mdd) MDD<ModelType>(*model, mddMaxWidth);
+    MDD<ModelType,ProblemType,StateType>* const mdd = reinterpret_cast<MDD<ModelType,ProblemType,StateType>*>(memory);
+    new (mdd) MDD<ModelType,ProblemType,StateType>(*model, mddMaxWidth);
 
     // Context initialization
     std::byte* scratchpadMem = nullptr;
@@ -118,11 +116,11 @@ int main(int argc, char ** argv)
     }
 
     // Main queue
-    MainQueue<ModelType> mainQueue(*mdd, queueMaxSize, dummyCmp<QueuedState<QueuedState>>, dummyCmp<QueuedState<QueuedState>>);
+    MainQueue<ModelType,ProblemType,StateType> mainQueue(*mdd, queueMaxSize, hasSmallerCost<StateType>, hasBiggerCost<StateType>);
 
     // Offload queues
-    OffloadQueue<ModelType> cpuQueue(*mdd, cpuMaxParallelism, MallocType::Std);
-    OffloadQueue<ModelType> gpuQueue(*mdd, gpuMaxParallelism, gpuDataMallocType);
+    OffloadQueue<ModelType,ProblemType,StateType> cpuQueue(*mdd, cpuMaxParallelism, MallocType::Std);
+    OffloadQueue<ModelType,ProblemType,StateType> gpuQueue(*mdd, gpuMaxParallelism, gpuDataMallocType);
 
     // Best solution
     unsigned int const stateSize = sizeof(VRPState);
@@ -189,8 +187,8 @@ int main(int argc, char ** argv)
             printf(" | Visited states: %u\r", visitedStatesCount);
         }
 
-        updateMainQueue<ModelType>(bestSolution->cost, mainQueue, cpuQueue);
-        updateMainQueue<ModelType>(bestSolution->cost, mainQueue, cpuQueue);
+        updateMainQueue<ModelType,ProblemType,StateType>(bestSolution->cost, mainQueue, cpuQueue);
+        updateMainQueue<ModelType,ProblemType,StateType>(bestSolution->cost, mainQueue, gpuQueue);
 
         iterationsCount += 1;
     }
@@ -268,22 +266,28 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
     return problem;
 }
 
-template<typename T>
-bool dummyCmp(QueuedState<T> const & queuedState0, QueuedState<T> const & queuedState1s)
+template<typename StateType>
+bool hasBiggerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
 {
-    return false;
+    return queuedState0.state.cost > queuedState1.state.cost;
 }
 
-template<typename T>
-void updateMainQueue(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQueue<T>& offloadQueue)
+template<typename StateType>
+bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
+{
+    return queuedState0.state.cost < queuedState1.state.cost;
+}
+
+template<typename ModelType, typename ProblemType, typename StateType>
+void updateMainQueue(unsigned int bestCost, MainQueue<ModelType,ProblemType,StateType>& mainQueue, OffloadQueue<ModelType,ProblemType,StateType>& offloadQueue)
 {
     assert(mainQueue.getSize() + (offloadQueue.cutsetMaxSize * offloadQueue.queue.getSize()) < mainQueue.getCapacity());
 
-    thrust::for_each(thrust::seq, offloadQueue.queue.begin(), offloadQueue.queue.end(), [&] (OffloadedState<T::StateType>& offloadedState)
+    thrust::for_each(thrust::seq, offloadQueue.queue.begin(), offloadQueue.queue.end(), [&] (OffloadedState<StateType>& offloadedState)
     {
-        if(boundsChk(bestCost, offloadedState))
+        if(boundsChk(bestCost, offloadedState.lowerbound, offloadedState.upperbound, offloadedState.state.cost))
         {
-            thrust::for_each(thrust::seq, offloadedState.cutset.begin(), offloadedState.cutset.end(), [&] (T::StateType& cutsetState)
+            thrust::for_each(thrust::seq, offloadedState.cutset.begin(), offloadedState.cutset.end(), [&] (StateType& cutsetState)
             {
                 mainQueue.enqueue(offloadedState.lowerbound, offloadedState.upperbound, cutsetState);
             });
@@ -291,7 +295,6 @@ void updateMainQueue(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQueu
     });
 }
 
-template<typename T>
 bool boundsChk(unsigned int bestCost, unsigned int lowerbound, unsigned int upperbound, unsigned int cost)
 {
     return
@@ -300,24 +303,12 @@ bool boundsChk(unsigned int bestCost, unsigned int lowerbound, unsigned int uppe
         cost < bestCost;
 }
 
-template<typename T>
-bool boundsChk(unsigned int bestCost, QueuedState<T> const & queuedState)
-{
-    return boundsChk(bestCost, queuedState.lowerbound, queuedState.upperbound, queuedState.state.cost);
-}
-
-template<typename T>
-bool boundsChk(unsigned int bestCost, OffloadedState<T> const & offloadedState)
-{
-    return boundsChk(bestCost, offloadedState.lowerbound, offloadedState.upperbound, offloadedState.state.cost);
-}
-
-template<typename T>
-bool checkForBetterSolutions(T::StateType& bestSolution, OffloadQueue<T>& offloadQueue)
+template<typename ModelType, typename ProblemType, typename StateType>
+bool checkForBetterSolutions(StateType& bestSolution, OffloadQueue<ModelType,ProblemType,StateType>& offloadQueue)
 {
     bool foundBetterSolution = false;
 
-    thrust::for_each(offloadQueue.queue.begin(), offloadQueue.queue.end(), [&] (OffloadedState<T::StateType>& offloadedState)
+    thrust::for_each(offloadQueue.queue.begin(), offloadQueue.queue.end(), [&] (OffloadedState<StateType>& offloadedState)
     {
         if (offloadedState.upperbound < bestSolution.cost)
         {
@@ -329,14 +320,14 @@ bool checkForBetterSolutions(T::StateType& bestSolution, OffloadQueue<T>& offloa
     return foundBetterSolution;
 }
 
-template<typename T>
-void prepareOffloadCpu(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQueue<T>& cpuQueue)
+template<typename ModelType, typename ProblemType, typename StateType>
+void prepareOffloadCpu(unsigned int bestCost, MainQueue<ModelType,ProblemType,StateType>& mainQueue, OffloadQueue<ModelType, ProblemType, StateType>& cpuQueue)
 {
     cpuQueue.queue.clear();
     while(not (mainQueue.isEmpty() or cpuQueue.queue.isFull()))
     {
-        QueuedState<T::StateType> const & queuedState = mainQueue.getStateForCpu();
-        if(boundsChk<T::StateType>(bestCost, queuedState))
+        QueuedState<StateType> const & queuedState = mainQueue.getStateForCpu();
+        if(boundsChk(bestCost, queuedState.lowerbound, queuedState.upperbound, queuedState.state.cost))
         {
             cpuQueue.enqueue(queuedState.state);
         }
@@ -344,14 +335,14 @@ void prepareOffloadCpu(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQu
     }
 }
 
-template<typename T>
-void prepareOffloadGpu(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQueue<T>& gpuQueue)
+template<typename ModelType, typename ProblemType, typename StateType>
+void prepareOffloadGpu(unsigned int bestCost, MainQueue<ModelType,ProblemType,StateType>& mainQueue, OffloadQueue<ModelType,ProblemType,StateType>& gpuQueue)
 {
     gpuQueue.queue.clear();
     while(not (mainQueue.isEmpty() or gpuQueue.queue.isFull()))
     {
-        QueuedState<T::StateType> const & queuedState = mainQueue.getStateForGpu();
-        if(boundsChk<T::StateType>(bestCost, queuedState))
+        QueuedState<StateType> const & queuedState = mainQueue.getStateForGpu();
+        if(boundsChk(bestCost, queuedState.lowerbound, queuedState.upperbound, queuedState.state.cost))
         {
             gpuQueue.enqueue(queuedState.state);
         }
@@ -359,49 +350,49 @@ void prepareOffloadGpu(unsigned int bestCost, MainQueue<T>& mainQueue, OffloadQu
     }
 }
 
-template<typename T>
-void doOffloadCpu(DD::MDD<T> const & mdd, OffloadQueue<T>& cpuQueue, std::byte* scratchpadMem)
+template<typename ModelType, typename ProblemType, typename StateType>
+void doOffloadCpu(DD::MDD<ModelType,ProblemType,StateType> const & mdd, OffloadQueue<ModelType,ProblemType,StateType>& cpuQueue, std::byte* scratchpadMem)
 {
-    thrust::for_each(thrust::host, cpuQueue.queue.begin(), cpuQueue.queue.end(), [&] (OffloadedState<T::StateTypr>& offloadedState)
+    thrust::for_each(thrust::host, cpuQueue.queue.begin(), cpuQueue.queue.end(), [&] (OffloadedState<StateType>& offloadedState)
     {
         unsigned int stateIdx = thrust::distance(cpuQueue.queue.begin(), &offloadedState);
         doOffload(mdd, offloadedState, &scratchpadMem[mdd.scratchpadMemSize * stateIdx]);
     });
 }
 
-template<typename T>
-void doOffloadGpu(DD::MDD<T> const & mdd, OffloadQueue<T>& gpuQueue)
+template<typename ModelType, typename ProblemType, typename StateType>
+void doOffloadGpu(DD::MDD<ModelType,ProblemType,StateType> const & mdd, OffloadQueue<ModelType,ProblemType,StateType>& gpuQueue)
 {
-    doOffloadKernel<<<gpuQueue.queue.getSize(), 1, mdd.scratchpadMemSize>>>(mdd, gpuQueue.queue);
+    doOffloadKernel<ModelType,ProblemType,StateType><<<gpuQueue.queue.getSize(), 1, mdd.scratchpadMemSize>>>(mdd, gpuQueue.queue);
     cudaDeviceSynchronize();
 }
 
-template<typename T>
+template<typename ModelType, typename ProblemType, typename StateType>
 __host__ __device__
-void doOffload(DD::MDD<T> const & mdd, BB::OffloadedState<T::StateType>& offloadedState, std::byte* scratchpadMem)
+void doOffload(DD::MDD<ModelType,ProblemType,StateType> const & mdd, BB::OffloadedState<StateType>& offloadedState, std::byte* scratchpadMem)
 {
     //Preparation to build MDDs
-    T::StateType& top = offloadedState.state;
-    Vector<T::StateType>& cutset = offloadedState.cutset;
-    T::StateType& bottom = offloadedState.upperboundState;
+    StateType const & top = offloadedState.state;
+    Vector<StateType>& cutset = offloadedState.cutset;
+    StateType& bottom = offloadedState.upperboundState;
 
     //Build MDDs
-    mdd.buildTopDown(DD::MDD<T>::Type::Relaxed, top, cutset, bottom, scratchpadMem);
+    mdd.buildTopDown(DD::MDD<ModelType,ProblemType,StateType>::Type::Relaxed, top, cutset, bottom, scratchpadMem);
     offloadedState.lowerbound = bottom.cost;
-    mdd.buildTopDown(DD::MDD<T>::Type::Restricted, top, cutset, bottom, scratchpadMem);
+    mdd.buildTopDown(DD::MDD<ModelType,ProblemType,StateType>::Type::Restricted, top, cutset, bottom, scratchpadMem);
     offloadedState.upperbound = bottom.cost;
 }
 
-template<typename T>
+template<typename ModelType, typename ProblemType, typename StateType>
 __global__
-void doOffloadKernel(DD::MDD<T> const & mdd, Vector<BB::OffloadedState<T::StateType>>& queue)
+void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const & mdd, Vector<BB::OffloadedState<StateType>>& queue)
 {
     extern __shared__ unsigned int sharedMem[];
     std::byte* scratchpadMem = reinterpret_cast<std::byte*>(sharedMem);
 
     if(blockIdx.x * blockDim.x + threadIdx.x == 0)
     {
-        BB::OffloadedState<T::StateType>& offloadedState = queue.at(blockIdx.x);
+        BB::OffloadedState<StateType>& offloadedState = queue.at(blockIdx.x);
         doOffload(mdd, offloadedState, scratchpadMem);
     };
 }
