@@ -14,7 +14,7 @@ namespace OP
         public:
             uint8_t start;
             uint8_t end;
-            std::byte padding[4]; // 64bit aligned
+            std::byte padding[6]; // 64bit aligned
             Vector<uint8_t> pickups;
             Vector<uint8_t> deliveries;
             Array<uint16_t> distances;

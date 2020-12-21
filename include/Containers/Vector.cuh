@@ -37,6 +37,8 @@ class Vector
         __host__ __device__ inline T& back() const;
         __host__ __device__ inline T* begin() const;
         __host__ __device__ inline void clear();
+        template<typename ... Args>
+        __host__ __device__ void emplaceBack(Args ... args);
         __host__ __device__ inline T* end() const;
         __host__ __device__ inline T& front() const;
         __host__ __device__ inline unsigned int getCapacity() const;
@@ -57,7 +59,7 @@ template<typename T>
 __host__ __device__
 std::byte* Vector<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
 {
-    return  Memory::safeMalloc(sizeOfStorage(capacity), mallocType);
+    return Memory::safeMalloc(sizeOfStorage(capacity), mallocType);
 }
 
 template<typename T>
@@ -138,6 +140,14 @@ __host__ __device__
 void Vector<T>::clear()
 {
     size = 0;
+}
+
+template<typename T>
+template<typename ... Args>
+void Vector<T>::emplaceBack(Args ... args)
+{
+    resize(size + 1);
+    new (&storage[size - 1]) T(args ...);
 }
 
 template<typename T>

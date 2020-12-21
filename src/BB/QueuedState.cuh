@@ -17,11 +17,12 @@ namespace BB
             StateType& state;
 
         public:
-           QueuedState(unsigned int* heapIdx, unsigned int lowerBound, unsigned int upperBound, StateType& state);
-           QueuedState<StateType>& operator=(QueuedState<StateType> const & other);
+           __host__ __device__ QueuedState(unsigned int* heapIdx, unsigned int lowerBound, unsigned int upperBound, StateType& state);
+           __host__ __device__ QueuedState<StateType>& operator=(QueuedState<StateType> const & other);
     };
 
     template<typename StateType>
+    __host__ __device__
     QueuedState<StateType>::QueuedState(unsigned int* heapIdx, unsigned int lowerBound, unsigned int upperBound, StateType& state) :
         heapIdx(heapIdx),
         lowerbound(lowerBound),
@@ -30,6 +31,7 @@ namespace BB
     {}
 
     template<typename StateType>
+    __host__ __device__
     QueuedState<StateType>& QueuedState<StateType>::operator=(QueuedState<StateType> const & other)
     {
         *heapIdx = *other.heapIdx;

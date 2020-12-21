@@ -18,10 +18,12 @@ namespace DD
             enum Type {Relaxed, Restricted};
 
         public:
+
+            ModelType const & model;
             unsigned int width;
             unsigned int fanout;
             unsigned int scratchpadMemSize;
-            ModelType const & model;
+
 
         public:
             MDD(ModelType const & model, unsigned int width);
@@ -34,9 +36,9 @@ namespace DD
 
     template<typename ModelType, typename ProblemType, typename StateType>
     MDD<ModelType,ProblemType,StateType>::MDD(ModelType const & model, unsigned int width) :
+        model(model),
         width(width),
         fanout(calcFanout(model.problem)),
-        model(model),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 

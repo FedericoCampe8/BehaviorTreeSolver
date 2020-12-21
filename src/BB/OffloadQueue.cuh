@@ -9,7 +9,7 @@
 
 namespace BB
 {
-    template<typename ModelType, typename ProblemType, typename StateType>
+    template<typename StateType>
     class OffloadQueue
     {
         public:
@@ -21,12 +21,14 @@ namespace BB
             Array<StateType> upperboundStatesBuffer;
 
         public:
+            template<typename ModelType, typename ProblemType>
             OffloadQueue(DD::MDD<ModelType,ProblemType,StateType> const & mdd, unsigned int offloadMaxSize, Memory::MallocType mallocType);
             void enqueue(StateType const & state);
     };
 
-    template<typename ModelType, typename ProblemType, typename StateType>
-    OffloadQueue<ModelType,ProblemType,StateType>::OffloadQueue(DD::MDD<ModelType,ProblemType,StateType> const & mdd, unsigned int offloadMaxSize, Memory::MallocType mallocType) :
+    template<typename StateType>
+    template<typename ModelType, typename ProblemType>
+    OffloadQueue<StateType>::OffloadQueue(DD::MDD<ModelType,ProblemType,StateType> const & mdd, unsigned int offloadMaxSize, Memory::MallocType mallocType) :
         cutsetMaxSize(mdd.width * mdd.fanout),
         queue(offloadMaxSize, mallocType),
         statesBuffer(offloadMaxSize, mallocType),
@@ -58,8 +60,8 @@ namespace BB
         }
     }
 
-    template<typename ModelType, typename ProblemType, typename StateType>
-    void OffloadQueue<ModelType,ProblemType,StateType>::enqueue(StateType const & state)
+    template<typename StateType>
+    void OffloadQueue<StateType>::enqueue(StateType const & state)
     {
         unsigned int const index = queue.getSize();
         statesBuffer[index] = state;

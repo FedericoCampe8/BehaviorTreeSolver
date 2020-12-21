@@ -45,7 +45,7 @@ set(SOURCES
     src/DP/State.cu
     src/DP/State.cuh
     src/BB/QueuedState.cuh
-    src/BB/MainQueue.cuh
+    src/BB/QueuesManager.cuh
     src/BB/OffloadedState.cuh
     src/BB/OffloadQueue.cuh)
 

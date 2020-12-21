@@ -58,8 +58,12 @@ template<typename T>
 __host__ __device__
 void Buffer<T>::clear()
 {
-    invalids.resize(invalids.getCapacity());
-    thrust::sequence(thrust::seq, invalids.begin(), invalids.end());
+    unsigned int capacity = elements.getCapacity();
+    invalids.resize(capacity);
+    for(unsigned int i = 0; i < capacity; i += 1)
+    {
+        invalids.at(i) = capacity - 1 - i;
+    }
 }
 
 template<typename T>
@@ -100,9 +104,8 @@ unsigned int Buffer<T>::indexOf(T& t) const
 {
     assert(elements.begin() <= &t);
     assert(&t < elements.end());
-    return thrust::distance(elements.end(),&t);
+    return thrust::distance(elements.begin(),&t);
 }
-
 
 template<typename T>
 __host__ __device__
