@@ -11,142 +11,145 @@
 #include <Utils/Memory.cuh>
 
 template<typename T>
-class Vector : public LightArray
+class LightVector : public LightArray<T>
 {
     // Members
-    private:
+    protected:
         std::size_t size;
 
     // Functions
     public:
-        __host__ __device__ Vector(std::size_t capacity, Memory::MallocType mallocType);
-        __host__ __device__ ~Vector();
+        __host__ __device__ LightVector(std::size_t capacity, T* storage);
+        __host__ __device__ ~LightVector();
+        __host__ __device__ inline T* back() const;
         __host__ __device__ inline void clear();
-        template<typename ... Args>
-        __host__ __device__ void emplaceBack(Args ... args);
+        __host__ __device__ inline T* end() const;
+        __host__ __device__ inline T* front() const;
         __host__ __device__ inline std::size_t getSize() const;
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
-        __host__ __device__ void operator=(Vector<T> const * other);
+        __host__ __device__ inline void incrementSize(std::size_t increment = 1);
+        __host__ __device__ void operator=(LightVector<T> const & other);
         __host__ __device__ inline T* operator[](std::size_t index) const;
         __host__ __device__ inline void popBack();
         __host__ __device__ void print(bool endLine = true) const;
-        __host__ __device__ void pushBack(T const * t);
         __host__ __device__ inline void resize(std::size_t size);
-        __host__ __device__ static void swap(Vector<T>* v0, Vector<T>* v1);
-    private:
-        __host__ __device__ static T* mallocStorage(std::size_t capacity, Memory::MallocType mallocType);
+        __host__ __device__ static void swap(LightVector<T>* v0, LightVector<T>* v1);
 };
 
 
 template<typename T>
 __host__ __device__
-Vector<T>::Vector(std::size_t capacity, Memory::MallocType mallocType) :
-    LightArray(capacity, mallocStorage(capacity, mallocType)),
+LightVector<T>::LightVector(std::size_t capacity, T* storage) :
+    LightArray<T>(capacity, storage),
     size(0)
 {}
 
 template<typename T>
 __host__ __device__
-Vector<T>::~Vector()
+LightVector<T>::~LightVector()
+{}
+
+template<typename T>
+__host__ __device__
+T* LightVector<T>::back() const
 {
-    free(storage);
+    assert(size > 0);
+    return this->at(size - 1);
 }
 
 template<typename T>
 __host__ __device__
-void Vector<T>::clear()
+void LightVector<T>::clear()
 {
     size = 0;
 }
-
 template<typename T>
-template<typename ... Args>
-void Vector<T>::emplaceBack(Args ... args)
+__host__ __device__
+T* LightVector<T>::end() const
 {
-    resize(size + 1);
-    new (back()) T(args ...);
+    return this->storage + size;
 }
 
 template<typename T>
 __host__ __device__
-std::size_t Vector<T>::getSize() const
+T* LightVector<T>::front() const
+{
+    assert(size > 0);
+    return this->at(0);
+}
+
+template<typename T>
+__host__ __device__
+std::size_t LightVector<T>::getSize() const
 {
     return size;
 }
 
 template<typename T>
 __host__ __device__
-bool Vector<T>::isEmpty() const
+bool LightVector<T>::isEmpty() const
 {
     return size == 0;
 }
 
 template<typename T>
 __host__ __device__
-bool Vector<T>::isFull() const
+bool LightVector<T>::isFull() const
 {
-    return size == capacity;
+    return size == this->capacity;
 }
 
 template<typename T>
 __host__ __device__
-void Vector<T>::operator=(Vector<T> const * other)
+void LightVector<T>::incrementSize(std::size_t increment)
 {
-    resize(other->size);
-    thrust::copy(thrust::seq, other->begin(), other->end(), begin());
+    resize(size + increment);
 }
 
 template<typename T>
 __host__ __device__
-T* Vector<T>::operator[](std::size_t index) const
+void LightVector<T>::operator=(LightVector<T> const & other)
+{
+    LightArray<T>::operator=(other);
+    size = other.size;
+}
+
+template<typename T>
+__host__ __device__
+T* LightVector<T>::operator[](std::size_t index) const
 {
     assert(index < size);
-    LightArray::operator[](index);
+    return LightArray<T>::operator[](index);
 }
 
 
 template<typename T>
 __host__ __device__
-void Vector<T>::popBack()
+void LightVector<T>::popBack()
 {
     resize(size - 1);
 }
 
 template<typename T>
 __host__ __device__
-void Vector<T>::print(bool endLine) const
+void LightVector<T>::print(bool endLine) const
 {
-   LightArray::print(0, size, endLine);
+   LightArray<T>::print(0, size, endLine);
 }
 
 template<typename T>
 __host__ __device__
-void Vector<T>::pushBack(T const * t)
+void LightVector<T>::resize(std::size_t size)
 {
-    resize(size + 1);
-    *back() = *t;
-}
-
-template<typename T>
-__host__ __device__
-void Vector<T>::resize(std::size_t size)
-{
-    assert(size <= capacity);
+    assert(size <= this->capacity);
     this->size = size;
 }
 
 template<typename T>
 __host__ __device__
-void Vector<T>::swap(Vector<T>* v0, Vector<T>* v1)
+void LightVector<T>::swap(LightVector<T>* v0, LightVector<T>* v1)
 {
     LightArray<T>::swap(v0, v1);
     thrust::swap(v0->size, v1->size);
-}
-
-template<typename T>
-__host__ __device__
-T* Vector<T>::mallocStorage(std::size_t capacity, Memory::MallocType mallocType)
-{
-    return reinterpret_cast<T*>(Memory::safeMalloc(LightArray<T>::sizeOfStorage(capacity), mallocType));
 }

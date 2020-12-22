@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <type_traits>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/swap.h>
@@ -22,13 +23,11 @@ class LightArray
         __host__ __device__ LightArray(std::size_t capacity, T* storage);
         __host__ __device__ ~LightArray();
         __host__ __device__ inline T* at(std::size_t index) const;
-        __host__ __device__ inline T* back() const;
         __host__ __device__ inline T* begin() const;
         __host__ __device__ inline T* end() const;
-        __host__ __device__ inline T* front() const;
         __host__ __device__ inline std::size_t getCapacity() const;
         __host__ __device__ inline std::size_t indexOf(T const * t) const;
-        __host__ __device__ void operator=(LightArray<T> const * other);
+        __host__ __device__ void operator=(LightArray<T> const & other);
         __host__ __device__ virtual inline T* operator[](std::size_t index) const;
         __host__ __device__ virtual void print(bool endLine = true) const;
         __host__ __device__ static std::size_t sizeOfStorage(std::size_t capacity);
@@ -61,13 +60,6 @@ T* LightArray<T>::at(std::size_t index) const
 
 template<typename T>
 __host__ __device__
-T* LightArray<T>::back() const
-{
-    return at(capacity - 1);
-}
-
-template<typename T>
-__host__ __device__
 T* LightArray<T>::begin() const
 {
     return storage;
@@ -78,13 +70,6 @@ __host__ __device__
 T* LightArray<T>::end() const
 {
     return storage + capacity;
-}
-
-template<typename T>
-__host__ __device__
-T* LightArray<T>::front() const
-{
-    return at(0);
 }
 
 template<typename T>
@@ -106,10 +91,10 @@ std::size_t LightArray<T>::indexOf(T const * t) const
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::operator=(LightArray<T> const * other)
+void LightArray<T>::operator=(LightArray<T> const & other)
 {
-    this->capacity = other->capacity;
-    this->storage = other->storage;
+    this->capacity = other.capacity;
+    this->storage = other.storage;
 }
 
 template<typename T>
@@ -144,8 +129,7 @@ template<typename T>
 __host__ __device__
 void LightArray<T>::print(std::size_t beginIdx, std::size_t endIdx, bool endLine = true) const
 {
-    static_assert(std::is_integral<T>::value);
-
+    /*
     printf("[");
     if (beginIdx < endIdx)
     {
@@ -160,4 +144,5 @@ void LightArray<T>::print(std::size_t beginIdx, std::size_t endIdx, bool endLine
     {
         printf("\n");
     }
+    */
 }

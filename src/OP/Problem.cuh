@@ -9,9 +9,11 @@ namespace OP
 {
     class Problem
     {
+        // Members
         public:
             Array<Variable> variables;
 
+        // Functions
         public:
             Problem(unsigned int variablesCount, Memory::MallocType mallocType);
     };

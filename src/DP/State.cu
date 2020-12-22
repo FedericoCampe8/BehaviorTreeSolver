@@ -2,30 +2,11 @@
 
 #include "State.cuh"
 
-
 __host__ __device__
-std::byte* DP::State::mallocStorages(unsigned int statesCount, OP::Problem const & problem, Memory::MallocType mallocType)
-{
-    return Memory::safeMalloc(sizeOfStorage(problem) * statesCount, mallocType);
-}
-
-__host__ __device__
-std::size_t DP::State::sizeOfStorage(OP::Problem const & problem)
-{
-    return Vector<uint8_t>::sizeOfStorage(problem.variables.getCapacity()) * 2;
-}
-
-__host__ __device__
-std::byte* DP::State::storageEnd() const
-{
-    return admissibleValues.storageEnd();
-}
-
-__host__ __device__
-DP::State::State(OP::Problem const & problem, std::byte* storage) :
+DP::State::State(OP::Problem const * problem, std::byte* storage) :
     cost(0u),
-    selectedValues(problem.variables.getCapacity(), storage),
-    admissibleValues(problem.variables.getCapacity(), selectedValues.storageEnd())
+    selectedValues(problem->variables.getCapacity(), reinterpret_cast<uint8_t*>(storage)),
+    admissibleValues(problem->variables.getCapacity(), selectedValues.end())
 {}
 
 __host__ __device__
@@ -40,10 +21,24 @@ bool DP::State::isSelected(unsigned int value) const
 }
 
 __host__ __device__
-DP::State& DP::State::operator=(const DP::State& other)
+std::byte* DP::State::mallocStorages(OP::Problem const * problem, unsigned int statesCount, Memory::MallocType mallocType)
+{
+    return Memory::safeMalloc(sizeOfStorage(problem) * statesCount, mallocType);
+}
+
+__host__ __device__
+void DP::State::operator=(DP::State const & other)
 {
     cost = other.cost;
-    selectedValues = other.selectedValues;
-    admissibleValues = other.admissibleValues;
-    return *this;
+    selectedValues.resize(other.selectedValues.getSize());
+    thrust::copy(thrust::seq, other.selectedValues.begin(), other.selectedValues.end(), selectedValues.begin());
+    admissibleValues.resize(other.admissibleValues.getSize());
+    thrust::copy(thrust::seq, other.admissibleValues.begin(), other.admissibleValues.end(), admissibleValues.begin());
 }
+
+__host__ __device__
+std::size_t DP::State::sizeOfStorage(OP::Problem const * problem)
+{
+    return LightArray<uint8_t>::sizeOfStorage(problem->variables.getCapacity()) * 2;
+}
+

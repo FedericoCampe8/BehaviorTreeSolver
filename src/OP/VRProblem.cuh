@@ -11,6 +11,7 @@ namespace OP
 {
     class VRProblem : public Problem
     {
+        // Members
         public:
             uint8_t start;
             uint8_t end;
@@ -19,6 +20,7 @@ namespace OP
             Vector<uint8_t> deliveries;
             Array<uint16_t> distances;
 
+        // Functions
         public:
             VRProblem(unsigned int variablesCount, Memory::MallocType mallocType);
             __host__ __device__ unsigned int getDistance(unsigned int from, unsigned int to) const;

@@ -5,7 +5,7 @@ OP::Variable::Variable(unsigned int minValue, unsigned int maxValue) :
     maxValue(static_cast<uint8_t>(maxValue))
 {}
 
-unsigned int OP::Variable::cardinality(Variable const & variable)
+unsigned int OP::Variable::cardinality()
 {
-    return variable.maxValue - variable.minValue + 1u;
+    return maxValue - minValue + 1u;
 }

@@ -10,5 +10,5 @@ OP::VRProblem::VRProblem(unsigned int variablesCount, Memory::MallocType mallocT
 __host__ __device__
 unsigned int OP::VRProblem::getDistance(unsigned int from, unsigned int to) const
 {
-    return distances[(from * variables.getCapacity()) + to];
+    return *distances[(from * variables.getCapacity()) + to];
 }
