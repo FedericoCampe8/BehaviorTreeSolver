@@ -2,32 +2,26 @@
 
 #include <Containers/Vector.cuh>
 
+#include "StateMetadata.cuh"
+
 namespace BB
 {
     template<typename StateType>
-    class OffloadedState
+    class OffloadedState : public StateMetadata<StateType>
     {
         public:
-            // Search information
-            unsigned int lowerbound;
-            unsigned int upperbound;
             LightVector<StateType> cutset;
             StateType* const upperboundState;
 
-            // State
-            StateType const * const state;
-
         public:
-            OffloadedState(unsigned int cutsetMaxSize, StateType* cutsetBuffer, StateType* upperbound, StateType const * state);
+            OffloadedState(StateType const * state, unsigned int cutsetMaxSize, StateType* cutsetBuffer, StateType* upperboundState);
     };
 
     template<typename StateType>
-    OffloadedState<StateType>::OffloadedState(unsigned int cutsetMaxSize, StateType* cutsetBuffer, StateType* upperboundState, StateType const * state) :
-        lowerbound(0u),
-        upperbound(0u),
+    OffloadedState<StateType>::OffloadedState(StateType const * state, unsigned int cutsetMaxSize, StateType* cutsetBuffer, StateType* upperboundState) :
+        StateMetadata<StateType>(0,0,state),
         cutset(cutsetMaxSize, cutsetBuffer),
-        upperboundState(upperboundState),
-        state(state)
+        upperboundState(upperboundState)
     {}
 }
 

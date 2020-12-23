@@ -16,7 +16,7 @@ class MaxHeap : public Vector<T>
     // Functions
     public:
         __host__ __device__ MaxHeap(Comparator cmp, unsigned int capacity, Memory::MallocType mallocType);
-        __host__ __device__ void erase(unsigned int index);
+        __host__ __device__ void erase(T const * t);
         __host__ __device__ void insertBack();
     private:
         __host__ __device__ void heapify(unsigned int index);
@@ -34,15 +34,16 @@ MaxHeap<T>::MaxHeap(Comparator cmp, unsigned int capacity, Memory::MallocType ma
 
 template<typename T>
 __host__ __device__
-void MaxHeap<T>::erase(unsigned int index)
+void MaxHeap<T>::erase(T const * t)
 {
-    while (index > 0)
+    unsigned int i = this->indexOf(t);
+    unsigned int p = parent(i);
+    while (i > 0)
     {
-        unsigned int p = parent(index);
-        T::swap(this->at(index), this->at(p));
-        index = p;
+        T::swap(this->at(i), this->at(p));
+        i = p;
+        p = parent(i);
     }
-
     T::swap(this->front(), this->back());
     this->popBack();
     heapify(0);
@@ -54,11 +55,12 @@ void MaxHeap<T>::insertBack()
 {
     unsigned int i = this->size - 1;
     unsigned int p = parent(i);
-    while(i > 0 and (not cmp(*this->at(p), *this->at(i))))
+    while (i > 0 and (not cmp(*this->at(p), *this->at(i))))
     {
-        T::swap(this->at(i), this->at(p));
+        T::swap(this->at(p), this->at(i));
         i = p;
         p = parent(i);
+
     }
 }
 
@@ -70,12 +72,12 @@ void MaxHeap<T>::heapify(unsigned int index)
     unsigned int const r = right(index);
     unsigned int largest = index;
 
-    if (l < this->size && cmp(*this->at(l), *this->at(index)))
+    if (l < this->size and cmp(*this->at(l), *this->at(index)))
     {
         largest = l;
     }
 
-    if (r < this->size && cmp(*this->at(r), *this->at(largest)))
+    if (r < this->size and cmp(*this->at(r), *this->at(largest)))
     {
         largest = r;
     }

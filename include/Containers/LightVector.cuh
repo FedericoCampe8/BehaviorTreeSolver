@@ -29,6 +29,7 @@ class LightVector : public LightArray<T>
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
         __host__ __device__ inline void incrementSize(std::size_t increment = 1);
+        __host__ __device__ inline std::size_t indexOf(T const * t) const;
         __host__ __device__ void operator=(LightVector<T> const & other);
         __host__ __device__ inline T* operator[](std::size_t index) const;
         __host__ __device__ inline void popBack();
@@ -105,6 +106,16 @@ __host__ __device__
 void LightVector<T>::incrementSize(std::size_t increment)
 {
     resize(size + increment);
+}
+
+template<typename T>
+__host__ __device__
+std::size_t LightVector<T>::indexOf(T const * t) const
+{
+    assert(this->begin() <= t);
+    assert(t < end());
+
+    return thrust::distance(const_cast<T const *>(this->begin()), t);
 }
 
 template<typename T>

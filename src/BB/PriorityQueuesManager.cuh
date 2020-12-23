@@ -1,7 +1,6 @@
 #pragma once
 
 #include <thrust/distance.h>
-
 #include <Containers/Buffer.cuh>
 #include <Containers/MaxHeap.cuh>
 
@@ -15,7 +14,7 @@ namespace BB
     {
         // Members
         private:
-            Vector<Array<uint32_t>> bufferToQueues;
+            Vector<Array<QueuedState<StateType>*>> bufferIdxToQueue;
             Vector<MaxHeap<QueuedState<StateType>>*> queues;
 
         // Functions
@@ -23,20 +22,17 @@ namespace BB
             template<typename ProblemType>
             PriorityQueuesManager(ProblemType const * problem, unsigned int queuesSize, unsigned int queuesCount);
             bool areQueuesEmpty();
-            void dequeue(QueuedState<StateType> const * queuedState);
-            void enqueue(unsigned int lowerbound, unsigned int upperbound, StateType const * state);
+            void dequeue(StateType const * state);
+            void enqueue(StateMetadata<StateType> const * stateMetadata);
             unsigned int getQueuesSize();
             void registerQueue(MaxHeap<QueuedState<StateType>>* queue);
-        private:
-            bool checkQueues();
-            static void printQueue(MaxHeap<QueuedState<StateType>>* queue);
     };
 
     template<typename StateType>
     template<typename ProblemType>
     PriorityQueuesManager<StateType>::PriorityQueuesManager(ProblemType const * problem, unsigned int queuesSize, unsigned int queuesCount) :
         Buffer<StateType>(queuesSize, Memory::MallocType::Std),
-        bufferToQueues(queuesCount, Memory::MallocType::Std),
+        bufferIdxToQueue(queuesCount, Memory::MallocType::Std),
         queues(queuesCount, Memory::MallocType::Std)
     {
         unsigned int const storageSize =  StateType::sizeOfStorage(problem);
@@ -54,38 +50,32 @@ namespace BB
     }
 
     template<typename StateType>
-    void PriorityQueuesManager<StateType>::dequeue(QueuedState<StateType> const * queuedState)
+    void PriorityQueuesManager<StateType>::dequeue(StateType const * state)
     {
-        unsigned int const bufferIdx = this->indexOf(queuedState->state);
+        unsigned int const bufferIdx = this->indexOf(state);
 
         for(unsigned int queueIdx = 0; queueIdx < queues.getSize(); queueIdx += 1)
         {
             MaxHeap<QueuedState<StateType>>* queue = *queues[queueIdx];
-            unsigned int const index = *bufferToQueues[queueIdx]->at(bufferIdx);
-            queue->erase(index);
+            queue->erase(*bufferIdxToQueue[queueIdx]->at(bufferIdx));
         }
-        this->erase(queuedState->state);
+        this->erase(state);
     }
 
     template<typename StateType>
-    void PriorityQueuesManager<StateType>::enqueue(unsigned int lowerbound, unsigned int upperbound, StateType const * state)
+    void PriorityQueuesManager<StateType>::enqueue(StateMetadata<StateType> const * stateMetadata)
     {
-        StateType const * const bufferedState = this->insert(state);
-        unsigned int const bufferIdx = this->indexOf(bufferedState);
-
-        assert(checkQueues());
-
+        StateType const * const bufferState = this->insert(stateMetadata->state);
+        StateMetadata<StateType> const bufferStateMetadata(stateMetadata->lowerbound, stateMetadata->upperbound, bufferState);
+        unsigned int const bufferIdx = this->indexOf(bufferState);
         for (unsigned int queueIdx = 0; queueIdx < queues.getSize(); queueIdx += 1)
         {
             MaxHeap<QueuedState<StateType>>* queue = *queues[queueIdx];
-            unsigned int * const heapIdx = bufferToQueues[queueIdx]->at(bufferIdx);
-            *heapIdx = queue->getSize();
             queue->incrementSize();
-            new (queue->back()) QueuedState<StateType>(heapIdx, lowerbound, upperbound, bufferedState);
+            *bufferIdxToQueue[queueIdx]->at(bufferIdx) = queue->back();
+            new (queue->back()) QueuedState<StateType>(&bufferStateMetadata, bufferIdxToQueue[queueIdx]->at(bufferIdx));
             queue->insertBack();
         }
-
-        assert(checkQueues());
     }
 
     template<typename StateType>
@@ -98,43 +88,9 @@ namespace BB
     void PriorityQueuesManager<StateType>::registerQueue(MaxHeap<QueuedState<StateType>>* queue)
     {
         assert(this->getCapacity() == queue->getCapacity());
-        bufferToQueues.incrementSize();
-        new (bufferToQueues.back()) Array<unsigned int>(queue->getCapacity(), Memory::MallocType::Std);
+        bufferIdxToQueue.incrementSize();
+        new (bufferIdxToQueue.back()) Array<QueuedState<StateType>*>(queue->getCapacity(), Memory::MallocType::Std);
         queues.incrementSize();
         *queues.back() = queue;
-    }
-
-    template<typename StateType>
-    bool PriorityQueuesManager<StateType>::checkQueues()
-    {
-        for (unsigned int queueIdx = 0; queueIdx < queues.getSize(); queueIdx += 1)
-        {
-            MaxHeap<QueuedState<StateType>>* queue = *queues[queueIdx];
-            for (unsigned int queuedStateIdx = 0; queuedStateIdx < queue->getSize(); queuedStateIdx += 1)
-            {
-                assert(*queue->at(queuedStateIdx)->heapIdx == queuedStateIdx);
-            }
-        }
-
-        return true;
-    }
-    template<typename StateType>
-    void PriorityQueuesManager<StateType>::printQueue(MaxHeap<QueuedState<StateType>>* queue)
-    {
-        if(not queue->isEmpty())
-        {
-            printf("[DEBUG]----\n");
-            for (unsigned int queuedStateIdx = 0; queuedStateIdx < queue->getSize(); queuedStateIdx += 1)
-            {
-                QueuedState<StateType>* queuedState = queue->at(queuedStateIdx);
-                printf("[DEBUG] State: ");
-                queuedState->state->selectedValues.print(false);
-                printf(" | Index: %d | Self Idx: %u\n", queuedStateIdx, *queuedState->heapIdx);
-            }
-        }
-        else
-        {
-            printf("[DEBUG] Empty queue\n");
-        }
     }
 }

@@ -68,7 +68,7 @@ namespace BB
         *statesBuffer[index] = *state;
 
         this->incrementSize();
-        new (this->back()) OffloadedState<StateType>(cutsetMaxSize, cutsetsBuffer[cutsetMaxSize * index], upperboundStatesBuffer[index], statesBuffer[index]);
+        new (this->back()) OffloadedState<StateType>(statesBuffer[index], cutsetMaxSize, cutsetsBuffer[cutsetMaxSize * index], upperboundStatesBuffer[index]);
     }
 }
 

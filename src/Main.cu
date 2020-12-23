@@ -40,7 +40,8 @@ template<typename QueuedStateType>
 bool hasSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
 
 // Queues
-bool boundsChk(unsigned int bestCost, unsigned int lowerbound, unsigned int upperbound, unsigned int cost);
+template<typename StateType>
+bool boundsChk(unsigned int bestCost, StateMetadata<StateType> const * stateMetadata);
 
 template<typename StateType>
 void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue);
@@ -136,7 +137,8 @@ int main(int argc, char ** argv)
     model->makeRoot(root);
 
     // Enqueue root
-    priorityQueuesManger.enqueue(0, StateType::MaxCost, root);
+    StateMetadata<StateType> const rootMetadata(0, StateType::MaxCost, root);
+    priorityQueuesManger.enqueue(&rootMetadata);
 
     // Search
     unsigned int visitedStatesCount = 0;
@@ -289,25 +291,24 @@ void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType
 {
     for (OffloadedState<StateType>* offloadedState = offloadQueue->begin(); offloadedState !=  offloadQueue->end(); offloadedState += 1)
     {
-        unsigned int lowerbound = offloadedState->lowerbound;
-        unsigned int upperbound = offloadedState->upperbound;
-
         for (StateType* cutsetState = offloadedState->cutset.begin(); cutsetState != offloadedState->cutset.end(); cutsetState += 1)
         {
-            if(boundsChk(bestCost, lowerbound, upperbound, cutsetState->cost))
+            StateMetadata<StateType> const cutsetStateMetadata(offloadedState->lowerbound, offloadedState->upperbound, cutsetState);
+            if(boundsChk(bestCost, &cutsetStateMetadata))
             {
-                priorityQueuesManager->enqueue(lowerbound, upperbound, cutsetState);
+                priorityQueuesManager->enqueue(&cutsetStateMetadata);
             }
         };
     };
 }
 
-bool boundsChk(unsigned int bestCost, unsigned int lowerbound, unsigned int upperbound, unsigned int cost)
+template<typename StateType>
+bool boundsChk(unsigned int bestCost, StateMetadata<StateType> const * stateMetadata)
 {
     return true or
-        lowerbound < upperbound and
-        lowerbound < bestCost and
-        cost < bestCost;
+        stateMetadata->lowerbound < stateMetadata->upperbound and
+        stateMetadata->lowerbound < bestCost and
+        stateMetadata->state->cost < bestCost;
 }
 
 template<typename StateType>
@@ -334,11 +335,11 @@ void prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* prio
     while(not (priorityQueue->isEmpty() or offloadQueue->isFull()))
     {
         QueuedState<StateType> const * const queuedState = priorityQueue->front();
-        if (boundsChk(bestCost, queuedState->lowerbound, queuedState->upperbound, queuedState->state->cost))
+        if (boundsChk(bestCost, queuedState))
         {
             offloadQueue->enqueue(queuedState->state);
         }
-        priorityQueuesManager->dequeue(queuedState);
+        priorityQueuesManager->dequeue(queuedState->state);
     }
 }
 

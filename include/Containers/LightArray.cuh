@@ -26,7 +26,7 @@ class LightArray
         __host__ __device__ inline T* begin() const;
         __host__ __device__ virtual inline T* end() const;
         __host__ __device__ inline std::size_t getCapacity() const;
-        __host__ __device__ inline std::size_t indexOf(T const * t) const;
+        __host__ __device__ virtual inline std::size_t indexOf(T const * t) const;
         __host__ __device__ void operator=(LightArray<T> const & other);
         __host__ __device__ virtual inline T* operator[](std::size_t index) const;
         __host__ __device__ virtual void print(bool endLine = true) const;
