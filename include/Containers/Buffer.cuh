@@ -54,6 +54,7 @@ void Buffer<T>::erase(T const * t)
     assert(t < this->end());
 
     unsigned int invalidIdx = this->indexOf(t);
+    //printf("Erasing %d\n", invalidIdx);
     invalids.incrementSize();
     *invalids.back() = invalidIdx;
 }
@@ -71,10 +72,10 @@ T* Buffer<T>::insert(T const * t)
 {
     assert(not isFull());
 
-    unsigned int const * elementIdx = invalids.back();
+    unsigned int const elementIdx = *invalids.back();
     invalids.popBack();
-    *this->at(*elementIdx) = *t;
-    return this->at(*elementIdx);
+    *this->at(elementIdx) = *t;
+    return this->at(elementIdx);
 }
 
 template<typename T>

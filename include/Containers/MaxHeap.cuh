@@ -39,11 +39,11 @@ void MaxHeap<T>::erase(unsigned int index)
     while (index > 0)
     {
         unsigned int p = parent(index);
-        thrust::swap(*this->at(index), *this->at(p));
+        T::swap(this->at(index), this->at(p));
         index = p;
     }
 
-    *this->front() = *this->back();
+    T::swap(this->front(), this->back());
     this->popBack();
     heapify(0);
 }
@@ -56,12 +56,11 @@ void MaxHeap<T>::insertBack()
     unsigned int p = parent(i);
     while(i > 0 and (not cmp(*this->at(p), *this->at(i))))
     {
-        thrust::swap(*this->at(i), *this->at(p));
+        T::swap(this->at(i), this->at(p));
         i = p;
         p = parent(i);
     }
 }
-
 
 template<typename T>
 __host__ __device__
@@ -83,7 +82,7 @@ void MaxHeap<T>::heapify(unsigned int index)
 
     if (largest != index)
     {
-        thrust::swap(*this->at(index), *this->at(largest));
+        T::swap(this->at(index), this->at(largest));
         heapify(largest);
     }
 }

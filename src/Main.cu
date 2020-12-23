@@ -145,24 +145,22 @@ int main(int argc, char ** argv)
     do
     {
         prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, &cpuOffloadQueue);
-        uint64_t cpuOffloadStartTime = now();
-        if (not cpuOffloadQueue.isEmpty())
-        {
-            doOffloadCpu(cpuMdd, &cpuOffloadQueue, scratchpadMem);
-            visitedStatesCount += cpuOffloadQueue.getSize();
-        }
-
         prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, &gpuOffloadQueue);
+
+        uint64_t cpuOffloadStartTime = now();
+        doOffloadCpu(cpuMdd, &cpuOffloadQueue, scratchpadMem);
+        visitedStatesCount += cpuOffloadQueue.getSize();
+
         uint64_t gpuOffloadStartTime = now();
-        if (not gpuOffloadQueue.isEmpty())
-        {
-            doOffloadGpu(gpuMdd, &gpuOffloadQueue);
-            visitedStatesCount += gpuOffloadQueue.getSize();
-        }
+        doOffloadGpu(gpuMdd, &gpuOffloadQueue);
+        visitedStatesCount += gpuOffloadQueue.getSize();
 
         bool foundBetterSolution =
             checkForBetterSolutions(bestSolution, &cpuOffloadQueue) or
             checkForBetterSolutions(bestSolution, &gpuOffloadQueue);
+
+        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, &cpuOffloadQueue);
+        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, &gpuOffloadQueue);
 
         if(foundBetterSolution)
         {
@@ -196,9 +194,6 @@ int main(int argc, char ** argv)
             printf(" | State to visit: %u", priorityQueuesManger.getQueuesSize());
             printf(" | Visited states: %u\r", visitedStatesCount);
         }
-
-        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, &cpuOffloadQueue);
-        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, &gpuOffloadQueue);
 
         iterationsCount += 1;
     }
@@ -235,9 +230,6 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
     std::ifstream problemFile(problemFileName);
     json problemJson;
     problemFile >> problemJson;
-
-    // DEBUG
-    //std::cout << problemJson.dump(4) << endl;
 
     // Init problem
     unsigned int const problemSize = sizeof(OP::VRProblem);
@@ -299,19 +291,20 @@ void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType
     {
         unsigned int lowerbound = offloadedState->lowerbound;
         unsigned int upperbound = offloadedState->upperbound;
-        if(boundsChk(bestCost, lowerbound, upperbound, offloadedState->state->cost))
+
+        for (StateType* cutsetState = offloadedState->cutset.begin(); cutsetState != offloadedState->cutset.end(); cutsetState += 1)
         {
-            for (StateType* cutsetState = offloadedState->cutset.begin(); cutsetState != offloadedState->cutset.end(); cutsetState += 1)
+            if(boundsChk(bestCost, lowerbound, upperbound, cutsetState->cost))
             {
                 priorityQueuesManager->enqueue(lowerbound, upperbound, cutsetState);
-            };
-        }
+            }
+        };
     };
 }
 
 bool boundsChk(unsigned int bestCost, unsigned int lowerbound, unsigned int upperbound, unsigned int cost)
 {
-    return
+    return true or
         lowerbound < upperbound and
         lowerbound < bestCost and
         cost < bestCost;
@@ -322,7 +315,7 @@ bool checkForBetterSolutions(StateType* bestSolution, OffloadQueue<StateType>* o
 {
     bool foundBetterSolution = false;
 
-    for(OffloadedState<StateType>* offloadedState = offloadQueue->begin(); offloadedState != offloadQueue->end(); offloadedState += 1)
+    for (OffloadedState<StateType>* offloadedState = offloadQueue->begin(); offloadedState != offloadQueue->end(); offloadedState += 1)
     {
         if (offloadedState->upperbound < bestSolution->cost)
         {
@@ -341,7 +334,7 @@ void prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* prio
     while(not (priorityQueue->isEmpty() or offloadQueue->isFull()))
     {
         QueuedState<StateType> const * const queuedState = priorityQueue->front();
-        if(boundsChk(bestCost, queuedState->lowerbound, queuedState->upperbound, queuedState->state->cost))
+        if (boundsChk(bestCost, queuedState->lowerbound, queuedState->upperbound, queuedState->state->cost))
         {
             offloadQueue->enqueue(queuedState->state);
         }

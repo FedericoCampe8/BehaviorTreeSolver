@@ -99,7 +99,7 @@ namespace DD
 
             // Calculate costs
             assert(currentStatesCount <= currentStatesBuffer.getCapacity());
-            for(unsigned int currentStateIdx = 0; currentStateIdx < currentStatesCount; currentStateIdx += 1)
+            for (unsigned int currentStateIdx = 0; currentStateIdx < currentStatesCount; currentStateIdx += 1)
             {
                 model->calcCosts(variableIdx, currentStatesBuffer[currentStateIdx], costs[fanout * currentStateIdx]);
             }
@@ -109,7 +109,11 @@ namespace DD
 
             // Count next states
             uint32_t* const costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), StateType::MaxCost);
-            unsigned int const costsCount = costs.indexOf(costsEnd);
+            unsigned int costsCount = 0;
+            if (costsEnd < costs.end())
+            {
+                costsCount = costs.indexOf(costsEnd);
+            }
             nextStatesCount = min(width, costsCount);
             if(variableIdx == variablesCount - 1)
             {
