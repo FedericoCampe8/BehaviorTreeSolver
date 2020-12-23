@@ -24,7 +24,7 @@ class LightArray
         __host__ __device__ ~LightArray();
         __host__ __device__ inline T* at(std::size_t index) const;
         __host__ __device__ inline T* begin() const;
-        __host__ __device__ inline T* end() const;
+        __host__ __device__ virtual inline T* end() const;
         __host__ __device__ inline std::size_t getCapacity() const;
         __host__ __device__ inline std::size_t indexOf(T const * t) const;
         __host__ __device__ void operator=(LightArray<T> const & other);
@@ -34,6 +34,7 @@ class LightArray
         __host__ __device__ static void swap(LightArray<T>* a0, LightArray<T>* a1);
     protected:
         __host__ __device__ void print(std::size_t beginIdx, std::size_t endIdx, bool endLine) const;
+
 };
 
 template<typename T>
@@ -127,22 +128,23 @@ void LightArray<T>::swap(LightArray<T>* a0, LightArray<T>* a1)
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::print(std::size_t beginIdx, std::size_t endIdx, bool endLine = true) const
+void LightArray<T>::print(std::size_t beginIdx, std::size_t endIdx, bool endLine) const
 {
-    /*
-    printf("[");
-    if (beginIdx < endIdx)
+    if constexpr (std::is_integral_v<T>)
     {
-        printf("%d", at(beginIdx));
-        for (std::size_t index = beginIdx; index < endIdx; index += 1)
+        printf("[");
+        if (beginIdx < endIdx)
         {
-            printf(",%d", at(index));
+            printf("%d", storage[beginIdx]);
+            for (std::size_t index = beginIdx + 1; index < endIdx; index += 1)
+            {
+                printf(",%d", storage[index]);
+            }
+        }
+        printf("]");
+        if (endLine)
+        {
+            printf("\n");
         }
     }
-    printf("]");
-    if (endLine)
-    {
-        printf("\n");
-    }
-    */
 }

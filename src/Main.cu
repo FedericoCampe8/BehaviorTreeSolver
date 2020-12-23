@@ -170,16 +170,28 @@ int main(int argc, char ** argv)
             bestSolution->selectedValues.print(false);
             printf(" | Value: %u", bestSolution->cost);
             printf(" | Time: ");
-            printElapsedTime(Chrono::now() - searchStartTime);
+            printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
             printf(" | Visited states: %u\n", visitedStatesCount);
         }
         else
         {
-            printf("[INFO] CPU Speed: %5lu states/s", static_cast<uint64_t>(cpuOffloadQueue.getSize()) * 1000 / (Chrono::now() - cpuOffloadStartTime));
-            printf(" | GPU Speed: %5lu states/s", static_cast<uint64_t>(gpuOffloadQueue.getSize()) * 1000 / (Chrono::now() - gpuOffloadStartTime));
+            unsigned long int cpuSpeed = 0;
+            if (cpuOffloadQueue.getSize() > 0 )
+            {
+                uint64_t cpuOffloadElapsedTime = max(1ul, now() - cpuOffloadStartTime);
+                cpuSpeed = cpuOffloadQueue.getSize() * 1000 / cpuOffloadElapsedTime;
+            }
+            unsigned long int gpuSpeed = 0;
+            if (gpuOffloadQueue.getSize() > 0 )
+            {
+                uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
+                gpuSpeed = gpuOffloadQueue.getSize() * 1000 / gpuOffloadElapsedTime;
+            }
+            printf("[INFO] CPU Speed: %5lu states/s", cpuSpeed);
+            printf(" | GPU Speed: %5lu states/s", gpuSpeed);
             printf(" | Time: ");
-            printElapsedTime(Chrono::now() - searchStartTime);
+            printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
             printf(" | State to visit: %u", priorityQueuesManger.getQueuesSize());
             printf(" | Visited states: %u\r", visitedStatesCount);
@@ -190,13 +202,13 @@ int main(int argc, char ** argv)
 
         iterationsCount += 1;
     }
-    while(not (priorityQueuesManger.areQueuesEmpty() or (Chrono::now() - searchStartTime) > timeoutSeconds * 1000));
+    while(not (priorityQueuesManger.areQueuesEmpty() or (now() - searchStartTime) > timeoutSeconds * 1000));
 
     printf("[RESULT] Solution: ");
     bestSolution->selectedValues.print(false);
     printf(" | Value: %u", bestSolution->cost);
     printf(" | Time: ");
-    printElapsedTime(Chrono::now() - searchStartTime);
+    printElapsedTime(now() - searchStartTime);
     printf(" | Iterations: %u", iterationsCount);
     printf(" | Visited states: %u\n", visitedStatesCount);
 
@@ -235,9 +247,9 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
 
     // Init variables
     new (problem->variables[0]) OP::Variable(0, 0);
-    for(OP::Variable* variable = problem->variables.begin(); variable != problem->variables.end(); variable +=1 )
+    for(unsigned int variableIdx = 1; variableIdx < variablesCount - 1; variableIdx += 1)
     {
-        new (variable) OP::Variable(2, variablesCount - 1);
+        new (problem->variables[variableIdx]) OP::Variable(2, variablesCount - 1);
     }
     new (problem->variables[variablesCount - 1]) OP::Variable(1, 1);
 

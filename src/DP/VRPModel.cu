@@ -34,7 +34,7 @@ void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, u
             *cost = state->cost;
             if(not state->selectedValues.isEmpty())
             {
-                *costs += problem->getDistance(*state->selectedValues.back(), value);
+                *cost += problem->getDistance(*state->selectedValues.back(), value);
             }
         }
         else
@@ -52,18 +52,25 @@ void DP::VRPModel::makeState(VRPState const * parentState, unsigned int selected
     childState->cost = childStateCost;
 
     // Remove value from admissible values
-    assert(childState->isAdmissible(selectedValue));
-    thrust::remove(thrust::seq, childState->admissibleValues.begin(), childState->admissibleValues.end(), static_cast<uint8_t>(selectedValue));
-    childState->admissibleValues.popBack();
+    assert(parentState->isAdmissible(selectedValue));
+    childState->removeFromAdmissibles(selectedValue);
 
     // Add value to selected values
-    if (not childState->isSelected(selectedValue))
-    {
-        childState->selectedValues.incrementSize();
-        *childState->selectedValues.back() = static_cast<uint8_t>(selectedValue);
-    }
+    childState->selectedValues.incrementSize();
+    *childState->selectedValues.back() = static_cast<uint8_t>(selectedValue);
 
     ifPickupAddDelivery(selectedValue, childState);
+
+    /*
+    printf("[DEBUG] Selected: ");
+    parentState->selectedValues.print(false);
+    printf(" -%d-> ", selectedValue);
+    childState->selectedValues.print(false);
+    printf(" | Admissibles: ");
+    parentState->admissibleValues.print(false);
+    printf(" -%d-> ", selectedValue);
+    childState->admissibleValues.print(true);
+     */
 }
 
 __host__ __device__
@@ -80,13 +87,14 @@ void DP::VRPModel::mergeState(VRPState const * parentState, unsigned int selecte
     };
 
     ifPickupAddDelivery(selectedValue, childState);
+
 }
 
 __host__ __device__
 void DP::VRPModel::ifPickupAddDelivery(unsigned int selectedValue, VRPState* state) const
 {
-    uint8_t const * const pickup = thrust::lower_bound(thrust::seq, problem->pickups.begin(), problem->pickups.end(), static_cast<uint8_t>(selectedValue));
-    if (pickup != problem->pickups.end())
+    uint8_t const * const pickup = thrust::find(thrust::seq, problem->pickups.begin(), problem->pickups.end(), static_cast<uint8_t>(selectedValue));
+    if (pickup < problem->pickups.end())
     {
         unsigned int const deliveryIdx = problem->pickups.indexOf(pickup);
         uint8_t const delivery = *problem->deliveries[deliveryIdx];

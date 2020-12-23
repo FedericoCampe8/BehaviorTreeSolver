@@ -135,7 +135,7 @@ template<typename T>
 __host__ __device__
 void LightVector<T>::print(bool endLine) const
 {
-   LightArray<T>::print(0, size, endLine);
+    LightArray<T>::print(0, size, endLine);
 }
 
 template<typename T>
