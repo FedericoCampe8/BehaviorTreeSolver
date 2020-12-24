@@ -33,6 +33,7 @@ namespace DD
         private:
             static unsigned int calcFanout(ProblemType const * problem);
             unsigned int calcScratchpadMemSize() const;
+            void printStates(LightVector<StateType> const * states) const;
 
     };
 
@@ -41,7 +42,7 @@ namespace DD
         model(model),
         width(width),
         fanout(calcFanout(model->problem)),
-        cutsetMaxSize(width*fanout),
+        cutsetMaxSize(width * fanout),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 
@@ -52,116 +53,119 @@ namespace DD
         std::byte* freeScratchpadMem = scratchpadMem;
 
         // Current states
-        LightArray<StateType> currentStatesBuffer(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(currentStatesBuffer.end()));
+        LightVector<StateType> currentStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
+        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(currentStates.LightArray<StateType>::end()));
         unsigned int const storageSize = StateType::sizeOfStorage(model->problem);
-        for(unsigned int stateIdx = 0; stateIdx < currentStatesBuffer.getCapacity(); stateIdx += 1)
+        for(unsigned int stateIdx = 0; stateIdx < currentStates.getCapacity(); stateIdx += 1)
         {
-            new (currentStatesBuffer[stateIdx]) StateType(model->problem, freeScratchpadMem);
+            new (currentStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
         freeScratchpadMem = Memory::align(4, freeScratchpadMem);
 
         // Next states
-        LightArray<StateType> nextStatesBuffer(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(nextStatesBuffer.end()));
-        for(unsigned int stateIdx = 0; stateIdx < nextStatesBuffer.getCapacity(); stateIdx += 1)
+        LightVector<StateType> nextStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
+        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(nextStates.LightArray<StateType>::end()));
+        for(unsigned int stateIdx = 0; stateIdx < nextStates.getCapacity(); stateIdx += 1)
         {
-            new (nextStatesBuffer[stateIdx]) StateType(model->problem, freeScratchpadMem);
+            new (nextStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
         freeScratchpadMem = Memory::align(4, freeScratchpadMem);
 
         // Auxiliary information
-        LightArray<uint32_t> costs(fanout * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(costs.end()));
+        LightVector<uint32_t> costs(fanout * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
+        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(costs.LightArray<uint32_t>::end()));
 
-        LightArray<uint8_t> indices(fanout * width, reinterpret_cast<uint8_t*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(indices.end()));
+        assert(width * fanout < UINT16_MAX);
+        LightVector<uint16_t> indices(fanout * width, reinterpret_cast<uint16_t*>(freeScratchpadMem));
+        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(indices.LightArray<uint16_t>::end()));
 
         assert(freeScratchpadMem < scratchpadMem + scratchpadMemSize);
 
         // Root
-        *currentStatesBuffer[0] = *top;
+        currentStates.incrementSize();
+        *currentStates.back() = *top;
 
         // Build
         bool cutsetInitialized = false;
-        unsigned int currentStatesCount = 1;
-        unsigned int nextStatesCount = 0;
         unsigned int const variablesCount = model->problem->variables.getCapacity();
         for(unsigned int variableIdx = top->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
         {
             // Initialize indices
+            indices.resize(fanout * currentStates.getSize());
             thrust::sequence(thrust::seq, indices.begin(), indices.end());
 
             // Initialize costs
+            costs.resize(fanout * currentStates.getSize());
             thrust::fill(costs.begin(), costs.end(), StateType::MaxCost);
 
             // Calculate costs
-            assert(currentStatesCount <= currentStatesBuffer.getCapacity());
-            for (unsigned int currentStateIdx = 0; currentStateIdx < currentStatesCount; currentStateIdx += 1)
+            for (unsigned int currentStateIdx = 0; currentStateIdx < currentStates.getSize(); currentStateIdx += 1)
             {
-                model->calcCosts(variableIdx, currentStatesBuffer[currentStateIdx], costs[fanout * currentStateIdx]);
+                model->calcCosts(variableIdx, currentStates[currentStateIdx], costs[fanout * currentStateIdx]);
             }
 
             // Sort indices by costs
             thrust::sort_by_key(thrust::seq, costs.begin(), costs.end(), indices.begin());
 
-            // Count next states
+            // Discards bad egdes by cost
             uint32_t* const costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), StateType::MaxCost);
-            unsigned int costsCount = 0;
-            if (costsEnd < costs.end())
+            if (costsEnd != costs.end())
             {
-                costsCount = costs.indexOf(costsEnd);
+                unsigned int size = costs.indexOf(costsEnd);
+                costs.resize(size);
+                indices.resize(size);
             }
-            nextStatesCount = min(width, costsCount);
-            if(variableIdx == variablesCount - 1)
+
+            if (variableIdx < variablesCount - 1)
             {
-                nextStatesCount = 1;
+                nextStates.resize(min(width, static_cast<unsigned int>(indices.getSize())));
+            }
+            else
+            {
+                nextStates.resize(1);
             }
 
             // Save cutset
-            if(type == Type::Relaxed and (not cutsetInitialized) and costsCount > width)
+            if(type == Type::Relaxed and (not cutsetInitialized))
             {
-                cutset->resize(costsCount);
-
-                for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < costsCount; cutsetStateIdx += 1)
+                cutset->resize(indices.getSize());
+                for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < indices.getSize(); cutsetStateIdx += 1)
                 {
                     unsigned int const index = *indices[cutsetStateIdx];
                     unsigned int const currentStateIdx = index / fanout;
                     unsigned int const edgeIdx = index % fanout;
                     unsigned int const selectedValue = model->problem->variables[variableIdx]->minValue + edgeIdx;
-                    model->makeState(currentStatesBuffer[currentStateIdx], selectedValue, *costs[cutsetStateIdx], cutset->at(cutsetStateIdx));
+                    model->makeState(currentStates[currentStateIdx], selectedValue, *costs[cutsetStateIdx], cutset->at(cutsetStateIdx));
                 };
 
                 cutsetInitialized = true;
             }
 
             // Add next states
-            assert(nextStatesCount <= indices.getCapacity());
-            for(unsigned int nextStateIdx = 0; nextStateIdx < costsCount; nextStateIdx += 1)
+            for(unsigned int nextStateIdx = 0; nextStateIdx < indices.getSize(); nextStateIdx += 1)
             {
                 unsigned int const index = *indices[nextStateIdx];
                 unsigned int const currentStateIdx = index / fanout;
-                unsigned int const edgeIdx =  index % fanout;
+                unsigned int const edgeIdx = index % fanout;
                 unsigned int const selectedValue = model->problem->variables[variableIdx]->minValue + edgeIdx;
-                if(nextStateIdx < nextStatesCount)
+                if (nextStateIdx < nextStates.getSize())
                 {
-                    model->makeState(currentStatesBuffer[currentStateIdx], selectedValue, *costs[nextStateIdx], nextStatesBuffer[nextStateIdx]);
+                    model->makeState(currentStates[currentStateIdx], selectedValue, *costs[nextStateIdx], nextStates[nextStateIdx]);
                 }
                 else if (type == Type::Relaxed)
                 {
-                    model->mergeState(currentStatesBuffer[currentStateIdx], selectedValue, nextStatesBuffer[nextStatesCount - 1]);
+                    model->mergeState(currentStates[currentStateIdx], selectedValue, nextStates.back());
                 }
             }
 
             //Prepare for the next loop
-            LightArray<StateType>::swap(&currentStatesBuffer, &nextStatesBuffer);
-            currentStatesCount = nextStatesCount;
+            LightVector<StateType>::swap(&currentStates, &nextStates);
         }
 
         //Copy bottom
-        *bottom = *currentStatesBuffer[0];
+        *bottom = *currentStates[0];
     }
 
     template<typename ModelType, typename ProblemType, typename StateType>
@@ -188,7 +192,16 @@ namespace DD
             stateSize * width + // Next states
             stateStorageSize * width  +
             sizeof(uint32_t) * width * fanout + // Costs
-            sizeof(uint8_t) * width * fanout + // Indices
+            sizeof(uint16_t) * width * fanout + // Indices
             4 * 6; // Alignment
+    }
+
+    template<typename ModelType, typename ProblemType, typename StateType>
+    void MDD<ModelType, ProblemType, StateType>::printStates(LightVector<StateType> const * states) const
+    {
+        for(StateType* state = states->begin(); state < states->end(); state += 1)
+        {
+            state->print();
+        }
     }
 }

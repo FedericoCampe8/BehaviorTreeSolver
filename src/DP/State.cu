@@ -30,8 +30,10 @@ __host__ __device__
 void DP::State::operator=(DP::State const & other)
 {
     cost = other.cost;
+
     selectedValues.resize(other.selectedValues.getSize());
     thrust::copy(thrust::seq, other.selectedValues.begin(), other.selectedValues.end(), selectedValues.begin());
+
     admissibleValues.resize(other.admissibleValues.getSize());
     thrust::copy(thrust::seq, other.admissibleValues.begin(), other.admissibleValues.end(), admissibleValues.begin());
 }
@@ -40,7 +42,7 @@ __host__ __device__
 void DP::State::removeFromAdmissibles(unsigned int value)
 {
     uint8_t const * const admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValues.begin(), admissibleValues.end(), static_cast<uint8_t>(value));
-    if (admissibleValuesEnd < admissibleValues.end())
+    if (admissibleValuesEnd != admissibleValues.end())
     {
         admissibleValues.resize(admissibleValues.indexOf(admissibleValuesEnd));
     }
@@ -52,6 +54,15 @@ void DP::State::removeFromAdmissibles(unsigned int value)
 __host__ __device__
 std::size_t DP::State::sizeOfStorage(OP::Problem const * problem)
 {
+
     return LightArray<uint8_t>::sizeOfStorage(problem->variables.getCapacity()) * 2;
+}
+__host__ __device__
+void DP::State::print() const
+{
+    printf("[DEBUG] Selected values: ");
+    selectedValues.print(false);
+    printf(" | Admissible values: ");
+    admissibleValues.print();
 }
 

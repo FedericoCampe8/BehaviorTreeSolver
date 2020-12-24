@@ -271,6 +271,8 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
         }
     }
 
+    printf("[INFO] Problem: %s | Locations: %d | Pickups/Deliveries: %lu\n", problemFileName, variablesCount, problem->pickups.getSize());
+
     return problem;
 }
 

@@ -1,4 +1,3 @@
-#include <thrust/for_each.h>
 #include <thrust/binary_search.h>
 
 #include "VRPModel.cuh"
@@ -26,20 +25,16 @@ __host__ __device__
 void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, uint32_t* costs) const
 {
     OP::Variable const * const variable = problem->variables[variableIdx];
-    for(uint8_t value = variable->minValue; value <= variable->maxValue; value += 1)
+    for(uint8_t* value = state->admissibleValues.begin(); value != state->admissibleValues.end(); value += 1)
     {
-        uint32_t* const cost = &costs[value - variable->minValue];
-        if(state->isAdmissible(value))
+        if (variable->minValue <= *value and *value <= variable->maxValue)
         {
-            *cost = state->cost;
+            unsigned int edgeIdx = *value - variable->minValue;
+            costs[edgeIdx] = state->cost;
             if(not state->selectedValues.isEmpty())
             {
-                *cost += problem->getDistance(*state->selectedValues.back(), value);
+                costs[edgeIdx] += problem->getDistance(*state->selectedValues.back(), *value);
             }
-        }
-        else
-        {
-            *cost = VRPState::MaxCost;
         }
     }
 }
@@ -54,12 +49,15 @@ void DP::VRPModel::makeState(VRPState const * parentState, unsigned int selected
     // Remove value from admissible values
     assert(parentState->isAdmissible(selectedValue));
     childState->removeFromAdmissibles(selectedValue);
+    assert(parentState->isAdmissible(selectedValue));
 
     // Add value to selected values
     childState->selectedValues.incrementSize();
     *childState->selectedValues.back() = static_cast<uint8_t>(selectedValue);
+    assert(parentState->isAdmissible(selectedValue));
 
     ifPickupAddDelivery(selectedValue, childState);
+    assert(parentState->isAdmissible(selectedValue));
 
     /*
     printf("[DEBUG] Selected: ");
@@ -87,7 +85,6 @@ void DP::VRPModel::mergeState(VRPState const * parentState, unsigned int selecte
     };
 
     ifPickupAddDelivery(selectedValue, childState);
-
 }
 
 __host__ __device__

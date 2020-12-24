@@ -135,10 +135,10 @@ void LightArray<T>::print(std::size_t beginIdx, std::size_t endIdx, bool endLine
         printf("[");
         if (beginIdx < endIdx)
         {
-            printf("%d", storage[beginIdx]);
+            printf("%d", static_cast<int>(*at(beginIdx)));
             for (std::size_t index = beginIdx + 1; index < endIdx; index += 1)
             {
-                printf(",%d", storage[index]);
+                printf(",%d", static_cast<int>(*at(index)));
             }
         }
         printf("]");
