@@ -54,32 +54,32 @@ namespace DD
 
         // Current states
         LightVector<StateType> currentStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(currentStates.LightArray<StateType>::end()));
+        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(currentStates.LightArray<StateType>::end()));
         unsigned int const storageSize = StateType::sizeOfStorage(model->problem);
         for(unsigned int stateIdx = 0; stateIdx < currentStates.getCapacity(); stateIdx += 1)
         {
             new (currentStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
-        freeScratchpadMem = Memory::align(4, freeScratchpadMem);
+        freeScratchpadMem = Memory::align(8, freeScratchpadMem);
 
         // Next states
         LightVector<StateType> nextStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(nextStates.LightArray<StateType>::end()));
+        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(nextStates.LightArray<StateType>::end()));
         for(unsigned int stateIdx = 0; stateIdx < nextStates.getCapacity(); stateIdx += 1)
         {
             new (nextStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
-        freeScratchpadMem = Memory::align(4, freeScratchpadMem);
+        freeScratchpadMem = Memory::align(8, freeScratchpadMem);
 
         // Auxiliary information
         LightVector<uint32_t> costs(fanout * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(costs.LightArray<uint32_t>::end()));
+        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(costs.LightArray<uint32_t>::end()));
 
-        assert(width * fanout < UINT16_MAX);
-        LightVector<uint16_t> indices(fanout * width, reinterpret_cast<uint16_t*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(4, reinterpret_cast<std::byte*>(indices.LightArray<uint16_t>::end()));
+        assert(width * fanout < UINT32_MAX);
+        LightVector<uint32_t> indices(fanout * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
+        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(indices.LightArray<uint32_t>::end()));
 
         assert(freeScratchpadMem < scratchpadMem + scratchpadMemSize);
 
@@ -98,7 +98,7 @@ namespace DD
 
             // Initialize costs
             costs.resize(fanout * currentStates.getSize());
-            thrust::fill(costs.begin(), costs.end(), StateType::MaxCost);
+            thrust::fill(thrust::seq, costs.begin(), costs.end(), StateType::MaxCost);
 
             // Calculate costs
             for (unsigned int currentStateIdx = 0; currentStateIdx < currentStates.getSize(); currentStateIdx += 1)
@@ -128,7 +128,7 @@ namespace DD
             }
 
             // Save cutset
-            if(type == Type::Relaxed and (not cutsetInitialized))
+            if(type == Type::Relaxed and (not cutsetInitialized) and indices.getSize() > width)
             {
                 cutset->resize(indices.getSize());
                 for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < indices.getSize(); cutsetStateIdx += 1)
@@ -192,8 +192,8 @@ namespace DD
             stateSize * width + // Next states
             stateStorageSize * width  +
             sizeof(uint32_t) * width * fanout + // Costs
-            sizeof(uint16_t) * width * fanout + // Indices
-            4 * 6; // Alignment
+            sizeof(uint32_t) * width * fanout + // Indices
+            8 * 6; // Alignment
     }
 
     template<typename ModelType, typename ProblemType, typename StateType>

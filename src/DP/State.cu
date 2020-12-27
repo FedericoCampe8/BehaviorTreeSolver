@@ -44,7 +44,11 @@ void DP::State::removeFromAdmissibles(unsigned int value)
     uint8_t const * const admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValues.begin(), admissibleValues.end(), static_cast<uint8_t>(value));
     if (admissibleValuesEnd != admissibleValues.end())
     {
-        admissibleValues.resize(admissibleValues.indexOf(admissibleValuesEnd));
+        uint8_t* tmp = const_cast<uint8_t*>(admissibleValuesEnd);
+        uint8_t* end = admissibleValues.end();
+        unsigned int distance = tmp -  admissibleValues.end();
+        unsigned int size = admissibleValues.indexOf(admissibleValuesEnd);
+        admissibleValues.resize(size);
     }
 
     assert(not isAdmissible(value));

@@ -21,6 +21,7 @@ class LightVector : public LightArray<T>
     public:
         __host__ __device__ LightVector(std::size_t capacity, T* storage);
         __host__ __device__ ~LightVector();
+        __host__ __device__ inline T* at(std::size_t index) const;
         __host__ __device__ inline T* back() const;
         __host__ __device__ inline void clear();
         __host__ __device__ inline T* end() const;
@@ -53,10 +54,18 @@ LightVector<T>::~LightVector()
 
 template<typename T>
 __host__ __device__
+T* LightVector<T>::at(std::size_t index) const
+{
+    assert(index < size);
+    return LightArray<T>::at(index);
+}
+
+template<typename T>
+__host__ __device__
 T* LightVector<T>::back() const
 {
     assert(size > 0);
-    return this->at(size - 1);
+    return at(size - 1);
 }
 
 template<typename T>
@@ -112,10 +121,12 @@ template<typename T>
 __host__ __device__
 std::size_t LightVector<T>::indexOf(T const * t) const
 {
-    assert(this->begin() <= t);
+    T const * const b = this->begin();
+
+    assert(b <= t);
     assert(t < end());
 
-    return thrust::distance(const_cast<T const *>(this->begin()), t);
+    return thrust::distance(b, t);
 }
 
 template<typename T>
@@ -130,10 +141,8 @@ template<typename T>
 __host__ __device__
 T* LightVector<T>::operator[](std::size_t index) const
 {
-    assert(index < size);
-    return LightArray<T>::operator[](index);
+    return at(index);
 }
-
 
 template<typename T>
 __host__ __device__

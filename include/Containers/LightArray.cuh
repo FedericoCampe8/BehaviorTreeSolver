@@ -84,10 +84,12 @@ template<typename T>
 __host__ __device__
 std::size_t LightArray<T>::indexOf(T const * t) const
 {
-    assert(begin() <= t);
+    T const * const b = begin();
+
+    assert(b <= t);
     assert(t < end());
 
-    return thrust::distance(const_cast<T const *>(begin()), t);
+    return thrust::distance(b, t);
 }
 
 template<typename T>

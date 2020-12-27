@@ -9,6 +9,7 @@
 #include <Utils/Memory.cuh>
 #include <Utils/Chrono.cuh>
 #include <External/NlohmannJson.hpp>
+#include <thread>
 
 #include "BB/OffloadQueue.cuh"
 #include "BB/PriorityQueuesManager.cuh"
@@ -55,7 +56,7 @@ template<typename StateType>
 void prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* priorityQueue, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue);
 
 template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadCpu(DD::MDD<ModelType,ProblemType,StateType> const * mdd, OffloadQueue<StateType>* cpuQueue, std::byte* scratchpadMem);
+void doOffloadCpu(DD::MDD<ModelType,ProblemType,StateType> const * mdd, OffloadQueue<StateType>* cpuQueue, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem);
 
 template<typename ModelType, typename ProblemType, typename StateType>
 void doOffloadGpu(DD::MDD<ModelType,ProblemType,StateType> const * mdd, OffloadQueue<StateType>* gpuQueue);
@@ -107,8 +108,10 @@ int main(int argc, char ** argv)
 
     // Context initialization
     std::byte* scratchpadMem = nullptr;
+    Vector<std::thread>* cpuThreads = nullptr;
     if(cpuMaxParallelism > 0)
     {
+        cpuThreads = new Vector<std::thread>(cpuMaxParallelism, MallocType::Std);
         scratchpadMem = safeMalloc(cpuMdd->scratchpadMemSize * cpuMaxParallelism, MallocType::Std);
     }
 
@@ -120,8 +123,11 @@ int main(int argc, char ** argv)
     priorityQueuesManger.registerQueue(&gpuPriorityQueue);
 
     // Offload queues
-    OffloadQueue<StateType> cpuOffloadQueue(cpuMdd, cpuMaxParallelism, MallocType::Std);
-    OffloadQueue<StateType> gpuOffloadQueue(gpuMdd, gpuMaxParallelism, gpuDataMallocType);
+    memorySize = sizeof(OffloadQueue<StateType>);
+    memory = safeMalloc(memorySize, MallocType::Std);
+    OffloadQueue<StateType>* cpuOffloadQueue = new (memory) OffloadQueue<StateType>(cpuMdd, cpuMaxParallelism, MallocType::Std);
+    memory = safeMalloc(memorySize, gpuDataMallocType);
+    OffloadQueue<StateType>* gpuOffloadQueue = new (memory) OffloadQueue<StateType>(gpuMdd, gpuMaxParallelism, gpuDataMallocType);
 
     // Best solution
     unsigned int const stateSize = sizeof(StateType);
@@ -146,23 +152,23 @@ int main(int argc, char ** argv)
     uint64_t searchStartTime = now();
     do
     {
-        prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, &cpuOffloadQueue);
-        prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, &gpuOffloadQueue);
+        prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
+        prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
 
         uint64_t cpuOffloadStartTime = now();
-        doOffloadCpu(cpuMdd, &cpuOffloadQueue, scratchpadMem);
-        visitedStatesCount += cpuOffloadQueue.getSize();
+        doOffloadCpu(cpuMdd, cpuOffloadQueue, cpuThreads, scratchpadMem);
+        visitedStatesCount += cpuOffloadQueue->getSize();
 
         uint64_t gpuOffloadStartTime = now();
-        doOffloadGpu(gpuMdd, &gpuOffloadQueue);
-        visitedStatesCount += gpuOffloadQueue.getSize();
+        doOffloadGpu(gpuMdd, gpuOffloadQueue);
+        visitedStatesCount += gpuOffloadQueue->getSize();
 
         bool foundBetterSolution =
-            checkForBetterSolutions(bestSolution, &cpuOffloadQueue) or
-            checkForBetterSolutions(bestSolution, &gpuOffloadQueue);
+            checkForBetterSolutions(bestSolution, cpuOffloadQueue) or
+            checkForBetterSolutions(bestSolution, gpuOffloadQueue);
 
-        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, &cpuOffloadQueue);
-        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, &gpuOffloadQueue);
+        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, cpuOffloadQueue);
+        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, gpuOffloadQueue);
 
         if(foundBetterSolution)
         {
@@ -177,16 +183,16 @@ int main(int argc, char ** argv)
         else
         {
             unsigned long int cpuSpeed = 0;
-            if (cpuOffloadQueue.getSize() > 0 )
+            if (cpuOffloadQueue->getSize() > 0 )
             {
                 uint64_t cpuOffloadElapsedTime = max(1ul, now() - cpuOffloadStartTime);
-                cpuSpeed = cpuOffloadQueue.getSize() * 1000 / cpuOffloadElapsedTime;
+                cpuSpeed = cpuOffloadQueue->getSize() * 1000 / cpuOffloadElapsedTime;
             }
             unsigned long int gpuSpeed = 0;
-            if (gpuOffloadQueue.getSize() > 0 )
+            if (gpuOffloadQueue->getSize() > 0 )
             {
                 uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
-                gpuSpeed = gpuOffloadQueue.getSize() * 1000 / gpuOffloadElapsedTime;
+                gpuSpeed = gpuOffloadQueue->getSize() * 1000 / gpuOffloadElapsedTime;
             }
             printf("[INFO] CPU Speed: %5lu states/s", cpuSpeed);
             printf(" | GPU Speed: %5lu states/s", gpuSpeed);
@@ -346,19 +352,32 @@ void prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* prio
 }
 
 template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadCpu(MDD<ModelType,ProblemType,StateType> const * mdd, OffloadQueue<StateType>* cpuQueue, std::byte* scratchpadMem)
+void doOffloadCpu(MDD<ModelType,ProblemType,StateType> const * mdd, OffloadQueue<StateType>* cpuQueue, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem)
 {
-    for(unsigned int offloadedStateIdx = 0; offloadedStateIdx < cpuQueue->getSize(); offloadedStateIdx += 1)
+    if(not cpuQueue->isEmpty())
     {
-        doOffload(mdd, cpuQueue->at(offloadedStateIdx), &scratchpadMem[mdd->scratchpadMemSize * offloadedStateIdx]);
+        cpuThreads->clear();
+        for (unsigned int offloadedStateIdx = 0; offloadedStateIdx < cpuQueue->getSize(); offloadedStateIdx += 1)
+        {
+            cpuThreads->incrementSize();
+            new(cpuThreads->back()) std::thread(&doOffload<ModelType, ProblemType, StateType>, mdd, cpuQueue->at(offloadedStateIdx), &scratchpadMem[mdd->scratchpadMemSize * offloadedStateIdx]);
+        }
+
+        for (std::thread* thread = cpuThreads->begin(); thread != cpuThreads->end(); thread += 1)
+        {
+            thread->join();
+        }
     }
 }
 
 template<typename ModelType, typename ProblemType, typename StateType>
 void doOffloadGpu(MDD<ModelType,ProblemType,StateType> const * mdd, OffloadQueue<StateType>* gpuQueue)
 {
-    doOffloadKernel<ModelType,ProblemType,StateType><<<gpuQueue->getSize(), 1, mdd->scratchpadMemSize>>>(mdd, gpuQueue);
-    cudaDeviceSynchronize();
+    if(not gpuQueue->isEmpty())
+    {
+        doOffloadKernel<ModelType, ProblemType, StateType><<<gpuQueue->getSize(), 1, mdd->scratchpadMemSize>>>(mdd, gpuQueue);
+        cudaDeviceSynchronize();
+    }
 }
 
 template<typename ModelType, typename ProblemType, typename StateType>
@@ -386,7 +405,7 @@ void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, Offlo
 
     if(blockIdx.x * blockDim.x + threadIdx.x == 0)
     {
-        BB::OffloadedState<StateType>* offloadedState = gpuQueue->at(blockIdx.x);
+        OffloadedState<StateType>* offloadedState = gpuQueue->at(blockIdx.x);
         doOffload(mdd, offloadedState, scratchpadMem);
     };
 }
