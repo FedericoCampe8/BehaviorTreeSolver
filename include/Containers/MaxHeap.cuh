@@ -60,7 +60,6 @@ void MaxHeap<T>::insertBack()
         T::swap(this->at(p), this->at(i));
         i = p;
         p = parent(i);
-
     }
 }
 

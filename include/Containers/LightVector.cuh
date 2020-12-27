@@ -36,7 +36,7 @@ class LightVector : public LightArray<T>
         __host__ __device__ inline void popBack();
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ inline void resize(std::size_t size);
-        __host__ __device__ static void swap(LightVector<T>* v0, LightVector<T>* v1);
+        __host__ __device__ inline static void swap(LightVector<T>* v0, LightVector<T>* v1);
 };
 
 

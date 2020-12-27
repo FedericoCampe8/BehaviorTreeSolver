@@ -39,22 +39,15 @@ template<typename T>
 __host__ __device__
 void Buffer<T>::clear()
 {
-    invalids.resize(this->capacity);
-    for(unsigned int i = 0; i < this->capacity; i += 1)
-    {
-        *invalids.at(i) = this->capacity - 1 - i;
-    }
+    invalids.resize(invalids.getCapacity());
+    thrust::sequence(thrust::seq, invalids.begin(), invalids.end());
 }
 
 template<typename T>
 __host__ __device__
 void Buffer<T>::erase(T const * t)
 {
-    assert(this->begin() <= t);
-    assert(t < this->end());
-
     unsigned int invalidIdx = this->indexOf(t);
-    //printf("Erasing %d\n", invalidIdx);
     invalids.incrementSize();
     *invalids.back() = invalidIdx;
 }

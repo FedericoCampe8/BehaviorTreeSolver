@@ -24,14 +24,14 @@ class LightArray
         __host__ __device__ ~LightArray();
         __host__ __device__ inline T* at(std::size_t index) const;
         __host__ __device__ inline T* begin() const;
-        __host__ __device__ virtual inline T* end() const;
+        __host__ __device__ inline T* end() const;
         __host__ __device__ inline std::size_t getCapacity() const;
-        __host__ __device__ virtual inline std::size_t indexOf(T const * t) const;
+        __host__ __device__ inline std::size_t indexOf(T const * t) const;
         __host__ __device__ void operator=(LightArray<T> const & other);
-        __host__ __device__ virtual inline T* operator[](std::size_t index) const;
-        __host__ __device__ virtual void print(bool endLine = true) const;
-        __host__ __device__ static std::size_t sizeOfStorage(std::size_t capacity);
-        __host__ __device__ static void swap(LightArray<T>* a0, LightArray<T>* a1);
+        __host__ __device__ inline T* operator[](std::size_t index) const;
+        __host__ __device__ void print(bool endLine = true) const;
+        __host__ __device__ inline static std::size_t sizeOfStorage(std::size_t capacity);
+        __host__ __device__ inline static void swap(LightArray<T>* a0, LightArray<T>* a1);
     protected:
         __host__ __device__ void print(std::size_t beginIdx, std::size_t endIdx, bool endLine) const;
 
