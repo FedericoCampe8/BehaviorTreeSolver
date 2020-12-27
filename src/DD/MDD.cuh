@@ -128,7 +128,7 @@ namespace DD
             }
 
             // Save cutset
-            if(type == Type::Relaxed and (not cutsetInitialized) and indices.getSize() > width)
+            if(type == Type::Relaxed and (not cutsetInitialized))
             {
                 cutset->resize(indices.getSize());
                 for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < indices.getSize(); cutsetStateIdx += 1)
