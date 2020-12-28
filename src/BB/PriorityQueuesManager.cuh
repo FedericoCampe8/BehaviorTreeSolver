@@ -1,6 +1,11 @@
 #pragma once
 
+#include <bitset>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <unordered_map>
+#include <type_traits>
 #include <thrust/distance.h>
 #include <thrust/equal.h>
 #include <Containers/Buffer.cuh>
@@ -18,7 +23,7 @@ namespace BB
         private:
             Vector<Array<QueuedState<StateType>*>> bufferIdxToQueue;
             Vector<MaxHeap<QueuedState<StateType>>*> queues;
-            Array<std::unordered_map<unsigned int, unsigned int>> bestsCosts;
+            Array<std::unordered_map<std::size_t, unsigned int>> bestsCosts;
 
         // Functions
         public:
@@ -29,12 +34,10 @@ namespace BB
             void enqueue(StateMetadata<StateType> const * stateMetadata);
             unsigned int getQueuesSize();
             void reduceQueuesByClass();
-            void reduceQueuesByCurrentBest(StateType const * bestSolution);
-            void reduceQueuesByCostProb(StateType const * bestSolution);
             void registerQueue(MaxHeap<QueuedState<StateType>>* queue);
 
         private:
-            static unsigned int hash(StateType const * state);
+            static std::size_t hash(StateType const * state);
     };
 
     template<typename StateType>
@@ -43,7 +46,7 @@ namespace BB
         Buffer<StateType>(queuesSize, Memory::MallocType::Std),
         bufferIdxToQueue(queuesCount, Memory::MallocType::Std),
         queues(queuesCount, Memory::MallocType::Std),
-        bestsCosts(problem->variables.getCapacity() + 1, Memory::MallocType::Std)
+        bestsCosts(problem->variables.getCapacity(), Memory::MallocType::Std)
     {
         unsigned int const storageSize =  StateType::sizeOfStorage(problem);
         std::byte* const storages = StateType::mallocStorages(problem, this->capacity, Memory::MallocType::Std);
@@ -52,12 +55,10 @@ namespace BB
             new (this->at(stateIdx)) StateType(problem, &storages[storageSize * stateIdx]);
         }
 
-        for (std::unordered_map<unsigned int, unsigned int>* lvlBestsCosts = bestsCosts.begin(); lvlBestsCosts != bestsCosts.end(); lvlBestsCosts += 1)
+        for (std::unordered_map<std::size_t, unsigned int>* lvlBestsCosts = bestsCosts.begin(); lvlBestsCosts != bestsCosts.end(); lvlBestsCosts += 1)
         {
-            new (lvlBestsCosts) std::unordered_map<unsigned int, unsigned int>();
+            new (lvlBestsCosts) std::unordered_map<std::size_t, unsigned int>();
         }
-
-
     }
 
     template<typename StateType>
@@ -107,11 +108,10 @@ namespace BB
         assert(not queues.isEmpty());
         MaxHeap<QueuedState<StateType>>* queue = *queues.front();
 
-
         for(QueuedState<StateType>* queuedState = queue->begin(); queuedState != queue->end(); queuedState += 1)
         {
             unsigned int lvl = queuedState->state->selectedValues.getSize();
-            unsigned int key = hash(queuedState->state);
+            std::size_t key = hash(queuedState->state);
             unsigned int stateCost = queuedState->state->cost;
             if (bestsCosts.at(lvl)->count(key) == 0)
             {
@@ -131,84 +131,12 @@ namespace BB
         for (QueuedState<StateType>* queuedState = queue->begin(); queuedState != queue->end(); queuedState += 1)
         {
             unsigned int lvl = queuedState->state->selectedValues.getSize();
-            unsigned int key = hash(queuedState->state);
+            std::size_t key = hash(queuedState->state);
             unsigned int stateCost = queuedState->state->cost;
-            //if (bestsCosts.at(lvl)->at(key) < stateCost)
             if (bestsCosts.at(lvl)->at(key) < stateCost)
             {
                 toRemove.incrementSize();
                 *toRemove.back() = const_cast<StateType*>(queuedState->state);
-            }
-        }
-
-        for (StateType** stateToRemove = toRemove.begin(); stateToRemove != toRemove.end(); stateToRemove += 1)
-        {
-            this->dequeue(*stateToRemove);
-        }
-    }
-
-
-    template<typename StateType>
-    void PriorityQueuesManager<StateType>::reduceQueuesByCurrentBest(StateType const * bestSolution)
-    {
-        assert(not queues.isEmpty());
-        MaxHeap<QueuedState<StateType>>* queue = *queues.front();
-
-        Vector<StateType*> toRemove(this->getSize(), Memory::MallocType::Std);
-
-        double similarity = 0.5;
-        while (toRemove.getSize() < this->getSize() * 9 / 10)
-        {
-            similarity -= 0.05;
-            toRemove.clear();
-
-            for (QueuedState<StateType>* queuedState = queue->begin(); queuedState != queue->end(); queuedState += 1)
-            {
-                double stateSimilarity = 0;
-                for (unsigned int i = 0; i < queuedState->state->selectedValues.getSize(); i += 1)
-                {
-                    if(*queuedState->state->selectedValues.at(i) == *bestSolution->selectedValues.at(i))
-                    {
-                        stateSimilarity += 1;
-                    }
-                }
-
-                if (stateSimilarity / static_cast<double>(queuedState->state->selectedValues.getSize()) >= similarity)
-                {
-                    toRemove.incrementSize();
-                    *toRemove.back() = const_cast<StateType*>(queuedState->state);
-                }
-            }
-        }
-
-        for (StateType** stateToRemove = toRemove.begin(); stateToRemove != toRemove.end(); stateToRemove += 1)
-        {
-            this->dequeue(*stateToRemove);
-        }
-    }
-
-    template<typename StateType>
-    void PriorityQueuesManager<StateType>::reduceQueuesByCostProb(StateType const * bestSolution)
-    {
-        assert(not queues.isEmpty());
-        MaxHeap<QueuedState<StateType>>* queue = *queues.front();
-
-        Vector<StateType*> toRemove(this->getSize(), Memory::MallocType::Std);
-
-        double alpha = 1.00;
-        while (toRemove.getSize() < this->getSize() / 2)
-        {
-            toRemove.clear();
-            alpha += 0.01;
-            for (QueuedState<StateType>* queuedState = queue->begin(); queuedState != queue->end(); queuedState += 1)
-            {
-                double avgCostQueuedState = static_cast<double>(queuedState->state->cost) / static_cast<double>(queuedState->state->selectedValues.getSize());
-                double finalCostQueuedState = avgCostQueuedState * static_cast<double>(bestSolution->selectedValues.getSize());
-                if (finalCostQueuedState > alpha * static_cast<double>(bestSolution->cost))
-                {
-                    toRemove.incrementSize();
-                    *toRemove.back() = const_cast<StateType*>(queuedState->state);
-                }
             }
         }
 
@@ -229,10 +157,20 @@ namespace BB
     }
 
     template<typename StateType>
-    unsigned int PriorityQueuesManager<StateType>::hash(StateType const * state)
+    std::size_t PriorityQueuesManager<StateType>::hash(StateType const * state)
     {
-        unsigned int hash = thrust::reduce(thrust::seq, state->selectedValues.begin(), state->selectedValues.end(), 0);
+        static_assert(std::is_same_v<decltype(state->selectedValues), LightVector<uint8_t>>);
+
+        std::hash<std::bitset<UINT8_MAX>> bitsetHashFn;
+
+        std::bitset<UINT8_MAX> bitset;
+        for(unsigned int i = 0; i < state->selectedValues.getSize(); i += 1)
+        {
+            bitset.set(*state->selectedValues.at(i));
+        }
+        size_t hash = bitsetHashFn(bitset);
         hash *= *state->selectedValues.back();
+
         return hash;
     }
 }

@@ -34,31 +34,18 @@ void configGPU();
 OP::VRProblem* parseGrubHubInstance(char const * problemFileName, Memory::MallocType mallocType);
 
 // Comparators
-
-template<typename QueuedStateType>
-bool hasAvgSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
-
-template<typename QueuedStateType>
-bool hasBiggerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
-
 template<typename QueuedStateType>
 bool hasSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
-
-template<typename QueuedStateType>
-bool hasMoreSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
-
-template<typename QueuedStateType>
-bool hasLessSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
 
 // Queues
 template<typename StateType>
 bool boundsChk(unsigned int bestCost, StateMetadata<StateType> const * stateMetadata);
 
 template<typename StateType>
-void updatePriorityQueues(StateType* bestSolution, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue);
+void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue);
 
 template<typename StateType>
-void reducePriorityQueues(PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType> const * cpuOffloadQueue, OffloadQueue<StateType> const * gpuOffloadQueue);
+void reducePriorityQueues(PriorityQueuesManager<StateType>* priorityQueuesManager);
 
 // Search
 template<typename StateType>
@@ -188,8 +175,13 @@ int main(int argc, char ** argv)
             checkForBetterSolutions(bestSolution, cpuOffloadQueue) or
             checkForBetterSolutions(bestSolution, gpuOffloadQueue);
 
-        updatePriorityQueues(bestSolution, &priorityQueuesManger, cpuOffloadQueue);
-        updatePriorityQueues(bestSolution, &priorityQueuesManger, gpuOffloadQueue);
+        if(iterationsCount % 25 == 0)
+        {
+            reducePriorityQueues(&priorityQueuesManger);
+        }
+
+        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, cpuOffloadQueue);
+        updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, gpuOffloadQueue);
 
         if(foundBetterSolution)
         {
@@ -306,69 +298,21 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
 }
 
 template<typename QueuedStateType>
-bool hasAvgSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
-{
-    return queuedState0.state->cost / queuedState0.state->selectedValues.getSize() < queuedState1.state->cost / queuedState0.state->selectedValues.getSize();
-}
-
-template<typename QueuedStateType>
-bool hasBiggerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
-{
-    return queuedState0.state->cost > queuedState1.state->cost;
-}
-
-template<typename QueuedStateType>
 bool hasSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
 {
     return queuedState0.state->cost < queuedState1.state->cost;
 }
 
-template<typename QueuedStateType>
-bool hasMoreSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
-{
-    unsigned int selectedValues0 = queuedState0.state->selectedValues.getSize();
-    unsigned int selectedValues1 = queuedState1.state->selectedValues.getSize();
-
-    if (selectedValues0 != selectedValues1)
-    {
-        return queuedState0.state->selectedValues.getSize() > queuedState0.state->selectedValues.getSize();
-    }
-    else
-    {
-        return hasSmallerCost(queuedState0, queuedState1);
-    }
-}
-
-template<typename QueuedStateType>
-bool hasLessSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
-{
-    unsigned int selectedValues0 = queuedState0.state->selectedValues.getSize();
-    unsigned int selectedValues1 = queuedState1.state->selectedValues.getSize();
-
-    if (selectedValues0 != selectedValues1)
-    {
-        return queuedState0.state->selectedValues.getSize() < queuedState0.state->selectedValues.getSize();
-    }
-    else
-    {
-        return hasSmallerCost(queuedState0, queuedState1);
-    }
-}
-
 template<typename StateType>
-void updatePriorityQueues(StateType* bestSolution, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue)
+void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue)
 {
     for (OffloadedState<StateType>* offloadedState = offloadQueue->begin(); offloadedState !=  offloadQueue->end(); offloadedState += 1)
     {
         for (StateType* cutsetState = offloadedState->cutset.begin(); cutsetState != offloadedState->cutset.end(); cutsetState += 1)
         {
             StateMetadata<StateType> const cutsetStateMetadata(offloadedState->lowerbound, offloadedState->upperbound, cutsetState);
-            if(boundsChk(bestSolution->cost, &cutsetStateMetadata))
+            if(boundsChk(bestCost, &cutsetStateMetadata))
             {
-                if (priorityQueuesManager->isFull())
-                {
-                    reducePriorityQueues(priorityQueuesManager, bestSolution);
-                }
                 priorityQueuesManager->enqueue(&cutsetStateMetadata);
             }
         };
@@ -376,19 +320,16 @@ void updatePriorityQueues(StateType* bestSolution, PriorityQueuesManager<StateTy
 }
 
 template<typename StateType>
-void reducePriorityQueues(PriorityQueuesManager<StateType>* priorityQueuesManager, StateType const * bestSolution)
+void reducePriorityQueues(PriorityQueuesManager<StateType>* priorityQueuesManager)
 {
     clearLine();
     printf("[INFO] Queue reduced from %lu ", priorityQueuesManager->getSize());
     uint64_t reductionStartTime = now();
-    priorityQueuesManager->reduceQueuesByCostProb(bestSolution);
+    priorityQueuesManager->reduceQueuesByClass();
     printf("to %lu states in ", priorityQueuesManager->getSize());
     printElapsedTime(now() - reductionStartTime);
     printf("\n");
 }
-
-
-
 
 template<typename StateType>
 bool boundsChk(unsigned int bestCost, StateMetadata<StateType> const * stateMetadata)
@@ -512,6 +453,7 @@ void printElapsedTime(uint64_t elapsedTimeMs)
 
     printf("%lums (%02uh%02um%02us)", elapsedTimeMs, h, m, s);
 }
+
 void clearLine()
 {
     // ANSI clear line escape code
