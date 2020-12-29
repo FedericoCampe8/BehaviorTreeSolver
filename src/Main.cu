@@ -37,15 +37,15 @@ OP::VRProblem* parseGrubHubInstance(char const * problemFileName, Memory::Malloc
 template<typename QueuedStateType>
 bool hasSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
 
+template<typename QueuedStateType>
+bool hasMoreSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
+
 // Queues
 template<typename StateType>
 bool boundsChk(unsigned int bestCost, StateMetadata<StateType> const * stateMetadata);
 
 template<typename StateType>
 void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue);
-
-template<typename StateType>
-void reducePriorityQueues(PriorityQueuesManager<StateType>* priorityQueuesManager);
 
 // Search
 template<typename StateType>
@@ -120,12 +120,12 @@ int main(int argc, char ** argv)
     std::byte* scratchpadMem = safeMalloc(cpuMdd->scratchpadMemSize * cpuMaxParallelism, MallocType::Std);
 
     // Queues
-    PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 2);
-    MaxHeap<QueuedState<StateType>> cpuPriorityQueue(hasSmallerCost<QueuedState<StateType>>, queueMaxSize, MallocType::Std);
-    priorityQueuesManger.registerQueue(&cpuPriorityQueue);
-    MaxHeap<QueuedState<StateType>> gpuPriorityQueue(hasSmallerCost<QueuedState<StateType>>, queueMaxSize, MallocType::Std);
-    priorityQueuesManger.registerQueue(&gpuPriorityQueue);
-
+    enum QueueStatus {Increasing, Decreasing} queueStatus;
+    PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 3);
+    MaxHeap<QueuedState<StateType>> dfsPriorityQueue(hasMoreSelections<QueuedState<StateType>>, queueMaxSize, MallocType::Std);
+    priorityQueuesManger.registerQueue(&dfsPriorityQueue);
+    MaxHeap<QueuedState<StateType>> smallerCostPriorityQueue(hasSmallerCost<QueuedState<StateType>>, queueMaxSize, MallocType::Std);
+    priorityQueuesManger.registerQueue(&smallerCostPriorityQueue);
 
     // Offload queues
     memorySize = sizeof(OffloadQueue<StateType>);
@@ -153,11 +153,46 @@ int main(int argc, char ** argv)
     // Search
     unsigned int visitedStatesCount = 0;
     unsigned int iterationsCount = 0;
+    unsigned int maxQueuesIncrement = cpuMaxParallelism * cpuOffloadQueue->cutsetMaxSize + gpuMaxParallelism * gpuOffloadQueue->cutsetMaxSize;
+    queueStatus = QueueStatus::Increasing;
+    printf("[INFO] Queue capacity: %lu | Queue max increment: %d\n", priorityQueuesManger.getCapacity(), maxQueuesIncrement);
     uint64_t searchStartTime = now();
     do
     {
-        prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
-        prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
+        if (queueStatus == QueueStatus::Increasing and (priorityQueuesManger.getSize() + (5 * maxQueuesIncrement) >= priorityQueuesManger.getCapacity()))
+        {
+            clearLine();
+            queueStatus = QueueStatus::Decreasing;
+            printf("[INFO] Switching to DFS-like search");
+            printf(" | Time: ");
+            printElapsedTime(now() - searchStartTime);
+            printf(" | Iterations: %u", iterationsCount);
+            printf(" | State to visit: %lu", priorityQueuesManger.getSize());
+            printf(" | Visited states: %u\n", visitedStatesCount);
+
+        }
+        if(queueStatus == QueueStatus::Decreasing and (priorityQueuesManger.getSize() <= priorityQueuesManger.getCapacity() / 100))
+        {
+            clearLine();
+            queueStatus = QueueStatus::Increasing;
+            printf("[INFO] Switching to Cost-based search");
+            printf(" | Time: ");
+            printElapsedTime(now() - searchStartTime);
+            printf(" | Iterations: %u", iterationsCount);
+            printf(" | State to visit: %lu", priorityQueuesManger.getSize());
+            printf(" | Visited states: %u\n", visitedStatesCount);
+        }
+
+        if(queueStatus == QueueStatus::Increasing)
+        {
+            prepareOffload<StateType>(bestSolution->cost, &smallerCostPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
+            prepareOffload<StateType>(bestSolution->cost, &smallerCostPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
+        }
+        else
+        {
+            prepareOffload<StateType>(bestSolution->cost, &dfsPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
+            prepareOffload<StateType>(bestSolution->cost, &dfsPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
+        }
 
         uint64_t cpuOffloadStartTime = now();
         doOffloadCpuAsync(cpuMdd, cpuOffloadQueue, cpuThreads, scratchpadMem);
@@ -177,7 +212,7 @@ int main(int argc, char ** argv)
 
         if(iterationsCount % 25 == 0)
         {
-            reducePriorityQueues(&priorityQueuesManger);
+            //reducePriorityQueues(&priorityQueuesManger);
         }
 
         updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, cpuOffloadQueue);
@@ -209,18 +244,18 @@ int main(int argc, char ** argv)
                 uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
                 gpuSpeed = gpuOffloadQueue->getSize() * 1000 / gpuOffloadElapsedTime;
             }
-            printf("[INFO] CPU Speed: %6lu states/s", cpuSpeed);
-            printf(" | GPU Speed: %6lu states/s", gpuSpeed);
+            printf("[INFO] CPU Speed: %5lu states/s", cpuSpeed);
+            printf(" | GPU Speed: %5lu states/s", gpuSpeed);
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
-            printf(" | State to visit: %u", priorityQueuesManger.getQueuesSize());
+            printf(" | State to visit: %lu", priorityQueuesManger.getSize());
             printf(" | Visited states: %u\r", visitedStatesCount);
         }
 
         iterationsCount += 1;
     }
-    while(not (priorityQueuesManger.areQueuesEmpty() or (now() - searchStartTime) > timeoutSeconds * 1000));
+    while(not (priorityQueuesManger.isEmpty() or (now() - searchStartTime) > timeoutSeconds * 1000));
 
     printf("[RESULT] Solution: ");
     bestSolution->selectedValues.print(false);
@@ -303,6 +338,14 @@ bool hasSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const 
     return queuedState0.state->cost < queuedState1.state->cost;
 }
 
+
+template<typename QueuedStateType>
+bool hasMoreSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
+{
+    return queuedState0.state->selectedValues.getSize() > queuedState1.state->selectedValues.getSize();
+}
+
+
 template<typename StateType>
 void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue)
 {
@@ -317,18 +360,6 @@ void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType
             }
         };
     };
-}
-
-template<typename StateType>
-void reducePriorityQueues(PriorityQueuesManager<StateType>* priorityQueuesManager)
-{
-    clearLine();
-    printf("[INFO] Queue reduced from %lu ", priorityQueuesManager->getSize());
-    uint64_t reductionStartTime = now();
-    priorityQueuesManager->reduceQueuesByClass();
-    printf("to %lu states in ", priorityQueuesManager->getSize());
-    printElapsedTime(now() - reductionStartTime);
-    printf("\n");
 }
 
 template<typename StateType>

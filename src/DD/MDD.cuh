@@ -14,7 +14,7 @@ namespace DD
     class MDD
     {
 
-        //
+        // Aliases, Enums, ...
         public:
             enum Type {Relaxed, Restricted};
 
@@ -42,7 +42,7 @@ namespace DD
         model(model),
         width(width),
         fanout(calcFanout(model->problem)),
-        cutsetMaxSize(width * fanout),
+        cutsetMaxSize(fanout),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 
