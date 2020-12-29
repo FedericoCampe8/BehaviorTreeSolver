@@ -34,11 +34,11 @@ void configGPU();
 OP::VRProblem* parseGrubHubInstance(char const * problemFileName, Memory::MallocType mallocType);
 
 // Comparators
-template<typename QueuedStateType>
-bool hasSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
+template<typename StateType>
+bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
 
-template<typename QueuedStateType>
-bool hasMoreSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1);
+template<typename StateType>
+bool hasMoreSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
 
 // Queues
 template<typename StateType>
@@ -121,10 +121,10 @@ int main(int argc, char ** argv)
 
     // Queues
     enum QueueStatus {Increasing, Decreasing} queueStatus;
-    PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 3);
-    MaxHeap<QueuedState<StateType>> dfsPriorityQueue(hasMoreSelections<QueuedState<StateType>>, queueMaxSize, MallocType::Std);
+    PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 2);
+    MaxHeap<QueuedState<StateType>> dfsPriorityQueue(hasMoreSelections<StateType>, queueMaxSize, MallocType::Std);
     priorityQueuesManger.registerQueue(&dfsPriorityQueue);
-    MaxHeap<QueuedState<StateType>> smallerCostPriorityQueue(hasSmallerCost<QueuedState<StateType>>, queueMaxSize, MallocType::Std);
+    MaxHeap<QueuedState<StateType>> smallerCostPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
     priorityQueuesManger.registerQueue(&smallerCostPriorityQueue);
 
     // Offload queues
@@ -155,7 +155,7 @@ int main(int argc, char ** argv)
     unsigned int iterationsCount = 0;
     unsigned int maxQueuesIncrement = cpuMaxParallelism * cpuOffloadQueue->cutsetMaxSize + gpuMaxParallelism * gpuOffloadQueue->cutsetMaxSize;
     queueStatus = QueueStatus::Increasing;
-    printf("[INFO] Queue capacity: %lu | Queue max increment: %d\n", priorityQueuesManger.getCapacity(), maxQueuesIncrement);
+    //printf("[DEBUG] Queue capacity: %lu | Queue max increment: %d\n", priorityQueuesManger.getCapacity(), maxQueuesIncrement);
     uint64_t searchStartTime = now();
     do
     {
@@ -167,7 +167,7 @@ int main(int argc, char ** argv)
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
-            printf(" | State to visit: %lu", priorityQueuesManger.getSize());
+            printf(" | States to visit: %lu", priorityQueuesManger.getSize());
             printf(" | Visited states: %u\n", visitedStatesCount);
 
         }
@@ -179,7 +179,7 @@ int main(int argc, char ** argv)
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
-            printf(" | State to visit: %lu", priorityQueuesManger.getSize());
+            printf(" | States to visit: %lu", priorityQueuesManger.getSize());
             printf(" | Visited states: %u\n", visitedStatesCount);
         }
 
@@ -187,6 +187,7 @@ int main(int argc, char ** argv)
         {
             prepareOffload<StateType>(bestSolution->cost, &smallerCostPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
             prepareOffload<StateType>(bestSolution->cost, &smallerCostPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
+
         }
         else
         {
@@ -327,20 +328,19 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
         }
     }
 
-    printf("[INFO] Problem: %s | Locations: %d | Pickups/Deliveries: %lu\n", problemFileName, variablesCount, problem->pickups.getSize());
+    //printf("[DEBUG] Problem: %s | Locations: %d | Pickups/Deliveries: %lu\n", problemFileName, variablesCount, problem->pickups.getSize());
 
     return problem;
 }
 
-template<typename QueuedStateType>
-bool hasSmallerCost(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
+template<typename StateType>
+bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
 {
     return queuedState0.state->cost < queuedState1.state->cost;
 }
 
-
-template<typename QueuedStateType>
-bool hasMoreSelections(QueuedStateType const & queuedState0, QueuedStateType const & queuedState1)
+template<typename StateType>
+bool hasMoreSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
 {
     return queuedState0.state->selectedValues.getSize() > queuedState1.state->selectedValues.getSize();
 }
@@ -356,6 +356,7 @@ void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType
             StateMetadata<StateType> const cutsetStateMetadata(offloadedState->lowerbound, offloadedState->upperbound, cutsetState);
             if(boundsChk(bestCost, &cutsetStateMetadata))
             {
+
                 priorityQueuesManager->enqueue(&cutsetStateMetadata);
             }
         };
