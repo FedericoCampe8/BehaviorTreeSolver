@@ -10,8 +10,14 @@ unsigned int OP::Variable::cardinality() const
     return maxValue - minValue + 1u;
 }
 
-__host__ __device__
-void OP::Variable::print()
+void OP::Variable::fixTo(unsigned int value)
 {
-    printf("(%d,%d)", minValue, maxValue);
+    minValue = value;
+    maxValue = value;
 }
+
+bool OP::Variable::isFixed() const
+{
+    return minValue == maxValue;
+}
+

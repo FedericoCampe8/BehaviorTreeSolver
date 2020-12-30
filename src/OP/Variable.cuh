@@ -14,7 +14,8 @@ namespace OP
         // Functions
         public:
             Variable(unsigned int minValue, unsigned int maxValue);
+            void fixTo(unsigned int value);
+            bool isFixed() const;
             unsigned int cardinality() const;
-            __host__ __device__ void print();
     };
 }

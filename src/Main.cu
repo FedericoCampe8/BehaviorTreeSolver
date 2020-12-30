@@ -40,6 +40,12 @@ bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<Sta
 template<typename StateType>
 bool hasMoreSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
 
+template<typename StateType>
+bool hasLessSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
+
+template<typename StateType>
+bool hasMoreSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
+
 // Queues
 template<typename StateType>
 bool boundsChk(unsigned int bestCost, StateMetadata<StateType> const * stateMetadata);
@@ -86,6 +92,7 @@ int main(int argc, char ** argv)
     unsigned int const cpuMaxParallelism = std::stoi(argv[5]);
     unsigned int const gpuMaxWidth = std::stoi(argv[6]);
     unsigned int const gpuMaxParallelism = std::stoi(argv[7]);
+    //unsigned int const fixPercentage = std::stoi(argv[8]);
 
     // Context initialization
     MallocType gpuMallocTime = MallocType::Std;
@@ -96,8 +103,9 @@ int main(int argc, char ** argv)
     };
 
     // Problems
-    ProblemType const * const cpuProblem = parseGrubHubInstance(problemFileName, MallocType::Std);
-    ProblemType const * const gpuProblem = parseGrubHubInstance(problemFileName, gpuMallocTime);
+    ProblemType* const cpuProblem = parseGrubHubInstance(problemFileName, MallocType::Std);
+    ProblemType* const gpuProblem = parseGrubHubInstance(problemFileName, gpuMallocTime);
+
 
     // Models
     unsigned int memorySize = sizeof(ModelType);
@@ -115,6 +123,25 @@ int main(int argc, char ** argv)
     memory = safeMalloc(memorySize, gpuMallocTime);
     MDD<ModelType,ProblemType,StateType>* const gpuMdd = new (memory) MDD<ModelType,ProblemType,StateType>(gpuModel, gpuMaxWidth);
 
+    unsigned int optSolution15_0[32] = {0, 16, 4, 17, 30, 18, 19, 14, 31, 15, 28, 24, 12, 10, 29, 13, 2, 26, 3, 25, 6, 27, 8, 22, 23, 5, 20, 9, 21, 7, 11, 1};
+    cpuProblem->pickups.print();
+    cpuProblem->deliveries.print();
+
+    /*
+    srand(time(NULL));
+    unsigned int fixedvariables = 0;
+    for(unsigned int i = 0; i < 32; i +=1)
+    {
+        if (rand() % 100 < fixPercentage)
+        {
+           fixedvariables += 1;
+            cpuProblem->fixVariableWithValue(i, optSolution15_0[i]);
+           gpuProblem->fixVariableWithValue(i, optSolution15_0[i]);
+        }
+    }
+    printf("[DEBUG] fixed %d variables\n", fixedvariables);
+     */
+
     // Context initialization
     Vector<std::thread>* cpuThreads = new Vector<std::thread>(cpuMaxParallelism, MallocType::Std);
     std::byte* scratchpadMem = safeMalloc(cpuMdd->scratchpadMemSize * cpuMaxParallelism, MallocType::Std);
@@ -122,10 +149,15 @@ int main(int argc, char ** argv)
     // Queues
     enum QueueStatus {Increasing, Decreasing} queueStatus;
     PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 2);
+
     MaxHeap<QueuedState<StateType>> dfsPriorityQueue(hasMoreSelections<StateType>, queueMaxSize, MallocType::Std);
     priorityQueuesManger.registerQueue(&dfsPriorityQueue);
-    MaxHeap<QueuedState<StateType>> smallerCostPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
-    priorityQueuesManger.registerQueue(&smallerCostPriorityQueue);
+
+    MaxHeap<QueuedState<StateType>> cpuPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
+    priorityQueuesManger.registerQueue(&cpuPriorityQueue);
+
+    MaxHeap<QueuedState<StateType>> gpuPriorityQueue(hasMoreSelectionsAndSmallerCost<StateType>, queueMaxSize, MallocType::Std);
+    priorityQueuesManger.registerQueue(&gpuPriorityQueue);
 
     // Offload queues
     memorySize = sizeof(OffloadQueue<StateType>);
@@ -155,10 +187,11 @@ int main(int argc, char ** argv)
     unsigned int iterationsCount = 0;
     unsigned int maxQueuesIncrement = cpuMaxParallelism * cpuOffloadQueue->cutsetMaxSize + gpuMaxParallelism * gpuOffloadQueue->cutsetMaxSize;
     queueStatus = QueueStatus::Increasing;
-    //printf("[DEBUG] Queue capacity: %lu | Queue max increment: %d\n", priorityQueuesManger.getCapacity(), maxQueuesIncrement);
+    printf("[DEBUG] Queue capacity: %lu | Queue max increment: %d\n", priorityQueuesManger.getCapacity(), maxQueuesIncrement);
     uint64_t searchStartTime = now();
     do
     {
+
         if (queueStatus == QueueStatus::Increasing and (priorityQueuesManger.getSize() + (5 * maxQueuesIncrement) >= priorityQueuesManger.getCapacity()))
         {
             clearLine();
@@ -185,8 +218,8 @@ int main(int argc, char ** argv)
 
         if(queueStatus == QueueStatus::Increasing)
         {
-            prepareOffload<StateType>(bestSolution->cost, &smallerCostPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
-            prepareOffload<StateType>(bestSolution->cost, &smallerCostPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
+            prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
+            prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
 
         }
         else
@@ -195,14 +228,14 @@ int main(int argc, char ** argv)
             prepareOffload<StateType>(bestSolution->cost, &dfsPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
         }
 
-        uint64_t cpuOffloadStartTime = now();
-        doOffloadCpuAsync(cpuMdd, cpuOffloadQueue, cpuThreads, scratchpadMem);
-
         uint64_t gpuOffloadStartTime = now();
         doOffloadGpuAsync(gpuMdd, gpuOffloadQueue);
 
-        waitOffloadCpu(cpuThreads);
+        uint64_t cpuOffloadStartTime = now();
+        doOffloadCpuAsync(cpuMdd, cpuOffloadQueue, cpuThreads, scratchpadMem);
+
         waitOffloadGpu();
+        waitOffloadCpu(cpuThreads);
 
         visitedStatesCount += cpuOffloadQueue->getSize();
         visitedStatesCount += gpuOffloadQueue->getSize();
@@ -232,7 +265,7 @@ int main(int argc, char ** argv)
         }
         else
         {
-            clearLine();
+            //clearLine();
             unsigned long int cpuSpeed = 0;
             if (cpuOffloadQueue->getSize() > 0 )
             {
@@ -245,8 +278,8 @@ int main(int argc, char ** argv)
                 uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
                 gpuSpeed = gpuOffloadQueue->getSize() * 1000 / gpuOffloadElapsedTime;
             }
-            printf("[INFO] CPU Speed: %5lu states/s", cpuSpeed);
-            printf(" | GPU Speed: %5lu states/s", gpuSpeed);
+            printf("[INFO] CPU Speed: %2lu states/s", cpuSpeed);
+            printf(" | GPU Speed: %4lu states/s", gpuSpeed);
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
@@ -336,14 +369,53 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
 template<typename StateType>
 bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
 {
-    return queuedState0.state->cost < queuedState1.state->cost;
+    unsigned int cost0 = queuedState0.state->cost;
+    unsigned int cost1 = queuedState1.state->cost;
+
+    return cost0 < cost1;
 }
 
 template<typename StateType>
 bool hasMoreSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
 {
-    return queuedState0.state->selectedValues.getSize() > queuedState1.state->selectedValues.getSize();
+    unsigned int selectedValuesCount0 = queuedState0.state->selectedValues.getSize();
+    unsigned int selectedValuesCount1 = queuedState1.state->selectedValues.getSize();
+
+    return selectedValuesCount0 > selectedValuesCount1;
 }
+
+template<typename StateType>
+bool hasLessSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
+{
+    unsigned int selectedValuesCount0 = queuedState0.state->selectedValues.getSize();
+    unsigned int selectedValuesCount1 = queuedState1.state->selectedValues.getSize();
+
+    if(selectedValuesCount0 != selectedValuesCount1)
+    {
+        return selectedValuesCount0 < selectedValuesCount1;
+    }
+    else
+    {
+        return hasSmallerCost(queuedState0, queuedState1);
+    }
+}
+
+template<typename StateType>
+bool hasMoreSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
+{
+    unsigned int selectedValuesCount0 = queuedState0.state->selectedValues.getSize();
+    unsigned int selectedValuesCount1 = queuedState1.state->selectedValues.getSize();
+
+    if(selectedValuesCount0 != selectedValuesCount1)
+    {
+        return selectedValuesCount0 > selectedValuesCount1;
+    }
+    else
+    {
+        return hasSmallerCost(queuedState0, queuedState1);
+    }
+}
+
 
 
 template<typename StateType>
@@ -461,7 +533,10 @@ void waitOffloadCpu(Vector<std::thread>* cpuThreads)
 {
     for (std::thread* thread = cpuThreads->begin(); thread != cpuThreads->end(); thread += 1)
     {
-        thread->join();
+        if(thread->joinable())
+        {
+            thread->join();
+        }
     }
 }
 

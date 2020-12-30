@@ -29,11 +29,15 @@ void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, u
     {
         if (variable->minValue <= *value and *value <= variable->maxValue)
         {
-            unsigned int edgeIdx = *value - variable->minValue;
-            costs[edgeIdx] = state->cost;
-            if(not state->selectedValues.isEmpty())
+            if( (not *problem->fixedValues[*value] and not *problem->fixedVariables[variableIdx]) or
+                (*problem->fixedValues[*value] and *problem->fixedVariablesValues[variableIdx] == *value))
             {
-                costs[edgeIdx] += problem->getDistance(*state->selectedValues.back(), *value);
+                unsigned int edgeIdx = *value - variable->minValue;
+                costs[edgeIdx] = state->cost;
+                if (not state->selectedValues.isEmpty())
+                {
+                    costs[edgeIdx] += problem->getDistance(*state->selectedValues.back(), *value);
+                }
             }
         }
     }
@@ -49,15 +53,12 @@ void DP::VRPModel::makeState(VRPState const * parentState, unsigned int selected
     // Remove value from admissible values
     assert(parentState->isAdmissible(selectedValue));
     childState->removeFromAdmissibles(selectedValue);
-    assert(parentState->isAdmissible(selectedValue));
 
     // Add value to selected values
     childState->selectedValues.incrementSize();
     *childState->selectedValues.back() = static_cast<uint8_t>(selectedValue);
-    assert(parentState->isAdmissible(selectedValue));
 
     ifPickupAddDelivery(selectedValue, childState);
-    assert(parentState->isAdmissible(selectedValue));
 
     /*
     printf("[DEBUG] Selected: ");

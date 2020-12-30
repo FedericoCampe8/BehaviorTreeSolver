@@ -42,7 +42,7 @@ namespace DD
         model(model),
         width(width),
         fanout(calcFanout(model->problem)),
-        cutsetMaxSize(fanout),
+        cutsetMaxSize(width * fanout),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 
@@ -103,6 +103,7 @@ namespace DD
             // Calculate costs
             for (unsigned int currentStateIdx = 0; currentStateIdx < currentStates.getSize(); currentStateIdx += 1)
             {
+                //currentStates[currentStateIdx]->print();
                 model->calcCosts(variableIdx, currentStates[currentStateIdx], costs[fanout * currentStateIdx]);
             }
 
@@ -114,8 +115,17 @@ namespace DD
             if (costsEnd != costs.end())
             {
                 unsigned int size = costs.indexOf(costsEnd);
-                costs.resize(size);
-                indices.resize(size);
+                if (size > 0)
+                {
+                    costs.resize(size);
+                    indices.resize(size);
+                }
+                else
+                {
+                    *bottom = *top;
+                    bottom->cost = StateType::MaxCost;
+                    return;
+                }
             }
 
             if (variableIdx < variablesCount - 1)
@@ -138,6 +148,7 @@ namespace DD
                     unsigned int const edgeIdx = index % fanout;
                     unsigned int const selectedValue = model->problem->variables[variableIdx]->minValue + edgeIdx;
                     model->makeState(currentStates[currentStateIdx], selectedValue, *costs[cutsetStateIdx], cutset->at(cutsetStateIdx));
+                    assert(currentStates[currentStateIdx]->selectedValues.getSize() + 1 == cutset->at(cutsetStateIdx)->selectedValues.getSize());
                 };
 
                 cutsetInitialized = true;
@@ -153,11 +164,18 @@ namespace DD
                 if (nextStateIdx < nextStates.getSize())
                 {
                     model->makeState(currentStates[currentStateIdx], selectedValue, *costs[nextStateIdx], nextStates[nextStateIdx]);
+                    assert(currentStates[currentStateIdx]->selectedValues.getSize() + 1 == nextStates[nextStateIdx]->selectedValues.getSize());
                 }
                 else if (type == Type::Relaxed)
                 {
                     model->mergeState(currentStates[currentStateIdx], selectedValue, nextStates.back());
+                    assert(currentStates[currentStateIdx]->selectedValues.getSize() + 1 == nextStates.back()->selectedValues.getSize());
                 }
+            }
+
+            for(unsigned int stateIdx = 0; stateIdx < nextStates.getSize(); stateIdx += 1)
+            {
+                assert(currentStates[0]->selectedValues.getSize() + 1 == nextStates[stateIdx]->selectedValues.getSize());
             }
 
             //Prepare for the next loop
@@ -166,6 +184,7 @@ namespace DD
 
         //Copy bottom
         *bottom = *currentStates[0];
+        assert(bottom->selectedValues.isFull());
     }
 
     template<typename ModelType, typename ProblemType, typename StateType>
