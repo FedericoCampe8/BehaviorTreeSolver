@@ -7,6 +7,7 @@
 
 #include "../DP/State.cuh"
 #include "../OP/Problem.cuh"
+#include "../LNS/Neighbourhood.cuh"
 
 namespace DD
 {
@@ -22,18 +23,16 @@ namespace DD
         public:
             ModelType const * model;
             unsigned int width;
-            unsigned int fanout;
-            unsigned int cutsetMaxSize;
+            unsigned int maxOutdegree;
             unsigned int scratchpadMemSize;
 
         // Functions
         public:
             MDD(ModelType const * model, unsigned int width);
-            __host__ __device__ void buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, std::byte* scratchpadMem) const;
+            __host__ __device__ void buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, LNS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const;
+            unsigned int calcCutsetMaxSize() const;
         private:
-            static unsigned int calcFanout(ProblemType const * problem);
             unsigned int calcScratchpadMemSize() const;
-            void printStates(LightVector<StateType> const * states) const;
 
     };
 
@@ -41,14 +40,13 @@ namespace DD
     MDD<ModelType,ProblemType,StateType>::MDD(ModelType const * model, unsigned int width) :
         model(model),
         width(width),
-        fanout(calcFanout(model->problem)),
-        cutsetMaxSize(width * fanout),
+        maxOutdegree(model->problem->calcMaxOutdegree()),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 
     template<typename ModelType, typename ProblemType, typename StateType>
     __host__ __device__
-    void MDD<ModelType,ProblemType,StateType>::buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, std::byte* scratchpadMem) const
+    void MDD<ModelType,ProblemType,StateType>::buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, LNS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const
     {
         std::byte* freeScratchpadMem = scratchpadMem;
 
@@ -74,11 +72,11 @@ namespace DD
         freeScratchpadMem = Memory::align(8, freeScratchpadMem);
 
         // Auxiliary information
-        LightVector<uint32_t> costs(fanout * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
+        LightVector<uint32_t> costs(maxOutdegree * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
         freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(costs.LightArray<uint32_t>::end()));
 
-        assert(width * fanout < UINT32_MAX);
-        LightVector<uint32_t> indices(fanout * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
+        assert(width * maxOutdegree < UINT32_MAX);
+        LightVector<uint32_t> indices(maxOutdegree * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
         freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(indices.LightArray<uint32_t>::end()));
 
         assert(freeScratchpadMem < scratchpadMem + scratchpadMemSize);
@@ -93,18 +91,17 @@ namespace DD
         for(unsigned int variableIdx = top->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
         {
             // Initialize indices
-            indices.resize(fanout * currentStates.getSize());
+            indices.resize(maxOutdegree * currentStates.getSize());
             thrust::sequence(thrust::seq, indices.begin(), indices.end());
 
             // Initialize costs
-            costs.resize(fanout * currentStates.getSize());
+            costs.resize(maxOutdegree * currentStates.getSize());
             thrust::fill(thrust::seq, costs.begin(), costs.end(), StateType::MaxCost);
 
             // Calculate costs
             for (unsigned int currentStateIdx = 0; currentStateIdx < currentStates.getSize(); currentStateIdx += 1)
             {
-                //currentStates[currentStateIdx]->print();
-                model->calcCosts(variableIdx, currentStates[currentStateIdx], costs[fanout * currentStateIdx]);
+                model->calcCosts(variableIdx, currentStates[currentStateIdx], neighbourhood, costs[maxOutdegree * currentStateIdx]);
             }
 
             // Sort indices by costs
@@ -144,8 +141,8 @@ namespace DD
                 for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < indices.getSize(); cutsetStateIdx += 1)
                 {
                     unsigned int const index = *indices[cutsetStateIdx];
-                    unsigned int const currentStateIdx = index / fanout;
-                    unsigned int const edgeIdx = index % fanout;
+                    unsigned int const currentStateIdx = index / maxOutdegree;
+                    unsigned int const edgeIdx = index % maxOutdegree;
                     unsigned int const selectedValue = model->problem->variables[variableIdx]->minValue + edgeIdx;
                     model->makeState(currentStates[currentStateIdx], selectedValue, *costs[cutsetStateIdx], cutset->at(cutsetStateIdx));
                     assert(currentStates[currentStateIdx]->selectedValues.getSize() + 1 == cutset->at(cutsetStateIdx)->selectedValues.getSize());
@@ -158,8 +155,8 @@ namespace DD
             for(unsigned int nextStateIdx = 0; nextStateIdx < indices.getSize(); nextStateIdx += 1)
             {
                 unsigned int const index = *indices[nextStateIdx];
-                unsigned int const currentStateIdx = index / fanout;
-                unsigned int const edgeIdx = index % fanout;
+                unsigned int const currentStateIdx = index / maxOutdegree;
+                unsigned int const edgeIdx = index % maxOutdegree;
                 unsigned int const selectedValue = model->problem->variables[variableIdx]->minValue + edgeIdx;
                 if (nextStateIdx < nextStates.getSize())
                 {
@@ -188,15 +185,9 @@ namespace DD
     }
 
     template<typename ModelType, typename ProblemType, typename StateType>
-    unsigned int MDD<ModelType,ProblemType,StateType>::calcFanout(ProblemType const * problem)
+    unsigned int MDD<ModelType, ProblemType, StateType>::calcCutsetMaxSize() const
     {
-        unsigned int fanout = 0;
-        for (OP::Variable* variable = problem->variables.begin(); variable != problem->variables.end(); variable += 1)
-        {
-            fanout = max(fanout, variable->cardinality());
-        }
-
-        return fanout;
+        return width * maxOutdegree;
     }
 
     template<typename ModelType, typename ProblemType, typename StateType>
@@ -204,23 +195,17 @@ namespace DD
     {
         unsigned int const stateSize = sizeof(StateType);
         unsigned int const stateStorageSize = StateType::sizeOfStorage(model->problem);
+        unsigned int const cutsetMaxSize = calcCutsetMaxSize();
 
         return
             stateSize * width + // Current states
             stateStorageSize * width  +
             stateSize * width + // Next states
             stateStorageSize * width  +
-            sizeof(uint32_t) * width * fanout + // Costs
-            sizeof(uint32_t) * width * fanout + // Indices
+            sizeof(uint32_t) * cutsetMaxSize + // Costs
+            sizeof(uint32_t) * cutsetMaxSize + // Indices
             8 * 6; // Alignment
     }
 
-    template<typename ModelType, typename ProblemType, typename StateType>
-    void MDD<ModelType, ProblemType, StateType>::printStates(LightVector<StateType> const * states) const
-    {
-        for(StateType* state = states->begin(); state < states->end(); state += 1)
-        {
-            state->print();
-        }
-    }
+
 }

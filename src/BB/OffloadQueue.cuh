@@ -31,7 +31,7 @@ namespace BB
     template<typename ModelType, typename ProblemType>
     OffloadQueue<StateType>::OffloadQueue(DD::MDD<ModelType,ProblemType,StateType> const * mdd, unsigned int offloadMaxSize, Memory::MallocType mallocType) :
         Vector<OffloadedState<StateType>>(offloadMaxSize, mallocType),
-        cutsetMaxSize(mdd->cutsetMaxSize),
+        cutsetMaxSize(mdd->calcCutsetMaxSize()),
         statesBuffer(offloadMaxSize, mallocType),
         cutsetsBuffer(cutsetMaxSize * offloadMaxSize, mallocType),
         upperboundStatesBuffer(offloadMaxSize, mallocType)

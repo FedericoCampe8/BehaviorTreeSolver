@@ -15,7 +15,7 @@
 #include "BB/PriorityQueuesManager.cuh"
 #include "DD/MDD.cuh"
 #include "DP/VRPModel.cuh"
-#include "OP/VRProblem.cuh"
+#include "LNS/Neighbourhood.cuh"
 
 using namespace std;
 using json = nlohmann::json;
@@ -25,6 +25,7 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
+using namespace LNS;
 using ModelType = VRPModel;
 using ProblemType = VRProblem;
 using StateType = VRPState;
@@ -62,16 +63,16 @@ template<typename StateType>
 void prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* priorityQueue, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue);
 
 template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadCpuAsync(DD::MDD<ModelType, ProblemType, StateType> const * mdd, OffloadQueue<StateType>* cpuQueue, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem);
+void doOffloadCpuAsync(DD::MDD<ModelType, ProblemType, StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, OffloadQueue<StateType>* cpuQueue, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem);
 
 template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadGpuAsync(DD::MDD<ModelType, ProblemType, StateType> const * mdd, OffloadQueue<StateType>* gpuQueue);
+void doOffloadGpuAsync(DD::MDD<ModelType, ProblemType, StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, OffloadQueue<StateType>* gpuQueue);
 
 template<typename ModelType, typename ProblemType, typename StateType>
-__host__ __device__ void doOffload(DD::MDD<ModelType,ProblemType,StateType> const * mdd, BB::OffloadedState<StateType>* offloadedState, std::byte* scratchpadMem);
+__host__ __device__ void doOffload(DD::MDD<ModelType,ProblemType,StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, BB::OffloadedState<StateType>* offloadedState, std::byte* scratchpadMem);
 
 template<typename ModelType, typename ProblemType, typename StateType>
-__global__ void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, Vector<BB::OffloadedState<StateType>>* queue);
+__global__ void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, Vector<BB::OffloadedState<StateType>>* queue);
 
 void waitOffloadCpu(Vector<std::thread>* cpuThreads);
 
@@ -92,7 +93,12 @@ int main(int argc, char ** argv)
     unsigned int const cpuMaxParallelism = std::stoi(argv[5]);
     unsigned int const gpuMaxWidth = std::stoi(argv[6]);
     unsigned int const gpuMaxParallelism = std::stoi(argv[7]);
-    //unsigned int const fixPercentage = std::stoi(argv[8]);
+    unsigned int const lnsFixPercentage = std::stoi(argv[8]);
+    unsigned int const randomSeed = std::stoi(argv[9]);
+
+    // *******************
+    // Data initialization
+    // *******************
 
     // Context initialization
     MallocType gpuMallocTime = MallocType::Std;
@@ -106,7 +112,6 @@ int main(int argc, char ** argv)
     ProblemType* const cpuProblem = parseGrubHubInstance(problemFileName, MallocType::Std);
     ProblemType* const gpuProblem = parseGrubHubInstance(problemFileName, gpuMallocTime);
 
-
     // Models
     unsigned int memorySize = sizeof(ModelType);
     std::byte* memory = safeMalloc(memorySize, MallocType::Std);
@@ -118,48 +123,28 @@ int main(int argc, char ** argv)
     memorySize = sizeof(MDD<ModelType,ProblemType,StateType>);
     memory = safeMalloc(memorySize, MallocType::Std);
     MDD<ModelType,ProblemType,StateType>* const cpuMdd = new (memory) MDD<ModelType,ProblemType,StateType>(cpuModel, cpuMaxWidth);
-
-    memorySize = sizeof(MDD<ModelType,ProblemType,StateType>);
     memory = safeMalloc(memorySize, gpuMallocTime);
     MDD<ModelType,ProblemType,StateType>* const gpuMdd = new (memory) MDD<ModelType,ProblemType,StateType>(gpuModel, gpuMaxWidth);
-
-    unsigned int optSolution15_0[32] = {0, 16, 4, 17, 30, 18, 19, 14, 31, 15, 28, 24, 12, 10, 29, 13, 2, 26, 3, 25, 6, 27, 8, 22, 23, 5, 20, 9, 21, 7, 11, 1};
-    cpuProblem->pickups.print();
-    cpuProblem->deliveries.print();
-
-    /*
-    srand(time(NULL));
-    unsigned int fixedvariables = 0;
-    for(unsigned int i = 0; i < 32; i +=1)
-    {
-        if (rand() % 100 < fixPercentage)
-        {
-           fixedvariables += 1;
-            cpuProblem->fixVariableWithValue(i, optSolution15_0[i]);
-           gpuProblem->fixVariableWithValue(i, optSolution15_0[i]);
-        }
-    }
-    printf("[DEBUG] fixed %d variables\n", fixedvariables);
-     */
 
     // Context initialization
     Vector<std::thread>* cpuThreads = new Vector<std::thread>(cpuMaxParallelism, MallocType::Std);
     std::byte* scratchpadMem = safeMalloc(cpuMdd->scratchpadMemSize * cpuMaxParallelism, MallocType::Std);
 
+    // LSN
+    memorySize = sizeof(Neighbourhood);
+    memory = safeMalloc(memorySize, MallocType::Std);
+    Neighbourhood* cpuNeighborhood = new (memory) Neighbourhood(cpuProblem, MallocType::Std);
+    memory = safeMalloc(memorySize, gpuMallocTime);
+    Neighbourhood* gpuNeighborhood = new (memory) Neighbourhood(gpuProblem, gpuMallocTime);
+
     // Queues
-    enum QueueStatus {Increasing, Decreasing} queueStatus;
     PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 2);
-
-    MaxHeap<QueuedState<StateType>> dfsPriorityQueue(hasMoreSelections<StateType>, queueMaxSize, MallocType::Std);
-    priorityQueuesManger.registerQueue(&dfsPriorityQueue);
-
     MaxHeap<QueuedState<StateType>> cpuPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
     priorityQueuesManger.registerQueue(&cpuPriorityQueue);
-
-    MaxHeap<QueuedState<StateType>> gpuPriorityQueue(hasMoreSelectionsAndSmallerCost<StateType>, queueMaxSize, MallocType::Std);
+    MaxHeap<QueuedState<StateType>> gpuPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
     priorityQueuesManger.registerQueue(&gpuPriorityQueue);
 
-    // Offload queues
+    // Offload
     memorySize = sizeof(OffloadQueue<StateType>);
     memory = safeMalloc(memorySize, MallocType::Std);
     OffloadQueue<StateType>* cpuOffloadQueue = new (memory) OffloadQueue<StateType>(cpuMdd, cpuMaxParallelism, MallocType::Std);
@@ -178,25 +163,38 @@ int main(int argc, char ** argv)
     StateType* root = new (memory) StateType(cpuProblem, StateType::mallocStorages(cpuProblem, 1, MallocType::Std));
     cpuModel->makeRoot(root);
 
+    // Search
+    unsigned int iterationsCount = 0;
+    enum SearchStatus {InitialSolution, LNS} searchStatus;
+    unsigned int visitedStatesCount = 0;
+
+
+    // ************
+    // Begin search
+    // ************
+
+    // Init status
+    searchStatus = SearchStatus::InitialSolution;
+
     // Enqueue root
     StateMetadata<StateType> const rootMetadata(0, StateType::MaxCost, root);
     priorityQueuesManger.enqueue(&rootMetadata);
 
-    // Search
-    unsigned int visitedStatesCount = 0;
-    unsigned int iterationsCount = 0;
-    unsigned int maxQueuesIncrement = cpuMaxParallelism * cpuOffloadQueue->cutsetMaxSize + gpuMaxParallelism * gpuOffloadQueue->cutsetMaxSize;
-    queueStatus = QueueStatus::Increasing;
-    printf("[DEBUG] Queue capacity: %lu | Queue max increment: %d\n", priorityQueuesManger.getCapacity(), maxQueuesIncrement);
     uint64_t searchStartTime = now();
     do
     {
-
-        if (queueStatus == QueueStatus::Increasing and (priorityQueuesManger.getSize() + (5 * maxQueuesIncrement) >= priorityQueuesManger.getCapacity()))
+        if (priorityQueuesManger.isFull() and searchStatus == SearchStatus::InitialSolution)
         {
+            priorityQueuesManger.clearQueues();
+            priorityQueuesManger.enqueue(&rootMetadata);
+
+            cpuNeighborhood->fixVariables(&bestSolution->selectedValues, lnsFixPercentage, randomSeed + iterationsCount);
+            *gpuNeighborhood = *cpuNeighborhood;
+
+            searchStatus = SearchStatus::LNS;
             clearLine();
-            queueStatus = QueueStatus::Decreasing;
-            printf("[INFO] Switching to DFS-like search");
+            printf("[INFO] Switching to LNS search | Neighborhood: ");
+            cpuNeighborhood->print(false);
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
@@ -204,38 +202,37 @@ int main(int argc, char ** argv)
             printf(" | Visited states: %u\n", visitedStatesCount);
 
         }
-        if(queueStatus == QueueStatus::Decreasing and (priorityQueuesManger.getSize() <= priorityQueuesManger.getCapacity() / 100))
+
+        if ((priorityQueuesManger.isFull() or priorityQueuesManger.isEmpty())  and searchStatus == SearchStatus::LNS)
         {
+            priorityQueuesManger.clearQueues();
+            priorityQueuesManger.enqueue(&rootMetadata);
+
+            cpuNeighborhood->reset();
+            cpuNeighborhood->fixVariables(&bestSolution->selectedValues, lnsFixPercentage, randomSeed + iterationsCount);
+            *gpuNeighborhood = *cpuNeighborhood;
+
             clearLine();
-            queueStatus = QueueStatus::Increasing;
-            printf("[INFO] Switching to Cost-based search");
+            printf("[INFO] Restarting LNS search | Neighborhood: ");
+            cpuNeighborhood->print(false);
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
             printf(" | States to visit: %lu", priorityQueuesManger.getSize());
-            printf(" | Visited states: %u\n", visitedStatesCount);
+            printf(" | Visited states: %u\r", visitedStatesCount);
         }
 
-        if(queueStatus == QueueStatus::Increasing)
-        {
-            prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
-            prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
-
-        }
-        else
-        {
-            prepareOffload<StateType>(bestSolution->cost, &dfsPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
-            prepareOffload<StateType>(bestSolution->cost, &dfsPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
-        }
-
-        uint64_t gpuOffloadStartTime = now();
-        doOffloadGpuAsync(gpuMdd, gpuOffloadQueue);
+        prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
+        prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
 
         uint64_t cpuOffloadStartTime = now();
-        doOffloadCpuAsync(cpuMdd, cpuOffloadQueue, cpuThreads, scratchpadMem);
+        doOffloadCpuAsync(cpuMdd, cpuNeighborhood, cpuOffloadQueue, cpuThreads, scratchpadMem);
 
-        waitOffloadGpu();
+        uint64_t gpuOffloadStartTime = now();
+        doOffloadGpuAsync(gpuMdd, gpuNeighborhood, gpuOffloadQueue);
+
         waitOffloadCpu(cpuThreads);
+        waitOffloadGpu();
 
         visitedStatesCount += cpuOffloadQueue->getSize();
         visitedStatesCount += gpuOffloadQueue->getSize();
@@ -243,11 +240,6 @@ int main(int argc, char ** argv)
         bool foundBetterSolution =
             checkForBetterSolutions(bestSolution, cpuOffloadQueue) or
             checkForBetterSolutions(bestSolution, gpuOffloadQueue);
-
-        if(iterationsCount % 25 == 0)
-        {
-            //reducePriorityQueues(&priorityQueuesManger);
-        }
 
         updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, cpuOffloadQueue);
         updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, gpuOffloadQueue);
@@ -261,23 +253,26 @@ int main(int argc, char ** argv)
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
+            printf(" | States to visit: %lu", priorityQueuesManger.getSize());
             printf(" | Visited states: %u\n", visitedStatesCount);
         }
         else
         {
-            //clearLine();
             unsigned long int cpuSpeed = 0;
             if (cpuOffloadQueue->getSize() > 0 )
             {
                 uint64_t cpuOffloadElapsedTime = max(1ul, now() - cpuOffloadStartTime);
                 cpuSpeed = cpuOffloadQueue->getSize() * 1000 / cpuOffloadElapsedTime;
             }
+
             unsigned long int gpuSpeed = 0;
             if (gpuOffloadQueue->getSize() > 0 )
             {
                 uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
                 gpuSpeed = gpuOffloadQueue->getSize() * 1000 / gpuOffloadElapsedTime;
             }
+
+            clearLine();
             printf("[INFO] CPU Speed: %2lu states/s", cpuSpeed);
             printf(" | GPU Speed: %4lu states/s", gpuSpeed);
             printf(" | Time: ");
@@ -289,7 +284,7 @@ int main(int argc, char ** argv)
 
         iterationsCount += 1;
     }
-    while(not (priorityQueuesManger.isEmpty() or (now() - searchStartTime) > timeoutSeconds * 1000));
+    while(now() - searchStartTime < timeoutSeconds * 1000);
 
     printf("[RESULT] Solution: ");
     bestSolution->selectedValues.print(false);
@@ -361,8 +356,6 @@ OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::Mallo
         }
     }
 
-    //printf("[DEBUG] Problem: %s | Locations: %d | Pickups/Deliveries: %lu\n", problemFileName, variablesCount, problem->pickups.getSize());
-
     return problem;
 }
 
@@ -428,8 +421,10 @@ void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType
             StateMetadata<StateType> const cutsetStateMetadata(offloadedState->lowerbound, offloadedState->upperbound, cutsetState);
             if(boundsChk(bestCost, &cutsetStateMetadata))
             {
-
-                priorityQueuesManager->enqueue(&cutsetStateMetadata);
+                if(not priorityQueuesManager->isFull())
+                {
+                    priorityQueuesManager->enqueue(&cutsetStateMetadata);
+                }
             }
         };
     };
@@ -462,7 +457,7 @@ bool checkForBetterSolutions(StateType* bestSolution, OffloadQueue<StateType>* o
 }
 
 template<typename StateType>
-void prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* priorityQueue, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue)
+void  prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* priorityQueue, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue)
 {
     offloadQueue->clear();
     while(not (priorityQueue->isEmpty() or offloadQueue->isFull()))
@@ -477,7 +472,7 @@ void prepareOffload(unsigned int bestCost, MaxHeap<QueuedState<StateType>>* prio
 }
 
 template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadCpuAsync(MDD<ModelType, ProblemType, StateType> const * mdd, OffloadQueue<StateType>* cpuQueue, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem)
+void doOffloadCpuAsync(MDD<ModelType, ProblemType, StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, OffloadQueue<StateType>* cpuQueue, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem)
 {
     if(not cpuQueue->isEmpty())
     {
@@ -485,23 +480,23 @@ void doOffloadCpuAsync(MDD<ModelType, ProblemType, StateType> const * mdd, Offlo
         for (unsigned int offloadedStateIdx = 0; offloadedStateIdx < cpuQueue->getSize(); offloadedStateIdx += 1)
         {
             cpuThreads->incrementSize();
-            new(cpuThreads->back()) std::thread(&doOffload<ModelType, ProblemType, StateType>, mdd, cpuQueue->at(offloadedStateIdx), &scratchpadMem[mdd->scratchpadMemSize * offloadedStateIdx]);
+            new(cpuThreads->back()) std::thread(&doOffload<ModelType, ProblemType, StateType>, mdd, neighbourhood, cpuQueue->at(offloadedStateIdx), &scratchpadMem[mdd->scratchpadMemSize * offloadedStateIdx]);
         }
     }
 }
 
 template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadGpuAsync(MDD<ModelType, ProblemType, StateType> const * mdd, OffloadQueue<StateType>* gpuQueue)
+void doOffloadGpuAsync(MDD<ModelType, ProblemType, StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, OffloadQueue<StateType>* gpuQueue)
 {
     if(not gpuQueue->isEmpty())
     {
-        doOffloadKernel<ModelType, ProblemType, StateType><<<gpuQueue->getSize(), 1, mdd->scratchpadMemSize>>>(mdd, gpuQueue);
+        doOffloadKernel<ModelType, ProblemType, StateType><<<gpuQueue->getSize(), 1, mdd->scratchpadMemSize>>>(mdd, neighbourhood, gpuQueue);
     }
 }
 
 template<typename ModelType, typename ProblemType, typename StateType>
 __host__ __device__
-void doOffload(MDD<ModelType,ProblemType,StateType> const * mdd, OffloadedState<StateType>* offloadedState, std::byte* scratchpadMem)
+void doOffload(MDD<ModelType,ProblemType,StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, OffloadedState<StateType>* offloadedState, std::byte* scratchpadMem)
 {
     //Preparation to build MDDs
     StateType const * top = offloadedState->state;
@@ -509,15 +504,15 @@ void doOffload(MDD<ModelType,ProblemType,StateType> const * mdd, OffloadedState<
     StateType * const bottom = offloadedState->upperboundState;
 
     //Build MDDs
-    mdd->buildTopDown(MDD<ModelType,ProblemType,StateType>::Type::Relaxed, top, cutset, bottom, scratchpadMem);
+    mdd->buildTopDown(MDD<ModelType,ProblemType,StateType>::Type::Relaxed, top, cutset, bottom, neighbourhood, scratchpadMem);
     offloadedState->lowerbound = bottom->cost;
-    mdd->buildTopDown(MDD<ModelType,ProblemType,StateType>::Type::Restricted, top, cutset, bottom, scratchpadMem);
+    mdd->buildTopDown(MDD<ModelType,ProblemType,StateType>::Type::Restricted, top, cutset, bottom, neighbourhood, scratchpadMem);
     offloadedState->upperbound = bottom->cost;
 }
 
 template<typename ModelType, typename ProblemType, typename StateType>
 __global__
-void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, OffloadQueue<StateType>* gpuQueue)
+void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, LNS::Neighbourhood const * neighbourhood, OffloadQueue<StateType>* gpuQueue)
 {
     extern __shared__ unsigned int sharedMem[];
     std::byte* scratchpadMem = reinterpret_cast<std::byte*>(sharedMem);
@@ -525,7 +520,7 @@ void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, Offlo
     if(threadIdx.x == 0)
     {
         OffloadedState<StateType>* offloadedState = gpuQueue->at(blockIdx.x);
-        doOffload(mdd, offloadedState, scratchpadMem);
+        doOffload(mdd, neighbourhood, offloadedState, scratchpadMem);
     };
 }
 

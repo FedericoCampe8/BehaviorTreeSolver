@@ -22,15 +22,15 @@ void DP::VRPModel::makeRoot(VRPState* root) const
 }
 
 __host__ __device__
-void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, uint32_t* costs) const
+void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, LNS::Neighbourhood const * neighbourhood, uint32_t* costs) const
 {
     OP::Variable const * const variable = problem->variables[variableIdx];
     for(uint8_t* value = state->admissibleValues.begin(); value != state->admissibleValues.end(); value += 1)
     {
         if (variable->minValue <= *value and *value <= variable->maxValue)
         {
-            if( (not *problem->fixedValues[*value] and not *problem->fixedVariables[variableIdx]) or
-                (*problem->fixedValues[*value] and *problem->fixedVariablesValues[variableIdx] == *value))
+            if( (not *neighbourhood->fixedValues[*value] and not *neighbourhood->fixedVariables[variableIdx]) or
+                (*neighbourhood->fixedValues[*value] and *neighbourhood->fixedVariablesValues[variableIdx] == *value))
             {
                 unsigned int edgeIdx = *value - variable->minValue;
                 costs[edgeIdx] = state->cost;

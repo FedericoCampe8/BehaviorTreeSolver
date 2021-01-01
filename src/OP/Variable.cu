@@ -5,19 +5,7 @@ OP::Variable::Variable(unsigned int minValue, unsigned int maxValue) :
     maxValue(static_cast<uint8_t>(maxValue))
 {}
 
-unsigned int OP::Variable::cardinality() const
+unsigned int OP::Variable::cardinality()
 {
-    return maxValue - minValue + 1u;
+    return static_cast<unsigned int>(maxValue - minValue + 1);
 }
-
-void OP::Variable::fixTo(unsigned int value)
-{
-    minValue = value;
-    maxValue = value;
-}
-
-bool OP::Variable::isFixed() const
-{
-    return minValue == maxValue;
-}
-

@@ -28,6 +28,7 @@ namespace BB
         public:
             template<typename ProblemType>
             PriorityQueuesManager(ProblemType const * problem, unsigned int queuesSize, unsigned int queuesCount);
+            void clearQueues();
             void dequeue(StateType const * state);
             void enqueue(StateMetadata<StateType> const * stateMetadata);
             void registerQueue(MaxHeap<QueuedState<StateType>>* queue);
@@ -46,6 +47,16 @@ namespace BB
         {
             new (this->at(stateIdx)) StateType(problem, &storages[storageSize * stateIdx]);
         }
+    }
+
+    template<typename StateType>
+    void PriorityQueuesManager<StateType>::clearQueues()
+    {
+        for (MaxHeap<QueuedState<StateType>>** queue = queues.begin(); queue != queues.end(); queue += 1)
+        {
+            (*queue)->clear();
+        }
+        this->clear();
     }
 
     template<typename StateType>
