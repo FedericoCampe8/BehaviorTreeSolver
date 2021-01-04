@@ -10,15 +10,13 @@ LNS::Neighbourhood::Neighbourhood(OP::Problem const * problem, Memory::MallocTyp
     reset();
 }
 
-void LNS::Neighbourhood::fixVariables(LightArray<OP::Variable::ValueType> const * solution, unsigned int fixPercentage, unsigned int randomSeed)
+void LNS::Neighbourhood::fixVariables(LightArray<OP::Variable::ValueType> const * solution, unsigned int fixPercentage, std::mt19937* rng)
 {
-    srand(randomSeed);
+    std::uniform_int_distribution<unsigned int> randomDistribution(0,100);
     for(unsigned int variablesIdx = 0; variablesIdx < solution->getCapacity(); variablesIdx += 1)
     {
-        if (static_cast<unsigned int>(rand() % 100) < fixPercentage)
-        {
-            fixVariableWithValue(variablesIdx, *solution->at(variablesIdx));
-        }
+        unsigned int random = randomDistribution(*rng);
+        registerVariableWithValue(random <= fixPercentage, variablesIdx, *solution->at(variablesIdx));
     }
 }
 
@@ -66,9 +64,9 @@ void LNS::Neighbourhood::reset()
     thrust::fill(thrust::seq, fixedVariables.begin(), fixedVariables.end(), false);
 }
 
-void LNS::Neighbourhood::fixVariableWithValue(unsigned int variableIdx, unsigned int value)
+void LNS::Neighbourhood::registerVariableWithValue(bool fixed, unsigned int variableIdx, unsigned int value)
 {
-    *fixedValues[value] = true;
-    *fixedVariables[variableIdx] = true;
+    *fixedValues[value] = fixed;
+    *fixedVariables[variableIdx] = fixed;
     *fixedVariablesValues[variableIdx] = value;
 }

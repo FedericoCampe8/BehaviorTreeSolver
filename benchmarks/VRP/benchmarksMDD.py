@@ -7,11 +7,13 @@ import benchmarksCommon
 
 ### Main ###
 binPath = "../../cmake-build-remote-release/mdd-gpu"
-queueMaxSize = 10000000
+queueMaxSize = 50000
 cpuMaxWidth = 2500
 cpuMaxParallelism = 12
 gpuMaxWidth = 3
 gpuMaxParallelism = 1000
+lnsFixPercentage = 75;
+randomSeed = 0
 
 outFileName = "VrpBenchmarksMDD-"+ str(int(time.time())) + ".csv"
 outFile = open(outFileName, "w")
@@ -26,7 +28,9 @@ for grubHubInstance in benchmarksCommon.grubHubInstances:
             [str(cpuMaxWidth)] + \
             [str(cpuMaxParallelism)] + \
             [str(gpuMaxWidth)] + \
-            [str(gpuMaxParallelism)]
+            [str(gpuMaxParallelism)] + \
+            [str(lnsFixPercentage)] + \
+            [str(randomSeed)]
 
         print("Running " + str(cmd) + " -> ", end = "")
         sys.stdout.flush()

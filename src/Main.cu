@@ -38,14 +38,15 @@ OP::VRProblem* parseGrubHubInstance(char const * problemFileName, Memory::Malloc
 template<typename StateType>
 bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
 
+// Comparators
 template<typename StateType>
-bool hasMoreSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
+bool hasBiggerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
 
 template<typename StateType>
-bool hasLessSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
+bool hasRandomPriority(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
 
 template<typename StateType>
-bool hasMoreSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
+bool hasLessSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1);
 
 // Queues
 template<typename StateType>
@@ -57,6 +58,9 @@ void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType
 // Search
 template<typename StateType>
 bool checkForBetterSolutions(StateType* bestSolution, OffloadQueue<StateType>* offloadQueue);
+
+template<typename StateType>
+void updateLnsSolutions(StateType* lnsSolution, OffloadQueue<StateType>* offloadQueue);
 
 // Offload
 template<typename StateType>
@@ -94,13 +98,17 @@ int main(int argc, char ** argv)
     unsigned int const gpuMaxWidth = std::stoi(argv[6]);
     unsigned int const gpuMaxParallelism = std::stoi(argv[7]);
     unsigned int const lnsFixPercentage = std::stoi(argv[8]);
-    unsigned int const randomSeed = std::stoi(argv[9]);
+    unsigned int const lnsQueueMaxSize = std::stoi(argv[9]);
+    unsigned int randomSeed = std::stoi(argv[10]);
+    unsigned int notBetterSolutionPercentage = std::stoi(argv[11]);
+    unsigned int randomStatePercentage = std::stoi(argv[12]);
 
     // *******************
     // Data initialization
     // *******************
 
     // Context initialization
+    std::mt19937 rng(randomSeed);
     MallocType gpuMallocTime = MallocType::Std;
     if (gpuMaxParallelism > 0)
     {
@@ -137,12 +145,17 @@ int main(int argc, char ** argv)
     memory = safeMalloc(memorySize, gpuMallocTime);
     Neighbourhood* gpuNeighborhood = new (memory) Neighbourhood(gpuProblem, gpuMallocTime);
 
+    memorySize = sizeof(StateType);
+    memory = safeMalloc(memorySize, MallocType::Std);
+    StateType* lnsSolution = new (memory) StateType(cpuProblem, StateType::mallocStorages(cpuProblem, 1, MallocType::Std));
+    lnsSolution->cost = StateType::MaxCost;
+
     // Queues
     PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 2);
-    MaxHeap<QueuedState<StateType>> cpuPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
-    priorityQueuesManger.registerQueue(&cpuPriorityQueue);
-    MaxHeap<QueuedState<StateType>> gpuPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
-    priorityQueuesManger.registerQueue(&gpuPriorityQueue);
+    MaxHeap<QueuedState<StateType>> searchPriorityQueue(hasSmallerCost<StateType>, queueMaxSize, MallocType::Std);
+    priorityQueuesManger.registerQueue(&searchPriorityQueue);
+    MaxHeap<QueuedState<StateType>> randomPriorityQueue(hasBiggerCost<StateType>, queueMaxSize, MallocType::Std);
+    priorityQueuesManger.registerQueue(&randomPriorityQueue);
 
     // Offload
     memorySize = sizeof(OffloadQueue<StateType>);
@@ -173,7 +186,8 @@ int main(int argc, char ** argv)
     // Begin search
     // ************
 
-    // Init status
+    // Init context
+    std::uniform_int_distribution<unsigned int> randomDistribution(0,100);
     searchStatus = SearchStatus::InitialSolution;
 
     // Enqueue root
@@ -183,18 +197,13 @@ int main(int argc, char ** argv)
     uint64_t searchStartTime = now();
     do
     {
-        if (priorityQueuesManger.isFull() and searchStatus == SearchStatus::InitialSolution)
+        if (searchStatus == SearchStatus::InitialSolution and priorityQueuesManger.isFull())
         {
-            priorityQueuesManger.clearQueues();
-            priorityQueuesManger.enqueue(&rootMetadata);
-
-            cpuNeighborhood->fixVariables(&bestSolution->selectedValues, lnsFixPercentage, randomSeed + iterationsCount);
-            *gpuNeighborhood = *cpuNeighborhood;
-
             searchStatus = SearchStatus::LNS;
+            lnsSolution->cost = StateType::MaxCost;
+
             clearLine();
-            printf("[INFO] Switching to LNS search | Neighborhood: ");
-            cpuNeighborhood->print(false);
+            printf("[INFO] Switching to LNS search");
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
@@ -203,27 +212,39 @@ int main(int argc, char ** argv)
 
         }
 
-        if ((priorityQueuesManger.isFull() or priorityQueuesManger.isEmpty())  and searchStatus == SearchStatus::LNS)
+        if (searchStatus == SearchStatus::LNS and (priorityQueuesManger.isEmpty() or priorityQueuesManger.getSize() > lnsQueueMaxSize or priorityQueuesManger.isFull()))
         {
             priorityQueuesManger.clearQueues();
             priorityQueuesManger.enqueue(&rootMetadata);
 
             cpuNeighborhood->reset();
-            cpuNeighborhood->fixVariables(&bestSolution->selectedValues, lnsFixPercentage, randomSeed + iterationsCount);
-            *gpuNeighborhood = *cpuNeighborhood;
+            if (lnsSolution->cost < bestSolution->cost)
+            {
+                printf("[INFO] Worst solution found: ");
+                lnsSolution->selectedValues.print();
+            }
+            if (randomDistribution(rng) < notBetterSolutionPercentage)
+            {
+                cpuNeighborhood->fixVariables(&lnsSolution->selectedValues, lnsFixPercentage, &rng);
+            }
+            else
+            {
+                cpuNeighborhood->fixVariables(&bestSolution->selectedValues, lnsFixPercentage, &rng);
+            }
+            lnsSolution->cost = StateType::MaxCost;
 
-            clearLine();
-            printf("[INFO] Restarting LNS search | Neighborhood: ");
-            cpuNeighborhood->print(false);
-            printf(" | Time: ");
-            printElapsedTime(now() - searchStartTime);
-            printf(" | Iterations: %u", iterationsCount);
-            printf(" | States to visit: %lu", priorityQueuesManger.getSize());
-            printf(" | Visited states: %u\r", visitedStatesCount);
+            *gpuNeighborhood = *cpuNeighborhood;
         }
 
-        prepareOffload<StateType>(bestSolution->cost, &cpuPriorityQueue, &priorityQueuesManger, cpuOffloadQueue);
-        prepareOffload<StateType>(bestSolution->cost, &gpuPriorityQueue, &priorityQueuesManger, gpuOffloadQueue);
+        MaxHeap<QueuedState<StateType>>* priorityQueue = &searchPriorityQueue;
+        if (searchStatus == SearchStatus::LNS and randomDistribution(rng) < randomStatePercentage)
+        {
+            priorityQueue = &randomPriorityQueue;
+        }
+
+        prepareOffload<StateType>(lnsSolution->cost, priorityQueue, &priorityQueuesManger, cpuOffloadQueue);
+        prepareOffload<StateType>(lnsSolution->cost, priorityQueue, &priorityQueuesManger, gpuOffloadQueue);
+
 
         uint64_t cpuOffloadStartTime = now();
         doOffloadCpuAsync(cpuMdd, cpuNeighborhood, cpuOffloadQueue, cpuThreads, scratchpadMem);
@@ -238,8 +259,11 @@ int main(int argc, char ** argv)
         visitedStatesCount += gpuOffloadQueue->getSize();
 
         bool foundBetterSolution =
-            checkForBetterSolutions(bestSolution, cpuOffloadQueue) or
-            checkForBetterSolutions(bestSolution, gpuOffloadQueue);
+                checkForBetterSolutions(bestSolution, cpuOffloadQueue) or
+                checkForBetterSolutions(bestSolution, gpuOffloadQueue);
+
+        updateLnsSolutions(lnsSolution, cpuOffloadQueue);
+        updateLnsSolutions(lnsSolution, gpuOffloadQueue);
 
         updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, cpuOffloadQueue);
         updatePriorityQueues(bestSolution->cost, &priorityQueuesManger, gpuOffloadQueue);
@@ -259,27 +283,34 @@ int main(int argc, char ** argv)
         else
         {
             unsigned long int cpuSpeed = 0;
-            if (cpuOffloadQueue->getSize() > 0 )
+            if (cpuOffloadQueue->getSize() > 0)
             {
                 uint64_t cpuOffloadElapsedTime = max(1ul, now() - cpuOffloadStartTime);
                 cpuSpeed = cpuOffloadQueue->getSize() * 1000 / cpuOffloadElapsedTime;
             }
 
             unsigned long int gpuSpeed = 0;
-            if (gpuOffloadQueue->getSize() > 0 )
+            if (gpuOffloadQueue->getSize() > 0)
             {
                 uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
                 gpuSpeed = gpuOffloadQueue->getSize() * 1000 / gpuOffloadElapsedTime;
             }
 
             clearLine();
-            printf("[INFO] CPU Speed: %2lu states/s", cpuSpeed);
-            printf(" | GPU Speed: %4lu states/s", gpuSpeed);
-            printf(" | Time: ");
+            printf("[INFO] Time: ");
             printElapsedTime(now() - searchStartTime);
+            if (searchStatus == SearchStatus::LNS )
+            {
+                printf(" | Neighborhood: ");
+                cpuNeighborhood->print(false);
+            }
+            printf(" | CPU Speed: %5lu states/s", cpuSpeed);
+            printf(" | GPU Speed: %5lu states/s", gpuSpeed);
             printf(" | Iterations: %u", iterationsCount);
             printf(" | State to visit: %lu", priorityQueuesManger.getSize());
             printf(" | Visited states: %u\r", visitedStatesCount);
+            fflush(stdout);
+
         }
 
         iterationsCount += 1;
@@ -369,47 +400,30 @@ bool hasSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<Sta
 }
 
 template<typename StateType>
-bool hasMoreSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
+bool hasBiggerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
 {
-    unsigned int selectedValuesCount0 = queuedState0.state->selectedValues.getSize();
-    unsigned int selectedValuesCount1 = queuedState1.state->selectedValues.getSize();
+    unsigned int cost0 = queuedState0.state->cost;
+    unsigned int cost1 = queuedState1.state->cost;
 
-    return selectedValuesCount0 > selectedValuesCount1;
+    return cost0 > cost1;
+}
+
+
+
+template<typename StateType>
+bool hasRandomPriority(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
+{
+    return static_cast<bool>(rand() % 2);
 }
 
 template<typename StateType>
-bool hasLessSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
+bool hasLessSelections(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
 {
     unsigned int selectedValuesCount0 = queuedState0.state->selectedValues.getSize();
     unsigned int selectedValuesCount1 = queuedState1.state->selectedValues.getSize();
 
-    if(selectedValuesCount0 != selectedValuesCount1)
-    {
-        return selectedValuesCount0 < selectedValuesCount1;
-    }
-    else
-    {
-        return hasSmallerCost(queuedState0, queuedState1);
-    }
+    return selectedValuesCount0 < selectedValuesCount1;
 }
-
-template<typename StateType>
-bool hasMoreSelectionsAndSmallerCost(QueuedState<StateType> const & queuedState0, QueuedState<StateType> const & queuedState1)
-{
-    unsigned int selectedValuesCount0 = queuedState0.state->selectedValues.getSize();
-    unsigned int selectedValuesCount1 = queuedState1.state->selectedValues.getSize();
-
-    if(selectedValuesCount0 != selectedValuesCount1)
-    {
-        return selectedValuesCount0 > selectedValuesCount1;
-    }
-    else
-    {
-        return hasSmallerCost(queuedState0, queuedState1);
-    }
-}
-
-
 
 template<typename StateType>
 void updatePriorityQueues(unsigned int bestCost, PriorityQueuesManager<StateType>* priorityQueuesManager, OffloadQueue<StateType>* offloadQueue)
@@ -454,6 +468,18 @@ bool checkForBetterSolutions(StateType* bestSolution, OffloadQueue<StateType>* o
     };
 
     return foundBetterSolution;
+}
+
+template<typename StateType>
+void updateLnsSolutions(StateType* lnsSolution, OffloadQueue<StateType>* offloadQueue)
+{
+    for (OffloadedState<StateType>* offloadedState = offloadQueue->begin(); offloadedState != offloadQueue->end(); offloadedState += 1)
+    {
+        if (offloadedState->upperbound < lnsSolution->cost)
+        {
+            *lnsSolution = *offloadedState->upperboundState;
+        }
+    };
 }
 
 template<typename StateType>

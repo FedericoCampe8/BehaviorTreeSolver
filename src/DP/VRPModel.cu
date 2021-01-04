@@ -1,4 +1,5 @@
 #include <thrust/binary_search.h>
+#include <thrust/equal.h>
 
 #include "VRPModel.cuh"
 
@@ -29,8 +30,9 @@ void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, L
     {
         if (variable->minValue <= *value and *value <= variable->maxValue)
         {
-            if( (not *neighbourhood->fixedValues[*value] and not *neighbourhood->fixedVariables[variableIdx]) or
-                (*neighbourhood->fixedValues[*value] and *neighbourhood->fixedVariablesValues[variableIdx] == *value))
+            bool const variableAndValueFree = not *neighbourhood->fixedVariables[variableIdx] and not *neighbourhood->fixedValues[*value];
+            bool const variableFixedToValue = *neighbourhood->fixedVariablesValues[variableIdx] == *value;
+            if (variableAndValueFree or variableFixedToValue)
             {
                 unsigned int edgeIdx = *value - variable->minValue;
                 costs[edgeIdx] = state->cost;
