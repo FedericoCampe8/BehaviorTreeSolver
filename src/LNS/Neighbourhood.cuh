@@ -9,21 +9,21 @@ namespace LNS
 {
     class Neighbourhood
     {
+            // Aliases, Enums, ...
+        public:
+            enum ConstraintType : uint8_t {None, Eq, Neq};
+
             // Members
         public:
-            Array<bool> fixedValues;
-            Array<bool> fixedVariables;
-            Array<OP::Variable::ValueType> fixedVariablesValues;
+            Array<ConstraintType> constraints;
+            Array<OP::Variable::ValueType> solution;
+            Array<bool> constrainedValues;
 
             // Functions
         public:
             Neighbourhood(OP::Problem const* problem, Memory::MallocType mallocType);
-            void fixVariables(LightArray<OP::Variable::ValueType> const * solution, unsigned int fixPercentage, std::mt19937* rng);
+            void generate(LightArray<OP::Variable::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng);
             void operator=(Neighbourhood const& other);
             void print(bool endLine = true);
-            void reset();
-
-        private:
-            void registerVariableWithValue(bool fixed, unsigned int variableIdx, unsigned int value);
     };
 }

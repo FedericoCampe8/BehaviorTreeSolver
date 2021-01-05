@@ -25,14 +25,21 @@ void DP::VRPModel::makeRoot(VRPState* root) const
 __host__ __device__
 void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, LNS::Neighbourhood const * neighbourhood, uint32_t* costs) const
 {
+    using namespace OP;
+    using namespace LNS;
+
     OP::Variable const * const variable = problem->variables[variableIdx];
-    for(uint8_t* value = state->admissibleValues.begin(); value != state->admissibleValues.end(); value += 1)
+
+    for(Variable::ValueType* value = state->admissibleValues.begin(); value != state->admissibleValues.end(); value += 1)
     {
         if (variable->minValue <= *value and *value <= variable->maxValue)
         {
-            bool const variableAndValueFree = not *neighbourhood->fixedVariables[variableIdx] and not *neighbourhood->fixedValues[*value];
-            bool const variableFixedToValue = *neighbourhood->fixedVariablesValues[variableIdx] == *value;
-            if (variableAndValueFree or variableFixedToValue)
+            Neighbourhood::ConstraintType const & variableConstraint = *neighbourhood->constraints[variableIdx];
+            bool const condition0 = variableConstraint == Neighbourhood::ConstraintType::None and (not *neighbourhood->constrainedValues[*value]);
+            bool const condition1 = variableConstraint == Neighbourhood::ConstraintType::Eq and *neighbourhood->solution[variableIdx] == *value;
+            bool const condition2 = variableConstraint == Neighbourhood::ConstraintType::Neq and *neighbourhood->solution[variableIdx] != *value;
+
+            if (condition0 or condition1 or condition2)
             {
                 unsigned int edgeIdx = *value - variable->minValue;
                 costs[edgeIdx] = state->cost;

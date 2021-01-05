@@ -17,7 +17,7 @@ class Array : public LightArray<T>
     public:
         __host__ __device__ Array(std::size_t capacity, Memory::MallocType mallocType);
         __host__ __device__ ~Array();
-        __host__ __device__ void operator=(Array<T> const & other);
+        __host__ __device__ void operator=(LightArray<T> const & other);
 
     private:
         __host__ __device__ static T* mallocStorage(std::size_t capacity, Memory::MallocType mallocType);
@@ -38,9 +38,9 @@ Array<T>::~Array()
 
 template<typename T>
 __host__ __device__
-void Array<T>::operator=(Array<T> const & other)
+void Array<T>::operator=(LightArray<T> const & other)
 {
-    assert(this->capacity == other.capacity);
+    assert(this->capacity == other.getCapacity());
     thrust::copy(thrust::seq, other.begin(), other.end(), this->begin());
 }
 

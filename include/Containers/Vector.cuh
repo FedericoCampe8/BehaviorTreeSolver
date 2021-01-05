@@ -17,7 +17,7 @@ class Vector : public LightVector<T>
     public:
         __host__ __device__ Vector(std::size_t capacity, Memory::MallocType mallocType);
         __host__ __device__ ~Vector();
-        __host__ __device__ void operator=(Vector<T> const & other);
+        __host__ __device__ void operator=(LightVector<T> const & other);
     private:
         __host__ __device__ static T* mallocStorage(std::size_t capacity, Memory::MallocType mallocType);
 };
@@ -38,7 +38,7 @@ Vector<T>::~Vector()
 
 template<typename T>
 __host__ __device__
-void Vector<T>::operator=(Vector<T> const & other)
+void Vector<T>::operator=(LightVector<T> const & other)
 {
     resize(other.getSize());
     thrust::copy(thrust::seq, other.begin(), other.end(), this->begin());

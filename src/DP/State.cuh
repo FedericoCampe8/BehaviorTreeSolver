@@ -28,6 +28,7 @@ namespace DP
             __host__ __device__ static std::byte* mallocStorages(OP::Problem const * problem, unsigned int statesCount, Memory::MallocType mallocType);
             __host__ __device__ void operator=(State const & other);
             __host__ __device__ void removeFromAdmissibles(unsigned int value);
+            __host__ __device__ void reset();
             __host__ __device__ static std::size_t sizeOfStorage(OP::Problem const * problem);
             __host__ __device__ void print() const;
     };

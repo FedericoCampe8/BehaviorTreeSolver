@@ -4,7 +4,7 @@
 
 __host__ __device__
 DP::State::State(OP::Problem const * problem, std::byte* storage) :
-    cost(0u),
+    cost(MaxCost),
     selectedValues(problem->variables.getCapacity(), reinterpret_cast<uint8_t*>(storage)),
     admissibleValues(problem->variables.getCapacity(), selectedValues.LightArray<uint8_t>::end())
 {}
@@ -55,7 +55,6 @@ void DP::State::removeFromAdmissibles(unsigned int value)
 __host__ __device__
 std::size_t DP::State::sizeOfStorage(OP::Problem const * problem)
 {
-
     return LightArray<uint8_t>::sizeOfStorage(problem->variables.getCapacity()) * 2;
 }
 __host__ __device__
@@ -65,5 +64,13 @@ void DP::State::print() const
     selectedValues.print(false);
     printf(" | Admissible values: ");
     admissibleValues.print();
+}
+
+__host__ __device__
+void DP::State::reset()
+{
+    cost = MaxCost;
+    selectedValues.clear();
+    admissibleValues.clear();
 }
 

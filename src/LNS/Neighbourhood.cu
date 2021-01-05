@@ -3,51 +3,69 @@
 #include "Neighbourhood.cuh"
 
 LNS::Neighbourhood::Neighbourhood(OP::Problem const * problem, Memory::MallocType mallocType)  :
-    fixedValues(problem->variables.getCapacity(), mallocType),
-    fixedVariables(problem->variables.getCapacity(), mallocType),
-    fixedVariablesValues(problem->variables.getCapacity(), mallocType)
+    constraints(problem->variables.getCapacity(), mallocType),
+    solution(problem->variables.getCapacity(), mallocType),
+    constrainedValues(problem->variables.getCapacity(), mallocType)
 {
-    reset();
+    thrust::fill(thrust::seq, constraints.begin(), constraints.end(), ConstraintType::None);
+    thrust::fill(thrust::seq, constrainedValues.begin(), constrainedValues.end(), false);
 }
 
-void LNS::Neighbourhood::fixVariables(LightArray<OP::Variable::ValueType> const * solution, unsigned int fixPercentage, std::mt19937* rng)
+void LNS::Neighbourhood::generate(LightArray<OP::Variable::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng)
 {
+    this->solution = *solution;
     std::uniform_int_distribution<unsigned int> randomDistribution(0,100);
     for(unsigned int variablesIdx = 0; variablesIdx < solution->getCapacity(); variablesIdx += 1)
     {
-        unsigned int random = randomDistribution(*rng);
-        registerVariableWithValue(random <= fixPercentage, variablesIdx, *solution->at(variablesIdx));
+        ConstraintType * const constraint = constraints[variablesIdx];
+        *constraint = ConstraintType::None;
+        OP::Variable::ValueType const value = *solution->at(variablesIdx);
+        *constrainedValues[value] = false;
+        unsigned int const random = randomDistribution(*rng);
+
+        if (random < eqPercentage)
+        {
+            *constrainedValues[value] = true;
+            *constraint = ConstraintType::Eq;
+        }
+        else if (random < eqPercentage + neqPercentage)
+        {
+            *constraint = ConstraintType::Neq;
+        }
     }
 }
 
-void LNS::Neighbourhood::operator=(const Neighbourhood& other)
+void LNS::Neighbourhood::operator=(Neighbourhood const & other)
 {
-    fixedValues = other.fixedValues;
-    fixedVariables = other.fixedVariables;
-    fixedVariablesValues = other.fixedVariablesValues;
+    constraints = other.constraints;
+    solution = other.solution;
+    constrainedValues = other.constrainedValues;
 }
 
 void LNS::Neighbourhood::print(bool endLine)
 {
+    auto printConstraint = [&] (unsigned int variableIdx) -> void
+    {
+        switch (*constraints[variableIdx])
+        {
+            case ConstraintType::None:
+                    printf("  ");
+                break;
+            case ConstraintType::Eq:
+                    printf("\033[30;42m%2d\033[0m", *solution[variableIdx]);
+                break;
+            case ConstraintType::Neq:
+                    printf("\033[30;41m%2d\033[0m", *solution[variableIdx]);
+                break;
+        }
+    };
+
     printf("[");
-    if(*fixedVariables[0])
+    printConstraint(0);
+    for(unsigned int variableIdx = 1; variableIdx < constraints.getCapacity(); variableIdx += 1)
     {
-        printf("%2d", *fixedVariablesValues[0]);
-    }
-    else
-    {
-        printf("__");
-    }
-    for(unsigned int variableIdx = 1; variableIdx < fixedVariablesValues.getCapacity(); variableIdx += 1)
-    {
-        if(*fixedVariables[variableIdx])
-        {
-            printf(",%2d", *fixedVariablesValues[variableIdx]);
-        }
-        else
-        {
-            printf(",__");
-        }
+        printf(",");
+        printConstraint(variableIdx);
     }
     printf("]");
 
@@ -55,18 +73,4 @@ void LNS::Neighbourhood::print(bool endLine)
     {
         printf("\n");
     }
-}
-
-
-void LNS::Neighbourhood::reset()
-{
-    thrust::fill(thrust::seq, fixedValues.begin(), fixedValues.end(), false);
-    thrust::fill(thrust::seq, fixedVariables.begin(), fixedVariables.end(), false);
-}
-
-void LNS::Neighbourhood::registerVariableWithValue(bool fixed, unsigned int variableIdx, unsigned int value)
-{
-    *fixedValues[value] = fixed;
-    *fixedVariables[variableIdx] = fixed;
-    *fixedVariablesValues[variableIdx] = value;
 }
