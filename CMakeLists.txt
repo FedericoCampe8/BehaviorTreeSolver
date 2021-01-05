@@ -49,8 +49,10 @@ set(SOURCES
     src/BB/OffloadedState.cuh
     src/BB/OffloadQueue.cuh
     src/BB/StateMetadata.cuh
-    src/LNS/Neighbourhood.cu
-    src/LNS/Neighbourhood.cuh)
+    src/TS/Attributes.cu
+    src/TS/Attributes.cuh
+    src/TS/Neighbourhood.cu
+    src/TS/Neighbourhood.cuh)
 
 # Add include path
 include_directories(include)

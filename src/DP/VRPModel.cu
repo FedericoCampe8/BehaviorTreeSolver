@@ -23,30 +23,26 @@ void DP::VRPModel::makeRoot(VRPState* root) const
 }
 
 __host__ __device__
-void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, LNS::Neighbourhood const * neighbourhood, uint32_t* costs) const
+void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, TS::Neighbourhood const * neighbourhood, uint32_t* costs) const
 {
     using namespace OP;
-    using namespace LNS;
+    using namespace TS;
 
     OP::Variable const * const variable = problem->variables[variableIdx];
 
     for(Variable::ValueType* value = state->admissibleValues.begin(); value != state->admissibleValues.end(); value += 1)
     {
-        if (variable->minValue <= *value and *value <= variable->maxValue)
+        bool const boundCheck = variable->minValue <= *value and *value <= variable->maxValue;
+        int lastTimeSeen = neighbourhood->getAttributes(variableIdx, *value)->lastTimeSeen;
+        bool tabuCheck = lastTimeSeen < 0 or lastTimeSeen < neighbourhood->timestamp - static_cast<int>(neighbourhood->tabuLength);
+        bool ignoreTabu = variableIdx == 0 or variableIdx == problem->variables.getCapacity() - 1; // Tabu search doesn't apply to Start/End
+        if (boundCheck and (tabuCheck or ignoreTabu))
         {
-            Neighbourhood::ConstraintType const & variableConstraint = *neighbourhood->constraints[variableIdx];
-            bool const condition0 = variableConstraint == Neighbourhood::ConstraintType::None and (not *neighbourhood->constrainedValues[*value]);
-            bool const condition1 = variableConstraint == Neighbourhood::ConstraintType::Eq and *neighbourhood->solution[variableIdx] == *value;
-            bool const condition2 = variableConstraint == Neighbourhood::ConstraintType::Neq and *neighbourhood->solution[variableIdx] != *value;
-
-            if (condition0 or condition1 or condition2)
+            unsigned int edgeIdx = *value - variable->minValue;
+            costs[edgeIdx] = state->cost;
+            if (not state->selectedValues.isEmpty())
             {
-                unsigned int edgeIdx = *value - variable->minValue;
-                costs[edgeIdx] = state->cost;
-                if (not state->selectedValues.isEmpty())
-                {
-                    costs[edgeIdx] += problem->getDistance(*state->selectedValues.back(), *value);
-                }
+                costs[edgeIdx] += problem->getDistance(*state->selectedValues.back(), *value);
             }
         }
     }

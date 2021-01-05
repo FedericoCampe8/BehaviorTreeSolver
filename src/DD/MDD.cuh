@@ -7,7 +7,7 @@
 
 #include "../DP/State.cuh"
 #include "../OP/Problem.cuh"
-#include "../LNS/Neighbourhood.cuh"
+#include "../TS/Neighbourhood.cuh"
 
 namespace DD
 {
@@ -29,7 +29,7 @@ namespace DD
         // Functions
         public:
             MDD(ModelType const * model, unsigned int width);
-            __host__ __device__ void buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, LNS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const;
+            __host__ __device__ void buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, TS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const;
             unsigned int calcCutsetMaxSize() const;
         private:
             unsigned int calcScratchpadMemSize() const;
@@ -46,7 +46,7 @@ namespace DD
 
     template<typename ModelType, typename ProblemType, typename StateType>
     __host__ __device__
-    void MDD<ModelType,ProblemType,StateType>::buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, LNS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const
+    void MDD<ModelType,ProblemType,StateType>::buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, TS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const
     {
         std::byte* freeScratchpadMem = scratchpadMem;
 
