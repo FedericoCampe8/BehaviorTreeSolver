@@ -1,28 +1,30 @@
 #pragma once
 
-#include <Containers/Array.cuh>
+#include <Containers/CircularBuffer.cuh>
 
-#include "Attributes.cuh"
 #include "../OP/Problem.cuh"
+#include "Move.cuh"
 
 namespace TS
 {
     class Neighbourhood
     {
-        // Members
+        // Aliases, Enums, ...
         public:
-            unsigned int tabuLength;
-            int timestamp;
+            using ValueType = OP::Variable::ValueType;
+
+        // Members
         private:
-            unsigned int valuesCount;
-            Array<TS::Attributes> attributes;
+            unsigned int bestAvgCost;
+            unsigned int updatesCount;
+            CircularBuffer<Move> shortTermTabuMoves;
+            CircularBuffer<Move> midTermTabuMoves;
+            CircularBuffer<Move> longTermTabuMoves;
 
         // Functions
         public:
-            Neighbourhood(OP::Problem const* problem, unsigned int tabuLength, Memory::MallocType mallocType);
-            __host__ __device__ TS::Attributes* getAttributes(unsigned int variableIdx, unsigned int value) const;
-            void operator=(Neighbourhood const & other);
+            Neighbourhood(OP::Problem const* problem, unsigned int tabuListSize, Memory::MallocType mallocType);
+            __host__ __device__ bool isTabu(Move const * move) const;
             void update(LightVector<OP::Variable::ValueType> const * solution);
-            void reset();
     };
 }

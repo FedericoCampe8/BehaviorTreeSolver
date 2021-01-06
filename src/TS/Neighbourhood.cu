@@ -1,51 +1,82 @@
-#include <thrust/fill.h>
-#include <Containers/LightVector.cuh>
-
-#include "Attributes.cuh"
 #include "Neighbourhood.cuh"
 
-TS::Neighbourhood::Neighbourhood(OP::Problem const * problem, unsigned int tabuLength, Memory::MallocType mallocType)  :
-    tabuLength(tabuLength),
-    timestamp(0),
-    valuesCount(problem->variables.getCapacity()),
-    attributes(problem->variables.getCapacity() * valuesCount, mallocType)
-{
-    for(TS::Attributes* attribute = attributes.begin(); attribute != attributes.end(); attribute += 1)
-    {
-        new (attribute) TS::Attributes();
-    }
-}
+TS::Neighbourhood::Neighbourhood(OP::Problem const * problem, unsigned int tabuListSize, Memory::MallocType mallocType)  :
+    bestAvgCost(UINT_MAX),
+    updatesCount(0),
+    shortTermTabuMoves(tabuListSize * problem->variables.getCapacity(), mallocType),
+    midTermTabuMoves(tabuListSize * problem->variables.getCapacity(), mallocType),
+    longTermTabuMoves(tabuListSize * problem->variables.getCapacity(), mallocType)
+{}
 
 __host__ __device__
-TS::Attributes* TS::Neighbourhood::getAttributes(unsigned int variableIdx, unsigned int value) const
+bool TS::Neighbourhood::isTabu(Move const * move) const
 {
-    return attributes[valuesCount * variableIdx + value];
-}
-
-
-void TS::Neighbourhood::operator=(Neighbourhood const & other)
-{
-    tabuLength = other.tabuLength;
-    timestamp = other.timestamp;
-    valuesCount = other.valuesCount;
-    attributes = other.attributes;
-}
-
-void TS::Neighbourhood::update(LightVector<OP::Variable::ValueType> const * solution)
-{
-    for(unsigned int variableIdx = 0; variableIdx < solution->getSize(); variableIdx += 1)
+    for(unsigned int moveIdx = 0; moveIdx < shortTermTabuMoves.getSize(); moveIdx += 1)
     {
-        OP::Variable::ValueType const value = *solution->at(variableIdx);
-        attributes[valuesCount * variableIdx + value]->lastTimeSeen = timestamp;
+        if(*shortTermTabuMoves.at(moveIdx) == *move)
+        {
+            return true;
+        }
+    }
+    for(unsigned int moveIdx = 0; moveIdx < midTermTabuMoves.getSize(); moveIdx += 1)
+    {
+        if(*midTermTabuMoves.at(moveIdx) == *move)
+        {
+            return true;
+        }
+    }
+    for(unsigned int moveIdx = 0; moveIdx < longTermTabuMoves.getSize(); moveIdx += 1)
+    {
+        if(*longTermTabuMoves.at(moveIdx) == *move)
+        {
+            return true;
+        }
+    }
+    return false;
+};
+
+
+void TS::Neighbourhood::update(LightVector<ValueType> const * solution)
+{
+
+    for (unsigned int variableIdx = 0; variableIdx < solution->getSize() - 1; variableIdx += 1)
+    {
+        unsigned int fromVariable = variableIdx;
+        ValueType fromValue = *solution->at(variableIdx);
+        ValueType toValue = *solution->at(variableIdx + 1);
+        Move move(fromVariable, fromValue, toValue);
+
+        if(rand() % 100 < 100)
+        {
+
+            if (updatesCount % 1 == 0)
+            {
+                if (shortTermTabuMoves.isFull())
+                {
+                    shortTermTabuMoves.popFront();
+                }
+                shortTermTabuMoves.pushBack(&move);
+            }
+
+            if (updatesCount % 10 == 0)
+            {
+                if (midTermTabuMoves.isFull())
+                {
+                    midTermTabuMoves.popFront();
+                }
+                midTermTabuMoves.pushBack(&move);
+            }
+
+            if (updatesCount % 100 == 0)
+            {
+                if (longTermTabuMoves.isFull())
+                {
+                    longTermTabuMoves.popFront();
+                }
+                longTermTabuMoves.pushBack(&move);
+            }
+        }
     }
 
-    timestamp += 1;
-}
-
-void TS::Neighbourhood::reset()
-{
-    for(TS::Attributes* attribute = attributes.begin(); attribute != attributes.end(); attribute += 1)
-    {
-        new (attribute) TS::Attributes();
-    }
+    updatesCount += 1;
 }

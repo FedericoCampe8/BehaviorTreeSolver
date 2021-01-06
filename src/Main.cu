@@ -131,12 +131,18 @@ int main(int argc, char ** argv)
     Vector<std::thread>* cpuThreads = new Vector<std::thread>(cpuMaxParallelism, MallocType::Std);
     std::byte* scratchpadMem = safeMalloc(cpuMdd->scratchpadMemSize * cpuMaxParallelism, MallocType::Std);
 
-    // TS
+    // Tabu Search
     memorySize = sizeof(Neighbourhood);
     memory = safeMalloc(memorySize, MallocType::Std);
-    Neighbourhood* cpuNeighborhood = new (memory) Neighbourhood(cpuProblem, tabuLength, MallocType::Std);
+    Neighbourhood* cpuTsNeighborhood = new (memory) Neighbourhood(cpuProblem, tabuLength, MallocType::Std);
+    memory = safeMalloc(memorySize, MallocType::Std);
+    Neighbourhood* cpuBbNeighborhood = new (memory) Neighbourhood(cpuProblem, tabuLength, MallocType::Std);
+    Neighbourhood* cpuNeighborhood;
     memory = safeMalloc(memorySize, gpuMallocType);
-    Neighbourhood* gpuNeighborhood = new (memory) Neighbourhood(gpuProblem, tabuLength, gpuMallocType);
+    Neighbourhood* gpuTsNeighborhood = new (memory) Neighbourhood(gpuProblem, tabuLength, gpuMallocType);
+    memory = safeMalloc(memorySize, gpuMallocType);
+    Neighbourhood* gpuBbNeighborhood = new (memory) Neighbourhood(gpuProblem, tabuLength, gpuMallocType);
+    Neighbourhood* gpuNeighborhood;
 
     // Queues
     PriorityQueuesManager<StateType> priorityQueuesManger(cpuProblem, queueMaxSize, 2);
@@ -156,7 +162,6 @@ int main(int argc, char ** argv)
     StateType* bestSolution = new (memory) StateType(cpuProblem, StateType::mallocStorages(cpuProblem, 1, MallocType::Std));
     memory = safeMalloc(memorySize, MallocType::Std);
     StateType* currentSolution = new (memory) StateType(cpuProblem, StateType::mallocStorages(cpuProblem, 1, MallocType::Std));
-    unsigned int bestSolutionIteration;
 
     // Root
     memorySize = sizeof(StateType);
@@ -165,14 +170,17 @@ int main(int argc, char ** argv)
     cpuModel->makeRoot(root);
 
     // Search
+    unsigned int tabuSearchIterationsCount = 0;
     unsigned int iterationsCount = 0;
     enum SearchStatus {BranchAndBound, TabuSearch} searchStatus = SearchStatus::BranchAndBound;
     unsigned int visitedStatesCount = 0;
-
+    cpuNeighborhood = cpuBbNeighborhood;
+    gpuNeighborhood = gpuBbNeighborhood;
 
     // ************
     // Begin search
     // ************
+
 
     // Enqueue root
     StateMetadata<StateType> const rootMetadata(0, StateType::MaxCost, root);
@@ -192,27 +200,35 @@ int main(int argc, char ** argv)
             {
                 if (priorityQueuesManger.isFull())
                 {
-                    if(currentSolution->selectedValues.isEmpty())
-                    {
-                        tabuLength = max(0, tabuLength - 1);
-
-                        clearLine();
-                        printf("[INFO] Changed tabu length to %u due to %u\n", tabuLength, currentSolution->cost);
-                    }
-                    if(thrust::equal(thrust::seq, currentSolution->selectedValues.begin(), currentSolution->selectedValues.end(), bestSolution->selectedValues.begin()))
-                    {
-                        tabuLength += 1;
-
-                        clearLine();
-                        printf("[INFO] Changed tabu length to %u due to %u\n", tabuLength, currentSolution->cost);
-                    }
                     clearLine();
-                    printf("[INFO] Restarting tabu search from %d\n", currentSolution->cost);
+                    printf("[INFO] Tabu search solution: ");
+                    currentSolution->selectedValues.print(false);
+                    printf(" | Value: %d\n", currentSolution->cost);
+
                     cpuNeighborhood->update(&currentSolution->selectedValues);
                     gpuNeighborhood->update(&currentSolution->selectedValues);
+
                     currentSolution->reset();
                     priorityQueuesManger.clearQueues();
                     priorityQueuesManger.enqueue(&rootMetadata);
+
+                    tabuSearchIterationsCount += 1;
+
+                    if(tabuSearchIterationsCount % 5 == 0)
+                    {
+                        cpuNeighborhood = cpuBbNeighborhood;
+                        gpuNeighborhood = gpuBbNeighborhood;
+                        currentSolution->reset();
+                        priorityQueuesManger.clearQueues();
+                        priorityQueuesManger.enqueue(&rootMetadata);
+                        searchStatus = SearchStatus::BranchAndBound;
+
+                        clearLine();
+                        printf("[INFO] Start branch and bound search");
+                        printf(" | Time: ");
+                        printElapsedTime(now() - searchStartTime);
+                        printf(" | Iterations: %u\n", iterationsCount);
+                    }
                 }
             }
             break;
@@ -220,6 +236,13 @@ int main(int argc, char ** argv)
             {
                 if (priorityQueuesManger.isFull())
                 {
+                    clearLine();
+                    printf("[INFO] Branch and bound solution: ");
+                    currentSolution->selectedValues.print(false);
+                    printf(" | Value: %d\n", currentSolution->cost);
+
+                    cpuNeighborhood = cpuTsNeighborhood;
+                    gpuNeighborhood = gpuTsNeighborhood;
                     cpuNeighborhood->update(&currentSolution->selectedValues);
                     gpuNeighborhood->update(&currentSolution->selectedValues);
                     currentSolution->reset();
@@ -249,12 +272,15 @@ int main(int argc, char ** argv)
         visitedStatesCount += cpuOffloadQueue->getSize();
         visitedStatesCount += gpuOffloadQueue->getSize();
 
-        bool const cpuBetterSolution = checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadQueue);
-        bool const gpuBetterSolution = checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadQueue);
+        bool foundBetterSolution =
+            checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadQueue) or
+            checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadQueue);
 
-        if (cpuBetterSolution or gpuBetterSolution)
+        updatePriorityQueues(currentSolution->cost, &priorityQueuesManger, cpuOffloadQueue);
+        updatePriorityQueues(currentSolution->cost, &priorityQueuesManger, gpuOffloadQueue);
+
+        if (foundBetterSolution)
         {
-
             clearLine();
             printf("[INFO] Better solution found: ");
             bestSolution->selectedValues.print(false);
@@ -265,9 +291,6 @@ int main(int argc, char ** argv)
             printf(" | States to visit: %lu", priorityQueuesManger.getSize());
             printf(" | Visited states: %u\n", visitedStatesCount);
         }
-
-        updatePriorityQueues(currentSolution->cost, &priorityQueuesManger, cpuOffloadQueue);
-        updatePriorityQueues(currentSolution->cost, &priorityQueuesManger, gpuOffloadQueue);
 
         uint64_t cpuOffloadElapsedTime = max(1ul, now() - cpuOffloadStartTime);
         unsigned long int cpuSpeed = cpuOffloadQueue->getSize() * 1000 / cpuOffloadElapsedTime;

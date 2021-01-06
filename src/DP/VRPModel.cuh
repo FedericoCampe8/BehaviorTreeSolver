@@ -8,6 +8,10 @@ namespace DP
 {
     class VRPModel
     {
+        // Aliases, Enums, ...
+        public:
+            using ValueType = OP::Variable::ValueType;
+
         // Members
         public:
             OP::VRProblem const * const problem;
@@ -17,9 +21,9 @@ namespace DP
             VRPModel(OP::VRProblem const * problem);
             void makeRoot(VRPState* root) const;
             __host__ __device__ void calcCosts(unsigned int variableIdx, VRPState const * state, TS::Neighbourhood const * neighbourhood, uint32_t* costs) const;
-            __host__ __device__ void makeState(VRPState const * parentState, unsigned int selectedValue, unsigned int childStateCost, VRPState* childState) const;
-            __host__ __device__ void mergeState(VRPState const * parentState, unsigned int selectedValue, VRPState* childState) const;
+            __host__ __device__ void makeState(VRPState const * parentState, ValueType selectedValue, unsigned int childStateCost, VRPState* childState) const;
+            __host__ __device__ void mergeState(VRPState const * parentState, ValueType selectedValue, VRPState* childState) const;
         private:
-            __host__ __device__ void ifPickupAddDelivery(unsigned int selectedValue, VRPState* state) const;
+            __host__ __device__ void ifPickupAddDelivery(ValueType selectedValue, VRPState* state) const;
     };
 }

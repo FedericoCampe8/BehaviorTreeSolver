@@ -15,7 +15,7 @@ void DP::VRPModel::makeRoot(VRPState* root) const
     *root->admissibleValues.back() = problem->start;
     root->admissibleValues.incrementSize();
     *root->admissibleValues.back() = problem->end;
-    for(uint8_t* pickup = problem->pickups.begin(); pickup != problem->pickups.end(); pickup += 1)
+    for(ValueType* pickup = problem->pickups.begin(); pickup != problem->pickups.end(); pickup += 1)
     {
         root->admissibleValues.incrementSize();
         *root->admissibleValues.back() = *pickup;
@@ -33,10 +33,17 @@ void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, T
     for(Variable::ValueType* value = state->admissibleValues.begin(); value != state->admissibleValues.end(); value += 1)
     {
         bool const boundCheck = variable->minValue <= *value and *value <= variable->maxValue;
-        int lastTimeSeen = neighbourhood->getAttributes(variableIdx, *value)->lastTimeSeen;
-        bool tabuCheck = lastTimeSeen < 0 or lastTimeSeen < neighbourhood->timestamp - static_cast<int>(neighbourhood->tabuLength);
-        bool ignoreTabu = variableIdx == 0 or variableIdx == problem->variables.getCapacity() - 1; // Tabu search doesn't apply to Start/End
-        if (boundCheck and (tabuCheck or ignoreTabu))
+        bool isTabu = 0 < variableIdx and variableIdx < problem->variables.getCapacity() - 1;
+        if(isTabu)
+        {
+            unsigned int fromVariable = variableIdx - 1;
+            ValueType fromValue = *state->selectedValues.back();
+            ValueType toValue = *value;
+            Move move(fromVariable, fromValue, toValue);
+            isTabu = neighbourhood->isTabu(&move);
+        }
+
+        if (boundCheck and (not isTabu))
         {
             unsigned int edgeIdx = *value - variable->minValue;
             costs[edgeIdx] = state->cost;
@@ -49,7 +56,7 @@ void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, T
 }
 
 __host__ __device__
-void DP::VRPModel::makeState(VRPState const * parentState, unsigned int selectedValue, unsigned int childStateCost, VRPState* childState) const
+void DP::VRPModel::makeState(VRPState const * parentState, ValueType selectedValue, unsigned int childStateCost, VRPState* childState) const
 {
     // Initialize child state
     *childState = *parentState;
@@ -78,10 +85,10 @@ void DP::VRPModel::makeState(VRPState const * parentState, unsigned int selected
 }
 
 __host__ __device__
-void DP::VRPModel::mergeState(VRPState const * parentState, unsigned int selectedValue, VRPState* childState) const
+void DP::VRPModel::mergeState(VRPState const * parentState, ValueType selectedValue, VRPState* childState) const
 {
     // Merge admissible values
-    for (uint8_t* admissibleValue = parentState->admissibleValues.begin(); admissibleValue != parentState->admissibleValues.end();  admissibleValue += 1)
+    for (ValueType* admissibleValue = parentState->admissibleValues.begin(); admissibleValue != parentState->admissibleValues.end();  admissibleValue += 1)
     {
         if (*admissibleValue != selectedValue and (not childState->isAdmissible(*admissibleValue)))
         {
@@ -94,13 +101,13 @@ void DP::VRPModel::mergeState(VRPState const * parentState, unsigned int selecte
 }
 
 __host__ __device__
-void DP::VRPModel::ifPickupAddDelivery(unsigned int selectedValue, VRPState* state) const
+void DP::VRPModel::ifPickupAddDelivery(ValueType selectedValue, VRPState* state) const
 {
-    uint8_t const * const pickup = thrust::find(thrust::seq, problem->pickups.begin(), problem->pickups.end(), static_cast<uint8_t>(selectedValue));
+    ValueType const * const pickup = thrust::find(thrust::seq, problem->pickups.begin(), problem->pickups.end(), selectedValue);
     if (pickup < problem->pickups.end())
     {
         unsigned int const deliveryIdx = problem->pickups.indexOf(pickup);
-        uint8_t const delivery = *problem->deliveries[deliveryIdx];
+        ValueType const delivery = *problem->deliveries[deliveryIdx];
         if(not state->isAdmissible(delivery))
         {
             state->admissibleValues.incrementSize();
