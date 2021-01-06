@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <Containers/Array.cuh>
 
 #include "Variable.cuh"
@@ -16,7 +15,7 @@ namespace OP
         // Functions
         public:
             Problem(unsigned int variablesCount, Memory::MallocType mallocType);
-            unsigned int calcMaxOutdegree() const;
+            ValueType calcMaxValue() const;
     };
 }
 

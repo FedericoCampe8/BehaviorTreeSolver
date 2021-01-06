@@ -11,7 +11,8 @@ namespace Memory
     enum MallocType {Std, Managed};
 
     __host__ __device__ inline std::byte* safeMalloc(std::size_t size, MallocType type);
-    __host__ __device__ inline std::byte* align(std::size_t const alignment, std::byte const * ptr);
+    template<typename T>
+    __host__ __device__ inline std::byte* align(std::size_t const alignment, T const * ptr);
 
     __host__ __device__ inline std::byte* safeStdMalloc(std::size_t size);
     __host__            inline std::byte* safeManagedMalloc(std::size_t size);
@@ -61,11 +62,12 @@ namespace Memory
         return static_cast<std::byte*>(mem);
     }
 
+    template<typename T>
     __host__ __device__
-    std::byte* align(std::size_t const alignment, std::byte const* ptr)
+    std::byte* align(unsigned int const alignment, T const* ptr)
     {
-        uintptr_t const intptr = reinterpret_cast<uintptr_t>(ptr);
-        uintptr_t const aligned = intptr + (intptr % alignment);
+        uintptr_t const intPtr = reinterpret_cast<uintptr_t>(ptr);
+        uintptr_t const aligned = intPtr + (intPtr % alignment);
         return reinterpret_cast<std::byte*>(aligned);
     }
 }

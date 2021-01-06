@@ -7,23 +7,22 @@
 
 namespace LNS
 {
+    enum ConstraintType : uint8_t {None, Eq, Neq};
+
     class Neighbourhood
     {
-            // Aliases, Enums, ...
+        // Members
         public:
-            enum ConstraintType : uint8_t {None, Eq, Neq};
+            LightArray<ConstraintType> constraints;
+            LightArray<OP::ValueType> solution;
+            LightArray<bool> constrainedValues;
 
-            // Members
+        // Functions
         public:
-            Array<ConstraintType> constraints;
-            Array<OP::Variable::ValueType> solution;
-            Array<bool> constrainedValues;
-
-            // Functions
-        public:
-            Neighbourhood(OP::Problem const* problem, Memory::MallocType mallocType);
-            void generate(LightArray<OP::Variable::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng);
-            void operator=(Neighbourhood const& other);
+            Neighbourhood(OP::Problem const* problem, std::byte* storage);
+            void generate(LightArray<OP::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng);
+            static std::byte* mallocStorages(OP::Problem const * problem, unsigned int neighbourhoodsCount, Memory::MallocType mallocType);
             void print(bool endLine = true);
+            static unsigned int sizeOfStorage(OP::Problem const * problem);
     };
 }

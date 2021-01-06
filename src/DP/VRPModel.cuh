@@ -16,10 +16,10 @@ namespace DP
         public:
             VRPModel(OP::VRProblem const * problem);
             void makeRoot(VRPState* root) const;
-            __host__ __device__ void calcCosts(unsigned int variableIdx, VRPState const * state, LNS::Neighbourhood const * neighbourhood, uint32_t* costs) const;
-            __host__ __device__ void makeState(VRPState const * parentState, unsigned int selectedValue, unsigned int childStateCost, VRPState* childState) const;
-            __host__ __device__ void mergeState(VRPState const * parentState, unsigned int selectedValue, VRPState* childState) const;
+            __host__ __device__ void calcCosts(unsigned int variableIdx, VRPState const * state, LNS::Neighbourhood const * neighbourhood, CostType* costs) const;
+            __host__ __device__ void makeState(VRPState const * parentState, OP::ValueType value, uint32_t childStateCost, VRPState* childState) const;
+            __host__ __device__ void mergeState(VRPState const * parentState, OP::ValueType value, VRPState* childState) const;
         private:
-            __host__ __device__ void ifPickupAddDelivery(unsigned int selectedValue, VRPState* state) const;
+            __host__ __device__ void ifPickupAddDelivery(OP::ValueType value, VRPState* state) const;
     };
 }

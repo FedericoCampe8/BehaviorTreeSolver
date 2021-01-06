@@ -44,13 +44,10 @@ set(SOURCES
     src/OP/Problem.cuh
     src/DP/State.cu
     src/DP/State.cuh
-    src/BB/QueuedState.cuh
-    src/BB/PriorityQueuesManager.cuh
-    src/BB/OffloadedState.cuh
-    src/BB/OffloadQueue.cuh
+    src/BB/OffloadBuffer.cuh
     src/BB/StateMetadata.cuh
     src/LNS/Neighbourhood.cu
-    src/LNS/Neighbourhood.cuh)
+    src/LNS/Neighbourhood.cuh src/BB/PriorityQueue.cuh)
 
 # Add include path
 include_directories(include)

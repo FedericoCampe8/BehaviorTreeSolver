@@ -2,16 +2,16 @@
 
 #include "Neighbourhood.cuh"
 
-LNS::Neighbourhood::Neighbourhood(OP::Problem const * problem, Memory::MallocType mallocType)  :
-    constraints(problem->variables.getCapacity(), mallocType),
-    solution(problem->variables.getCapacity(), mallocType),
-    constrainedValues(problem->variables.getCapacity(), mallocType)
+LNS::Neighbourhood::Neighbourhood(OP::Problem const * problem, std::byte* storage)  :
+    constraints(problem->variables.getCapacity(), reinterpret_cast<ConstraintType*>(storage)),
+    solution(problem->variables.getCapacity(), reinterpret_cast<OP::ValueType*>(Memory::align(8u, constraints.end()))),
+    constrainedValues(problem->variables.getCapacity(), reinterpret_cast<bool*>(Memory::align(8u, solution.end())))
 {
     thrust::fill(thrust::seq, constraints.begin(), constraints.end(), ConstraintType::None);
     thrust::fill(thrust::seq, constrainedValues.begin(), constrainedValues.end(), false);
 }
 
-void LNS::Neighbourhood::generate(LightArray<OP::Variable::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng)
+void LNS::Neighbourhood::generate(LightArray<OP::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng)
 {
     this->solution = *solution;
     std::uniform_int_distribution<unsigned int> randomDistribution(0,100);
@@ -19,7 +19,7 @@ void LNS::Neighbourhood::generate(LightArray<OP::Variable::ValueType> const * so
     {
         ConstraintType * const constraint = constraints[variablesIdx];
         *constraint = ConstraintType::None;
-        OP::Variable::ValueType const value = *solution->at(variablesIdx);
+        OP::ValueType const value = *solution->at(variablesIdx);
         *constrainedValues[value] = false;
         unsigned int const random = randomDistribution(*rng);
 
@@ -35,11 +35,9 @@ void LNS::Neighbourhood::generate(LightArray<OP::Variable::ValueType> const * so
     }
 }
 
-void LNS::Neighbourhood::operator=(Neighbourhood const & other)
+std::byte* LNS::Neighbourhood::mallocStorages(const OP::Problem* problem, unsigned int neighbourhoodsCount, Memory::MallocType mallocType)
 {
-    constraints = other.constraints;
-    solution = other.solution;
-    constrainedValues = other.constrainedValues;
+    return Memory::safeMalloc(sizeOfStorage(problem) * neighbourhoodsCount, mallocType);
 }
 
 void LNS::Neighbourhood::print(bool endLine)
@@ -67,10 +65,14 @@ void LNS::Neighbourhood::print(bool endLine)
         printf(",");
         printConstraint(variableIdx);
     }
-    printf("]");
+    printf("]%c", endLine ? '\n' : '\0');
+}
 
-    if(endLine)
-    {
-        printf("\n");
-    }
+unsigned int LNS::Neighbourhood::sizeOfStorage(OP::Problem const * problem)
+{
+    return
+        LightArray<ConstraintType>::sizeOfStorage(problem->variables.getCapacity()) + // constraints
+        LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // solutions
+        LightArray<bool>::sizeOfStorage(problem->calcMaxValue()) + // constrainedValues
+        8 * 3; // Alignment
 }

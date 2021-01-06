@@ -4,12 +4,10 @@
 
 namespace OP
 {
+    using ValueType = uint8_t;
+
     class Variable
     {
-        // Aliases, Enums, ...
-        public:
-            using ValueType = uint8_t;
-
         // Members
         public:
             ValueType minValue;
@@ -17,7 +15,6 @@ namespace OP
 
         // Functions
         public:
-            Variable(unsigned int minValue, unsigned int maxValue);
-            unsigned int cardinality();
+            Variable(ValueType minValue, ValueType maxValue);
     };
 }

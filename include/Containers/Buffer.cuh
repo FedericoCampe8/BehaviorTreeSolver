@@ -13,14 +13,14 @@ class Buffer : public Array<T>
 {
     // Members
     private:
-        Vector<uint32_t> invalids;
+        Vector<unsigned int> invalids;
 
     // Functions
     public:
-        __host__ __device__ Buffer(std::size_t capacity, Memory::MallocType mallocType);
+        __host__ __device__ Buffer(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ void clear();
         __host__ __device__ inline void erase(T const * t);
-        __host__ __device__ inline std::size_t getSize() const;
+        __host__ __device__ inline unsigned int getSize() const;
         __host__ __device__ T* insert(T const * t);
         __host__ __device__ inline bool isEmpty() const;
         __host__ __device__ inline bool isFull() const;
@@ -28,7 +28,7 @@ class Buffer : public Array<T>
 
 template<typename T>
 __host__ __device__
-Buffer<T>::Buffer(std::size_t capacity, Memory::MallocType mallocType) :
+Buffer<T>::Buffer(unsigned int capacity, Memory::MallocType mallocType) :
     Array<T>(capacity, mallocType),
     invalids(capacity, mallocType)
 {
@@ -48,13 +48,12 @@ __host__ __device__
 void Buffer<T>::erase(T const * t)
 {
     unsigned int invalidIdx = this->indexOf(t);
-    invalids.incrementSize();
-    *invalids.back() = invalidIdx;
+    invalids.pushBack(&invalidIdx);
 }
 
 template<typename T>
 __host__ __device__
-std::size_t Buffer<T>::getSize() const
+unsigned int Buffer<T>::getSize() const
 {
     return invalids.getCapacity() - invalids.getSize();
 }
@@ -64,7 +63,6 @@ __host__ __device__
 T* Buffer<T>::insert(T const * t)
 {
     assert(not isFull());
-
     unsigned int const elementIdx = *invalids.back();
     invalids.popBack();
     *this->at(elementIdx) = *t;

@@ -15,7 +15,7 @@ class Array : public LightArray<T>
 {
     // Functions
     public:
-        __host__ __device__ Array(std::size_t capacity, Memory::MallocType mallocType);
+        __host__ __device__ Array(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ ~Array();
         __host__ __device__ void operator=(LightArray<T> const & other);
 
@@ -25,7 +25,7 @@ class Array : public LightArray<T>
 
 template<typename T>
 __host__ __device__
-Array<T>::Array(std::size_t capacity, Memory::MallocType mallocType) :
+Array<T>::Array(unsigned int capacity, Memory::MallocType mallocType) :
     LightArray<T>(capacity, mallocStorage(capacity, mallocType))
 {}
 
@@ -48,5 +48,7 @@ template<typename T>
 __host__ __device__
 T* Array<T>::mallocStorage(std::size_t capacity, Memory::MallocType mallocType)
 {
-    return reinterpret_cast<T*>(Memory::safeMalloc(LightArray<T>::sizeOfStorage(capacity), mallocType));
+    unsigned int memorySize = LightArray<T>::sizeOfStorage(capacity);
+    std::byte* memory = Memory::safeMalloc(memorySize, mallocType);
+    return reinterpret_cast<T*>(memory);
 }

@@ -15,17 +15,16 @@ class Vector : public LightVector<T>
 {
     // Functions
     public:
-        __host__ __device__ Vector(std::size_t capacity, Memory::MallocType mallocType);
+        __host__ __device__ Vector(unsigned int capacity, Memory::MallocType mallocType);
         __host__ __device__ ~Vector();
         __host__ __device__ void operator=(LightVector<T> const & other);
     private:
         __host__ __device__ static T* mallocStorage(std::size_t capacity, Memory::MallocType mallocType);
 };
 
-
 template<typename T>
 __host__ __device__
-Vector<T>::Vector(std::size_t capacity, Memory::MallocType mallocType) :
+Vector<T>::Vector(unsigned int capacity, Memory::MallocType mallocType) :
     LightVector<T>(capacity, mallocStorage(capacity, mallocType))
 {}
 
@@ -48,5 +47,7 @@ template<typename T>
 __host__ __device__
 T* Vector<T>::mallocStorage(std::size_t capacity, Memory::MallocType mallocType)
 {
-    return reinterpret_cast<T*>(Memory::safeMalloc(LightArray<T>::sizeOfStorage(capacity), mallocType));
+    unsigned int memorySize = LightArray<T>::sizeOfStorage(capacity);
+    std::byte* memory = Memory::safeMalloc(memorySize, mallocType);
+    return reinterpret_cast<T*>(memory);
 }

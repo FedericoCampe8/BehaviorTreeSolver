@@ -5,19 +5,20 @@
 __host__ __device__
 DP::State::State(OP::Problem const * problem, std::byte* storage) :
     cost(MaxCost),
-    selectedValues(problem->variables.getCapacity(), reinterpret_cast<uint8_t*>(storage)),
-    admissibleValues(problem->variables.getCapacity(), selectedValues.LightArray<uint8_t>::end())
+    selectedValues(problem->variables.getCapacity(), reinterpret_cast<OP::ValueType*>(storage)),
+    admissibleValues(problem->variables.getCapacity(), selectedValues.LightArray<OP::ValueType>::end())
 {}
 
 __host__ __device__
-bool DP::State::isAdmissible(unsigned int value) const
+bool DP::State::isAdmissible(OP::ValueType value) const
 {
-    return thrust::find(thrust::seq, admissibleValues.begin(), admissibleValues.end(), static_cast<uint8_t>(value)) != admissibleValues.end();
+    return thrust::find(thrust::seq, admissibleValues.begin(), admissibleValues.end(), value) != admissibleValues.end();
 }
+
 __host__ __device__
-bool DP::State::isSelected(unsigned int value) const
+bool DP::State::isSelected(OP::ValueType value) const
 {
-    return thrust::find(thrust::seq, selectedValues.begin(), selectedValues.end(), static_cast<uint8_t>(value)) != selectedValues.end();
+    return thrust::find(thrust::seq, selectedValues.begin(), selectedValues.end(), value) != selectedValues.end();
 }
 
 __host__ __device__
@@ -39,9 +40,9 @@ void DP::State::operator=(DP::State const & other)
 }
 
 __host__ __device__
-void DP::State::removeFromAdmissibles(unsigned int value)
+void DP::State::removeFromAdmissibles(OP::ValueType value)
 {
-    uint8_t const * const admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValues.begin(), admissibleValues.end(), static_cast<uint8_t>(value));
+    OP::ValueType const * const admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValues.begin(), admissibleValues.end(), value);
     if (admissibleValuesEnd != admissibleValues.end())
     {
         unsigned int size = admissibleValues.indexOf(admissibleValuesEnd);
@@ -51,19 +52,22 @@ void DP::State::removeFromAdmissibles(unsigned int value)
     assert(not isAdmissible(value));
 }
 
+__host__ __device__
+unsigned int DP::State::sizeOfStorage(OP::Problem const * problem)
+{
+    return
+        LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // selectedValues
+        LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // admissibleValues
+        8 * 2; // Alignment
+}
 
 __host__ __device__
-std::size_t DP::State::sizeOfStorage(OP::Problem const * problem)
-{
-    return LightArray<uint8_t>::sizeOfStorage(problem->variables.getCapacity()) * 2;
-}
-__host__ __device__
-void DP::State::print() const
+void DP::State::print(bool endLine) const
 {
     printf("[DEBUG] Selected values: ");
     selectedValues.print(false);
     printf(" | Admissible values: ");
-    admissibleValues.print();
+    admissibleValues.print(endLine);
 }
 
 __host__ __device__
@@ -73,4 +77,3 @@ void DP::State::reset()
     selectedValues.clear();
     admissibleValues.clear();
 }
-

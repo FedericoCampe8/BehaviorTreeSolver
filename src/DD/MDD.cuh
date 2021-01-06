@@ -23,7 +23,7 @@ namespace DD
         public:
             ModelType const * model;
             unsigned int width;
-            unsigned int maxOutdegree;
+            unsigned int maxValue;
             unsigned int scratchpadMemSize;
 
         // Functions
@@ -40,7 +40,7 @@ namespace DD
     MDD<ModelType,ProblemType,StateType>::MDD(ModelType const * model, unsigned int width) :
         model(model),
         width(width),
-        maxOutdegree(model->problem->calcMaxOutdegree()),
+        maxValue(model->problem->calcMaxValue()),
         scratchpadMemSize(calcScratchpadMemSize())
     {}
 
@@ -52,38 +52,37 @@ namespace DD
 
         // Current states
         LightVector<StateType> currentStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(currentStates.LightArray<StateType>::end()));
+        freeScratchpadMem = Memory::align(8u, currentStates.LightArray<StateType>::end());
         unsigned int const storageSize = StateType::sizeOfStorage(model->problem);
         for(unsigned int stateIdx = 0; stateIdx < currentStates.getCapacity(); stateIdx += 1)
         {
             new (currentStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
-        freeScratchpadMem = Memory::align(8, freeScratchpadMem);
+        freeScratchpadMem = Memory::align(8u, freeScratchpadMem);
 
         // Next states
         LightVector<StateType> nextStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(nextStates.LightArray<StateType>::end()));
+        freeScratchpadMem = Memory::align(8u, nextStates.LightArray<StateType>::end());
         for(unsigned int stateIdx = 0; stateIdx < nextStates.getCapacity(); stateIdx += 1)
         {
             new (nextStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
             freeScratchpadMem += storageSize;
         }
-        freeScratchpadMem = Memory::align(8, freeScratchpadMem);
+        freeScratchpadMem = Memory::align(8u, freeScratchpadMem);
 
         // Auxiliary information
-        LightVector<uint32_t> costs(maxOutdegree * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(costs.LightArray<uint32_t>::end()));
+        LightVector<DP::CostType> costs(maxValue * width, reinterpret_cast<DP::CostType*>(freeScratchpadMem));
+        freeScratchpadMem = Memory::align(8u, costs.LightArray<DP::CostType>::end());
 
-        assert(width * maxOutdegree < UINT32_MAX);
-        LightVector<uint32_t> indices(maxOutdegree * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8, reinterpret_cast<std::byte*>(indices.LightArray<uint32_t>::end()));
+        assert(width * maxValue < UINT32_MAX);
+        LightVector<uint32_t> indices(maxValue * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
+        freeScratchpadMem = Memory::align(8u, indices.LightArray<uint32_t>::end());
 
         assert(freeScratchpadMem < scratchpadMem + scratchpadMemSize);
 
         // Root
-        currentStates.incrementSize();
-        *currentStates.back() = *top;
+        currentStates.pushBack(top);
 
         // Build
         bool cutsetInitialized = false;
@@ -91,24 +90,24 @@ namespace DD
         for(unsigned int variableIdx = top->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
         {
             // Initialize indices
-            indices.resize(maxOutdegree * currentStates.getSize());
+            indices.resize(maxValue * currentStates.getSize());
             thrust::sequence(thrust::seq, indices.begin(), indices.end());
 
             // Initialize costs
-            costs.resize(maxOutdegree * currentStates.getSize());
-            thrust::fill(thrust::seq, costs.begin(), costs.end(), StateType::MaxCost);
+            costs.resize(maxValue * currentStates.getSize());
+            thrust::fill(thrust::seq, costs.begin(), costs.end(), DP::MaxCost);
 
             // Calculate costs
             for (unsigned int currentStateIdx = 0; currentStateIdx < currentStates.getSize(); currentStateIdx += 1)
             {
-                model->calcCosts(variableIdx, currentStates[currentStateIdx], neighbourhood, costs[maxOutdegree * currentStateIdx]);
+                model->calcCosts(variableIdx, currentStates[currentStateIdx], neighbourhood, costs[maxValue * currentStateIdx]);
             }
 
             // Sort indices by costs
             thrust::sort_by_key(thrust::seq, costs.begin(), costs.end(), indices.begin());
 
             // Discards bad egdes by cost
-            uint32_t* const costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), StateType::MaxCost);
+            uint32_t* const costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), DP::MaxCost);
             if (costsEnd != costs.end())
             {
                 unsigned int size = costs.indexOf(costsEnd);
@@ -120,14 +119,14 @@ namespace DD
                 else
                 {
                     *bottom = *top;
-                    bottom->cost = StateType::MaxCost;
+                    bottom->cost = DP::MaxCost;
                     return;
                 }
             }
 
             if (variableIdx < variablesCount - 1)
             {
-                nextStates.resize(min(width, static_cast<unsigned int>(indices.getSize())));
+                nextStates.resize(min(width, indices.getSize()));
             }
             else
             {
@@ -140,12 +139,11 @@ namespace DD
                 cutset->resize(indices.getSize());
                 for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < indices.getSize(); cutsetStateIdx += 1)
                 {
-                    unsigned int const index = *indices[cutsetStateIdx];
-                    unsigned int const currentStateIdx = index / maxOutdegree;
-                    unsigned int const edgeIdx = index % maxOutdegree;
-                    unsigned int const selectedValue = model->problem->variables[variableIdx]->minValue + edgeIdx;
-                    model->makeState(currentStates[currentStateIdx], selectedValue, *costs[cutsetStateIdx], cutset->at(cutsetStateIdx));
-                    assert(currentStates[currentStateIdx]->selectedValues.getSize() + 1 == cutset->at(cutsetStateIdx)->selectedValues.getSize());
+                    uint32_t const index = *indices[cutsetStateIdx];
+                    unsigned int const currentStateIdx = index / maxValue;
+                    unsigned int const edgeIdx = index % maxValue;
+                    OP::ValueType const value = model->problem->variables[variableIdx]->minValue + edgeIdx;
+                    model->makeState(currentStates[currentStateIdx], value, *costs[cutsetStateIdx], cutset->at(cutsetStateIdx));
                 };
 
                 cutsetInitialized = true;
@@ -154,40 +152,32 @@ namespace DD
             // Add next states
             for(unsigned int nextStateIdx = 0; nextStateIdx < indices.getSize(); nextStateIdx += 1)
             {
-                unsigned int const index = *indices[nextStateIdx];
-                unsigned int const currentStateIdx = index / maxOutdegree;
-                unsigned int const edgeIdx = index % maxOutdegree;
-                unsigned int const selectedValue = model->problem->variables[variableIdx]->minValue + edgeIdx;
+                uint32_t const index = *indices[nextStateIdx];
+                unsigned int const currentStateIdx = index / maxValue;
+                unsigned int const edgeIdx = index % maxValue;
+                OP::ValueType const value = model->problem->variables[variableIdx]->minValue + edgeIdx;
                 if (nextStateIdx < nextStates.getSize())
                 {
-                    model->makeState(currentStates[currentStateIdx], selectedValue, *costs[nextStateIdx], nextStates[nextStateIdx]);
-                    assert(currentStates[currentStateIdx]->selectedValues.getSize() + 1 == nextStates[nextStateIdx]->selectedValues.getSize());
+                    model->makeState(currentStates[currentStateIdx], value, *costs[nextStateIdx], nextStates[nextStateIdx]);
                 }
                 else if (type == Type::Relaxed)
                 {
-                    model->mergeState(currentStates[currentStateIdx], selectedValue, nextStates.back());
-                    assert(currentStates[currentStateIdx]->selectedValues.getSize() + 1 == nextStates.back()->selectedValues.getSize());
+                    model->mergeState(currentStates[currentStateIdx], value, nextStates.back());
                 }
             }
 
-            for(unsigned int stateIdx = 0; stateIdx < nextStates.getSize(); stateIdx += 1)
-            {
-                assert(currentStates[0]->selectedValues.getSize() + 1 == nextStates[stateIdx]->selectedValues.getSize());
-            }
-
             //Prepare for the next loop
-            LightVector<StateType>::swap(&currentStates, &nextStates);
+            LightVector<StateType>::swap(currentStates, nextStates);
         }
 
         //Copy bottom
         *bottom = *currentStates[0];
-        assert(bottom->selectedValues.isFull());
     }
 
     template<typename ModelType, typename ProblemType, typename StateType>
     unsigned int MDD<ModelType, ProblemType, StateType>::calcCutsetMaxSize() const
     {
-        return width * maxOutdegree;
+        return width * maxValue;
     }
 
     template<typename ModelType, typename ProblemType, typename StateType>
@@ -198,14 +188,13 @@ namespace DD
         unsigned int const cutsetMaxSize = calcCutsetMaxSize();
 
         return
-            stateSize * width + // Current states
+            stateSize * width + // currentStates
             stateStorageSize * width  +
-            stateSize * width + // Next states
+            stateSize * width + // nextStates
             stateStorageSize * width  +
-            sizeof(uint32_t) * cutsetMaxSize + // Costs
-            sizeof(uint32_t) * cutsetMaxSize + // Indices
+            sizeof(DP::CostType) * cutsetMaxSize + // costs
+            sizeof(uint32_t) * cutsetMaxSize + // indices
             8 * 6; // Alignment
     }
-
 
 }
