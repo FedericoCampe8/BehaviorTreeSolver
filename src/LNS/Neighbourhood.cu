@@ -13,7 +13,6 @@ LNS::Neighbourhood::Neighbourhood(OP::Problem const * problem, std::byte* storag
 
 void LNS::Neighbourhood::generate(LightArray<OP::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng)
 {
-    this->solution = *solution;
     std::uniform_int_distribution<unsigned int> randomDistribution(0,100);
     for(unsigned int variablesIdx = 0; variablesIdx < solution->getCapacity(); variablesIdx += 1)
     {
@@ -27,10 +26,12 @@ void LNS::Neighbourhood::generate(LightArray<OP::ValueType> const * solution, un
         {
             *constrainedValues[value] = true;
             *constraint = ConstraintType::Eq;
+            *this->solution[variablesIdx] = *solution->at(variablesIdx);
         }
         else if (random < eqPercentage + neqPercentage)
         {
             *constraint = ConstraintType::Neq;
+            *this->solution[variablesIdx] = *solution->at(variablesIdx);
         }
     }
 }
@@ -72,7 +73,7 @@ unsigned int LNS::Neighbourhood::sizeOfStorage(OP::Problem const * problem)
 {
     return
         LightArray<ConstraintType>::sizeOfStorage(problem->variables.getCapacity()) + // constraints
-        LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // solutions
+        LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // solution
         LightArray<bool>::sizeOfStorage(problem->calcMaxValue()) + // constrainedValues
         8 * 3; // Alignment
 }

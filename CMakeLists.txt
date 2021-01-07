@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(mdd-gpu)
+project(mdd-gpu LANGUAGES CXX)
 
 # CUDA
 enable_language(CUDA)

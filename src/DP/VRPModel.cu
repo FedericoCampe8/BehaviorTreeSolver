@@ -34,12 +34,9 @@ void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, L
 
             if (condition0 or condition1 or condition2)
             {
+                DP::CostType edgeCost = not state->selectedValues.isEmpty() ? problem->getDistance(*state->selectedValues.back(), *value) : 0;
                 unsigned int edgeIdx = *value - variable->minValue;
-                costs[edgeIdx] = state->cost;
-                if (not state->selectedValues.isEmpty())
-                {
-                    costs[edgeIdx] += problem->getDistance(*state->selectedValues.back(), *value);
-                }
+                costs[edgeIdx] = state->cost + edgeCost;
             }
         }
     }

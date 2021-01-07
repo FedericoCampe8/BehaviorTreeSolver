@@ -12,16 +12,16 @@ namespace BB
     class OffloadBuffer
     {
         // Members
-        public:
-            unsigned int const cutsetMaxSize;
         private:
             unsigned int size;
-            Array<StateType> statesBuffer;
-            Array<StateMetadata<StateType>> statesMetadataBuffer;
-            Array<unsigned int> cutsetsSizes;
-            Array<StateType> cutsetsBuffer;
-            Array<StateType> approximateSolutionsBuffer;
+            unsigned int const cutsetMaxSize;
+            Array<StateMetadata<StateType>> statesMetadata;
+            Array<LightVector<StateType>> cutsets;
+            Array<StateType> approximateSolutions;
             Array<LNS::Neighbourhood> neighbourhoods;
+            Array<StateType> statesBuffer;
+            Array<StateType> cutsetsBuffer;
+
 
         // Functions
         public:
@@ -42,13 +42,14 @@ namespace BB
     template<typename StateType>
     template<typename ModelType, typename ProblemType>
     OffloadBuffer<StateType>::OffloadBuffer(DD::MDD<ModelType, ProblemType, StateType> const * mdd, unsigned int capacity, Memory::MallocType mallocType) :
+        size(0),
         cutsetMaxSize(mdd->calcCutsetMaxSize()),
+        statesMetadata(capacity, mallocType),
+        cutsets(capacity, mallocType),
+        approximateSolutions(capacity, mallocType),
+        neighbourhoods(capacity, mallocType),
         statesBuffer(capacity, mallocType),
-        statesMetadataBuffer(capacity, mallocType),
-        cutsetsSizes(capacity, mallocType),
-        cutsetsBuffer(cutsetMaxSize * capacity, mallocType),
-        approximateSolutionsBuffer(capacity, mallocType),
-        neighbourhoods(capacity, mallocType)
+        cutsetsBuffer(cutsetMaxSize * capacity, mallocType)
     {
         ProblemType const * const problem = mdd->model->problem;
         unsigned int storageSize = StateType::sizeOfStorage(problem);
@@ -68,10 +69,10 @@ namespace BB
         }
 
         // Approximate solutions
-        storages = StateType::mallocStorages(problem, approximateSolutionsBuffer.getCapacity(), mallocType);
-        for (unsigned int stateIdx = 0; stateIdx < approximateSolutionsBuffer.getCapacity(); stateIdx += 1)
+        storages = StateType::mallocStorages(problem, approximateSolutions.getCapacity(), mallocType);
+        for (unsigned int stateIdx = 0; stateIdx < approximateSolutions.getCapacity(); stateIdx += 1)
         {
-            new (approximateSolutionsBuffer[stateIdx]) StateType(problem, &storages[storageSize * stateIdx]);
+            new (approximateSolutions[stateIdx]) StateType(problem, &storages[storageSize * stateIdx]);
         }
 
         // Neighbourhood
@@ -92,10 +93,10 @@ namespace BB
     template<typename StateType>
     void OffloadBuffer<StateType>::enqueue(StateMetadata<StateType> const * stateMetadata)
     {
-        unsigned int const index = size - 1;
+        unsigned int const index = size;
         *statesBuffer[index] = *stateMetadata->state;
-        new (statesMetadataBuffer[index]) StateMetadata<StateType>(stateMetadata->lowerbound, stateMetadata->upperbound, statesBuffer[index]);
-        *cutsetsSizes[index] = 0;
+        new (statesMetadata[index]) StateMetadata<StateType>(stateMetadata->lowerbound, stateMetadata->upperbound, statesBuffer[index]);
+        new (cutsets[index]) LightVector<StateType>(cutsetMaxSize, cutsetsBuffer[cutsetMaxSize * index]);
         size += 1;
     }
 
@@ -112,14 +113,14 @@ namespace BB
     __host__ __device__
     StateType * OffloadBuffer<StateType>::getApproximateSolution(unsigned int index) const
     {
-        return approximateSolutionsBuffer[index];
+        return approximateSolutions[index];
     }
 
     template<typename StateType>
     __host__ __device__
     LightVector<StateType> OffloadBuffer<StateType>::getCutset(unsigned int index) const
     {
-        return LightVector<StateType>(*cutsetsSizes[index], cutsetsBuffer[cutsetMaxSize * index]);
+        return *cutsets[index];
     }
 
     template<typename StateType>
@@ -139,7 +140,7 @@ namespace BB
     __host__ __device__
     StateMetadata<StateType> * OffloadBuffer<StateType>::getStateMetadata(unsigned int index) const
     {
-        return statesMetadataBuffer[index];
+        return statesMetadata[index];
     }
 
     template<typename StateType>
@@ -151,7 +152,7 @@ namespace BB
     template<typename StateType>
     bool OffloadBuffer<StateType>::isFull() const
     {
-        return size == statesMetadataBuffer.getCapacity();
+        return size == statesMetadata.getCapacity();
     }
 }
 

@@ -5,7 +5,7 @@
 #include <fstream>
 #include <Containers/Buffer.cuh>
 #include <Utils/Chrono.cuh>
-#include <External/NlohmannJson.hpp>
+
 #include <thread>
 
 #include "BB/OffloadBuffer.cuh"
@@ -13,7 +13,6 @@
 #include "BB/PriorityQueue.cuh"
 
 using namespace std;
-using json = nlohmann::json;
 using namespace Memory;
 using namespace Chrono;
 using namespace BB;
@@ -27,7 +26,6 @@ using StateType = VRPState;
 
 // Auxiliary functions
 void configGPU();
-OP::VRProblem* parseGrubHubInstance(char const * problemFileName, Memory::MallocType mallocType);
 
 // Comparators
 template<typename StateType>
@@ -93,29 +91,29 @@ int main(int argc, char ** argv)
 
     // Context initialization
     std::mt19937 rng(randomSeed);
-    MallocType gpuMallocTime = MallocType::Std;
+    MallocType gpuMallocType = MallocType::Std;
     if (gpuMaxParallelism > 0)
     {
-        gpuMallocTime = MallocType::Managed;
+        gpuMallocType = MallocType::Managed;
         configGPU();
     };
 
     // Problems
-    ProblemType* const cpuProblem = parseGrubHubInstance(problemFileName, MallocType::Std);
-    ProblemType* const gpuProblem = parseGrubHubInstance(problemFileName, gpuMallocTime);
+    ProblemType* const cpuProblem = VRProblem::parseGrubHubInstance(problemFileName, MallocType::Std);
+    ProblemType* const gpuProblem = VRProblem::parseGrubHubInstance(problemFileName, gpuMallocType);
 
     // Models
     unsigned int memorySize = sizeof(ModelType);
     std::byte* memory = safeMalloc(memorySize, MallocType::Std);
     ModelType * const cpuModel = new (memory) ModelType(cpuProblem);
-    memory = safeMalloc(memorySize, gpuMallocTime);
+    memory = safeMalloc(memorySize, gpuMallocType);
     ModelType * const gpuModel = new (memory) ModelType(gpuProblem);
 
     // MDDs
     memorySize = sizeof(MDD<ModelType,ProblemType,StateType>);
     memory = safeMalloc(memorySize, MallocType::Std);
     MDD<ModelType,ProblemType,StateType>* const cpuMdd = new (memory) MDD<ModelType,ProblemType,StateType>(cpuModel, cpuMaxWidth);
-    memory = safeMalloc(memorySize, gpuMallocTime);
+    memory = safeMalloc(memorySize, gpuMallocType);
     MDD<ModelType,ProblemType,StateType>* const gpuMdd = new (memory) MDD<ModelType,ProblemType,StateType>(gpuModel, gpuMaxWidth);
 
     // Context initialization
@@ -129,8 +127,8 @@ int main(int argc, char ** argv)
     memorySize = sizeof(OffloadBuffer<StateType>);
     memory = safeMalloc(memorySize, MallocType::Std);
     OffloadBuffer<StateType>* cpuOffloadBuffer = new (memory) OffloadBuffer<StateType>(cpuMdd, cpuMaxParallelism, MallocType::Std);
-    memory = safeMalloc(memorySize, gpuMallocTime);
-    OffloadBuffer<StateType>* gpuOffloadBuffer = new (memory) OffloadBuffer<StateType>(gpuMdd, gpuMaxParallelism, gpuMallocTime);
+    memory = safeMalloc(memorySize, gpuMallocType);
+    OffloadBuffer<StateType>* gpuOffloadBuffer = new (memory) OffloadBuffer<StateType>(gpuMdd, gpuMaxParallelism, gpuMallocType);
 
     // Solutions
     memorySize = sizeof(StateType);
@@ -159,17 +157,15 @@ int main(int argc, char ** argv)
     priorityQueue.insert(&rootMetadata);
 
     uint64_t searchStartTime = now();
-    clearLine();
-    printf("[INFO] Start branch and bound search");
-    printf(" | Time: ");
-    printElapsedTime(now() - searchStartTime);
-    printf(" | Iterations: %u\n", iterationsCount);
     do
     {
         switch(searchStatus)
         {
             case SearchStatus::BB:
             {
+                clearLine();
+                printf("[INFO] Branch and bound");
+
                 if (priorityQueue.isFull())
                 {
                     searchStatus = SearchStatus::LNS;
@@ -182,17 +178,12 @@ int main(int argc, char ** argv)
             case SearchStatus::LNS:
             {
                 clearLine();
-                printf("[INFO] LNS exploration search ");
-                printf(" | Solution: ");
-                currentSolution->selectedValues.print(false);
-                printf(" | Value: %u", currentSolution->cost);
-                printf(" | Time: ");
-                printElapsedTime(now() - searchStartTime);
-                printf(" | Iterations: %u\n", iterationsCount);
+                printf("[INFO] Large neighborhood search");
 
                 prepareOffload<StateType>(&rootMetadata, cpuOffloadBuffer);
                 prepareOffload<StateType>(&rootMetadata, gpuOffloadBuffer);
                 cpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
+                gpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
                 currentSolution->reset();
             }
                 break;
@@ -214,7 +205,7 @@ int main(int argc, char ** argv)
                 checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadBuffer) or
                 checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadBuffer);
 
-        updatePriorityQueue(currentSolution->cost, &priorityQueue, gpuOffloadBuffer);
+        updatePriorityQueue(currentSolution->cost, &priorityQueue, cpuOffloadBuffer);
         updatePriorityQueue(currentSolution->cost, &priorityQueue, gpuOffloadBuffer);
 
         if(foundBetterSolution)
@@ -243,16 +234,16 @@ int main(int argc, char ** argv)
                 uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
                 gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
             }
-
-            clearLine();
-            printf("[INFO] Time: ");
+            printf(" | Solution: ");
+            currentSolution->selectedValues.print(false);
+            printf(" | Value: %u", currentSolution->cost);
+            printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
-            printf(" | Speed: %lu - %lu", cpuSpeed, gpuSpeed);
             printf(" | Iterations: %u", iterationsCount);
-            printf(" | Visited States: %u\r",  visitedStatesCount);
-            fflush(stdout);
+            printElapsedTime(now() - searchStartTime);
+            printf(" | Speed: %lu - %lu\r", cpuSpeed, gpuSpeed);
         }
-
+        fflush(stdout);
         iterationsCount += 1;
     }
     while(now() - searchStartTime < timeoutSeconds * 1000);
@@ -282,51 +273,7 @@ void configGPU()
     cudaDeviceSetCacheConfig(cudaFuncCachePreferEqual );
 }
 
-OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::MallocType mallocType)
-{
-    // Parse instance
-    std::ifstream problemFile(problemFileName);
-    json problemJson;
-    problemFile >> problemJson;
 
-    // Init problem
-    unsigned int const memorySize = sizeof(OP::VRProblem);
-    std::byte* const memory = safeMalloc(memorySize, mallocType);
-    unsigned int const variablesCount = problemJson["nodes"].size();
-    OP::VRProblem* const problem  = new (memory) OP::VRProblem(variablesCount, mallocType);
-
-    // Init variables
-    new (problem->variables[0]) OP::Variable(0, 0);
-    for(unsigned int variableIdx = 1; variableIdx < variablesCount - 1; variableIdx += 1)
-    {
-        new (problem->variables[variableIdx]) OP::Variable(2, variablesCount - 1);
-    }
-    new (problem->variables[variablesCount - 1]) OP::Variable(1, 1);
-
-    // Init start/end locations
-    problem->start = 0;
-    problem->end = 1;
-
-    // Init pickups and deliveries
-    for(OP::ValueType pickup = 2; pickup < variablesCount; pickup += 2)
-    {
-        problem->pickups.pushBack(&pickup);
-        problem->deliveries.pushBack(&pickup);
-        OP::ValueType const delivery = pickup + 1;
-        problem->deliveries.pushBack(&delivery);
-    }
-
-    // Init distances
-    for(unsigned int from = 0; from < variablesCount; from += 1)
-    {
-        for(unsigned int to = 0; to < variablesCount; to += 1)
-        {
-            *problem->distances[(from * variablesCount) + to] = problemJson["edges"][from][to];
-        }
-    }
-
-    return problem;
-}
 
 template<typename StateType>
 bool hasSmallerCost(StateMetadata<StateType> const & sm0, StateMetadata<StateType> const & sm1)
