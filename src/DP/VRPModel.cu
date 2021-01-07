@@ -28,7 +28,7 @@ void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, L
         if (variable->minValue <= *value and *value <= variable->maxValue)
         {
             LNS::ConstraintType const variableConstraint = *neighbourhood->constraints[variableIdx];
-            bool const condition0 = variableConstraint == LNS::ConstraintType::None and (not *neighbourhood->constrainedValues[*value]);
+            bool const condition0 = variableConstraint == LNS::ConstraintType::None and (not *neighbourhood->fixedValue[*value]);
             bool const condition1 = variableConstraint == LNS::ConstraintType::Eq and *neighbourhood->solution[variableIdx] == *value;
             bool const condition2 = variableConstraint == LNS::ConstraintType::Neq and *neighbourhood->solution[variableIdx] != *value;
 

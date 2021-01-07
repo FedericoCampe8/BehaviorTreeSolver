@@ -15,7 +15,7 @@ namespace LNS
         public:
             LightArray<ConstraintType> constraints;
             LightArray<OP::ValueType> solution;
-            LightArray<bool> constrainedValues;
+            LightArray<bool> fixedValue;
 
         // Functions
         public:

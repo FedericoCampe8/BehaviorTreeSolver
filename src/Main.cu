@@ -239,8 +239,7 @@ int main(int argc, char ** argv)
             printf(" | Value: %u", currentSolution->cost);
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
-            printf(" | Iterations: %u", iterationsCount);
-            printElapsedTime(now() - searchStartTime);
+            printf(" | Iteration: %u", iterationsCount);
             printf(" | Speed: %lu - %lu\r", cpuSpeed, gpuSpeed);
         }
         fflush(stdout);

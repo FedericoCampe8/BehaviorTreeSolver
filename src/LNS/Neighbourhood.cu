@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <thrust/fill.h>
 
 #include "Neighbourhood.cuh"
@@ -5,35 +6,35 @@
 LNS::Neighbourhood::Neighbourhood(OP::Problem const * problem, std::byte* storage)  :
     constraints(problem->variables.getCapacity(), reinterpret_cast<ConstraintType*>(storage)),
     solution(problem->variables.getCapacity(), reinterpret_cast<OP::ValueType*>(Memory::align(8u, constraints.end()))),
-    constrainedValues(problem->variables.getCapacity(), reinterpret_cast<bool*>(Memory::align(8u, solution.end())))
+    fixedValue(problem->calcMaxValue() + 1, reinterpret_cast<bool*>(Memory::align(8u, solution.end())))
 {
     thrust::fill(thrust::seq, constraints.begin(), constraints.end(), ConstraintType::None);
-    thrust::fill(thrust::seq, constrainedValues.begin(), constrainedValues.end(), false);
+    thrust::fill(thrust::seq, fixedValue.begin(), fixedValue.end(), false);
 }
 
 void LNS::Neighbourhood::generate(LightArray<OP::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng)
 {
     std::uniform_int_distribution<unsigned int> randomDistribution(0,100);
-    for(unsigned int variablesIdx = 0; variablesIdx < solution->getCapacity(); variablesIdx += 1)
+    for (unsigned int variableIdx = 0; variableIdx < solution->getCapacity(); variableIdx += 1)
     {
-        ConstraintType * const constraint = constraints[variablesIdx];
+        ConstraintType * const constraint = constraints[variableIdx];
         *constraint = ConstraintType::None;
-        OP::ValueType const value = *solution->at(variablesIdx);
-        *constrainedValues[value] = false;
+        OP::ValueType const value = *solution->at(variableIdx);
+        *fixedValue[value] = false;
         unsigned int const random = randomDistribution(*rng);
-
         if (random < eqPercentage)
         {
-            *constrainedValues[value] = true;
+            *fixedValue[value] = true;
             *constraint = ConstraintType::Eq;
-            *this->solution[variablesIdx] = *solution->at(variablesIdx);
+            *this->solution[variableIdx] = value;
         }
         else if (random < eqPercentage + neqPercentage)
         {
             *constraint = ConstraintType::Neq;
-            *this->solution[variablesIdx] = *solution->at(variablesIdx);
+            *this->solution[variableIdx] = value;
         }
     }
+    //this->print();
 }
 
 std::byte* LNS::Neighbourhood::mallocStorages(const OP::Problem* problem, unsigned int neighbourhoodsCount, Memory::MallocType mallocType)
@@ -74,6 +75,6 @@ unsigned int LNS::Neighbourhood::sizeOfStorage(OP::Problem const * problem)
     return
         LightArray<ConstraintType>::sizeOfStorage(problem->variables.getCapacity()) + // constraints
         LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // solution
-        LightArray<bool>::sizeOfStorage(problem->calcMaxValue()) + // constrainedValues
+        LightArray<bool>::sizeOfStorage(problem->calcMaxValue()) + // fixedValue
         8 * 3; // Alignment
 }
