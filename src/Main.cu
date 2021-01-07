@@ -32,17 +32,16 @@ int main(int argc, char ** argv)
     // *******************
 
     // Context initialization
-    MallocType gpuMallocType = MallocType::Managed;
     configGPU();
 
     // Problem
-    ProblemType* const problem = VRProblem::parseGrubHubInstance(problemFileName, gpuMallocType);
+    ProblemType* const problem = VRProblem::parseGrubHubInstance(problemFileName, MallocType::Managed);
 
     // Current states
     unsigned int memorySize = sizeof(Vector<StateType>);
-    byte* memory = safeMalloc(memorySize, gpuMallocType);
-    Vector<StateType> * const currentStates = new (memory) Vector<StateType>(maxWidth, gpuMallocType);
-    memory = StateType::mallocStorages(problem, maxWidth, gpuMallocType);
+    byte* memory = safeMalloc(memorySize, MallocType::Managed);
+    Vector<StateType> * const currentStates = new (memory) Vector<StateType>(maxWidth, MallocType::Managed);
+    memory = StateType::mallocStorages(problem, maxWidth, MallocType::Device);
     memorySize = StateType::sizeOfStorage(problem);
     for(unsigned int stateIdx = 0; stateIdx < currentStates->getCapacity(); stateIdx += 1)
     {
@@ -52,9 +51,9 @@ int main(int argc, char ** argv)
 
     // Next states
     memorySize = sizeof(Vector<StateType>);
-    memory = safeMalloc(memorySize, gpuMallocType);
-    Vector<StateType> * const nextStates = new (memory) Vector<StateType>(maxWidth, gpuMallocType);
-    memory = StateType::mallocStorages(problem, maxWidth, gpuMallocType);
+    memory = safeMalloc(memorySize, MallocType::Managed);
+    Vector<StateType> * const nextStates = new (memory) Vector<StateType>(maxWidth, MallocType::Managed);
+    memory = StateType::mallocStorages(problem, maxWidth, MallocType::Managed);
     memorySize = StateType::sizeOfStorage(problem);
     for(unsigned int stateIdx = 0; stateIdx < currentStates->getCapacity(); stateIdx += 1)
     {
@@ -64,21 +63,27 @@ int main(int argc, char ** argv)
 
     // Auxiliary information
     memorySize = sizeof(Vector<DP::CostType>);
-    memory = safeMalloc(memorySize, gpuMallocType);
-    Vector<DP::CostType> * const costs = new (memory) Vector<DP::CostType>(problem->maxBranchingFactor * maxWidth, gpuMallocType);
+    memory = safeMalloc(memorySize, MallocType::Managed);
+    Vector<DP::CostType> * const costs = new (memory) Vector<DP::CostType>(problem->maxBranchingFactor * maxWidth, MallocType::Managed);
     memorySize = sizeof(Vector<uint32_t>);
-    memory = safeMalloc(memorySize, gpuMallocType);
-    Vector<uint32_t> * const indices = new (memory) Vector<uint32_t>(problem->maxBranchingFactor * maxWidth, gpuMallocType);
+    memory = safeMalloc(memorySize, MallocType::Managed);
+    Vector<uint32_t> * const indices = new (memory) Vector<uint32_t>(problem->maxBranchingFactor * maxWidth, MallocType::Managed);
 
     // Root
     currentStates->resize(1);
     StateType* const root = currentStates->back();
-    DP::makeRoot(problem, root);
+    DP::makeRoot<<<1,1>>>(problem, root);
+    cudaDeviceSynchronize();
+
+    //Solution
+    unsigned int const variablesCount = problem->variables.getCapacity();
+    Array<ValueType> solution(variablesCount, MallocType::Std);
 
     // Build
-    unsigned int const variablesCount = problem->variables.getCapacity();
+
     unsigned int visitedStatesCount = 0;
     uint64_t buildStartTime = now();
+    bool printMaxWidthAlert = true;
     for(unsigned int variableIdx = root->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
     {
         // Initialize indices
@@ -100,7 +105,7 @@ int main(int argc, char ** argv)
         uint32_t const * const costsEnd = thrust::lower_bound(thrust::device, costs->begin(), costs->end(), DP::MaxCost);
         if (costsEnd != costs->end())
         {
-            unsigned int size = costs->indexOf(costsEnd);
+            unsigned int const size = costs->indexOf(costsEnd);
             assert(size > 0);
             costs->resize(size);
             indices->resize(size);
@@ -109,11 +114,14 @@ int main(int argc, char ** argv)
         // Adjust next states size
         if (variableIdx < variablesCount - 1)
         {
-            if (indices->getSize() > maxWidth)
+
+            if (indices->getSize() > maxWidth and printMaxWidthAlert)
             {
-                printf("[INFO] Max width reached, the solution could be not optimal\n");
-                nextStates->resize(maxWidth);
+                printMaxWidthAlert = false;
+                printf("[INFO] Max width reached, the solution could not be optimal\n");
             }
+            unsigned int const size = min(maxWidth, indices->getSize());
+            nextStates->resize(size);
         }
         else
         {
@@ -133,7 +141,8 @@ int main(int argc, char ** argv)
         printf(" | Progress: %u/%u", variableIdx + 1, variablesCount);
         printf(" | Visited: %u", visitedStatesCount);
         printf(" | Solution: ");
-        nextStates->at(0)->selectedValues.print(true);
+        cudaMemcpy(nextStates->at(0)->selectedValues.begin(),solution.begin(), solution.sizeOfStorage(solution.getCapacity()),cudaMemcpyHostToDevice);
+        solution.print();
 
         //Prepare for the next loop
         LightVector<StateType>::swap(*currentStates, *nextStates);

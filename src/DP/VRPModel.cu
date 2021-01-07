@@ -2,6 +2,7 @@
 
 #include "VRPModel.cuh"
 
+__global__
 void DP::makeRoot(OP::VRProblem const * problem, VRPState* root)
 {
     root->cost = 0;

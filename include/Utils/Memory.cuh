@@ -8,7 +8,7 @@
 
 namespace Memory
 {
-    enum MallocType {Std, Managed};
+    enum MallocType {Std, Managed, Device};
 
     __host__ __device__ inline std::byte* safeMalloc(std::size_t size, MallocType type);
     template<typename T>
@@ -16,6 +16,7 @@ namespace Memory
 
     __host__ __device__ inline std::byte* safeStdMalloc(std::size_t size);
     __host__            inline std::byte* safeManagedMalloc(std::size_t size);
+    __host__            inline std::byte* safeDeviceMalloc(std::size_t size);
 
 
     __host__ __device__
@@ -37,6 +38,8 @@ namespace Memory
                 return safeStdMalloc(size);
             case Managed:
                 return safeManagedMalloc(size);
+            case Device:
+                return safeDeviceMalloc(size);
             default:
                 assert(false);
                 return nullptr;
@@ -57,6 +60,15 @@ namespace Memory
     {
         void* mem;
         cudaError_t status = cudaMallocManaged(&mem, size);
+        assert(status == cudaSuccess);
+        assert(mem != nullptr);
+        return static_cast<std::byte*>(mem);
+    }
+    __host__
+    std::byte* safeDeviceMalloc(std::size_t size)
+    {
+        void* mem;
+        cudaError_t status = cudaMalloc(&mem, size);
         assert(status == cudaSuccess);
         assert(mem != nullptr);
         return static_cast<std::byte*>(mem);
