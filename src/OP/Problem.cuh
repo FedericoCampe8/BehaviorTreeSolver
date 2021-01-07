@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Containers/Array.cuh>
-
 #include "Variable.cuh"
 
 namespace OP
@@ -10,12 +9,12 @@ namespace OP
     {
         // Members
         public:
-            Array<Variable> variables;
+        unsigned int maxBranchingFactor;
+        Array<Variable> variables;
 
         // Functions
         public:
-            Problem(unsigned int variablesCount, Memory::MallocType mallocType);
-            ValueType calcMaxValue() const;
+        Problem(unsigned int variablesCount, Memory::MallocType mallocType);
     };
 }
 

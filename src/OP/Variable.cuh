@@ -1,20 +1,19 @@
 #pragma once
 
 #include <cstdint>
+#include "Context.cuh"
 
 namespace OP
 {
-    using ValueType = uint8_t;
-
     class Variable
     {
         // Members
         public:
-            ValueType minValue;
-            ValueType maxValue;
+        ValueType minValue;
+        ValueType maxValue;
 
         // Functions
         public:
-            Variable(ValueType minValue, ValueType maxValue);
+        Variable(ValueType minValue, ValueType maxValue);
     };
 }

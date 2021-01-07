@@ -1,4 +1,6 @@
+#include <thrust/copy.h>
 #include <thrust/find.h>
+#include <thrust/remove.h>
 
 #include "State.cuh"
 
@@ -16,12 +18,6 @@ bool DP::State::isAdmissible(OP::ValueType value) const
 }
 
 __host__ __device__
-bool DP::State::isSelected(OP::ValueType value) const
-{
-    return thrust::find(thrust::seq, selectedValues.begin(), selectedValues.end(), value) != selectedValues.end();
-}
-
-__host__ __device__
 std::byte* DP::State::mallocStorages(OP::Problem const * problem, unsigned int statesCount, Memory::MallocType mallocType)
 {
     return Memory::safeMalloc(sizeOfStorage(problem) * statesCount, mallocType);
@@ -31,10 +27,8 @@ __host__ __device__
 void DP::State::operator=(DP::State const & other)
 {
     cost = other.cost;
-
     selectedValues.resize(other.selectedValues.getSize());
     thrust::copy(thrust::seq, other.selectedValues.begin(), other.selectedValues.end(), selectedValues.begin());
-
     admissibleValues.resize(other.admissibleValues.getSize());
     thrust::copy(thrust::seq, other.admissibleValues.begin(), other.admissibleValues.end(), admissibleValues.begin());
 }
@@ -45,11 +39,9 @@ void DP::State::removeFromAdmissibles(OP::ValueType value)
     OP::ValueType const * const admissibleValuesEnd = thrust::remove(thrust::seq, admissibleValues.begin(), admissibleValues.end(), value);
     if (admissibleValuesEnd != admissibleValues.end())
     {
-        unsigned int size = admissibleValues.indexOf(admissibleValuesEnd);
+        unsigned int const size = admissibleValues.indexOf(admissibleValuesEnd);
         admissibleValues.resize(size);
     }
-
-    assert(not isAdmissible(value));
 }
 
 __host__ __device__
@@ -59,15 +51,6 @@ unsigned int DP::State::sizeOfStorage(OP::Problem const * problem)
         LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // selectedValues
         LightArray<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // admissibleValues
         8 * 2; // Alignment
-}
-
-__host__ __device__
-void DP::State::print(bool endLine) const
-{
-    printf("[DEBUG] Selected values: ");
-    selectedValues.print(false);
-    printf(" | Admissible values: ");
-    admissibleValues.print(endLine);
 }
 
 __host__ __device__

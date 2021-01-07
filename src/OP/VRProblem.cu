@@ -4,6 +4,8 @@
 
 OP::VRProblem::VRProblem(unsigned int variablesCount, Memory::MallocType mallocType) :
     Problem(variablesCount, mallocType),
+    start(0),
+    end(0),
     pickups(variablesCount / 2, mallocType),
     deliveries(variablesCount / 2, mallocType),
     distances(variablesCount * variablesCount, mallocType)
@@ -27,18 +29,26 @@ OP::VRProblem * OP::VRProblem::parseGrubHubInstance(char const * problemFileName
     std::byte* const memory = safeMalloc(memorySize, mallocType);
     unsigned int const variablesCount = problemJson["nodes"].size();
     OP::VRProblem* const problem  = new (memory) OP::VRProblem(variablesCount, mallocType);
-
-    // Init variables
-    new (problem->variables[0]) OP::Variable(0, 0);
-    for(unsigned int variableIdx = 1; variableIdx < variablesCount - 1; variableIdx += 1)
-    {
-        new (problem->variables[variableIdx]) OP::Variable(2, variablesCount - 1);
-    }
-    new (problem->variables[variablesCount - 1]) OP::Variable(1, 1);
-
-    // Init start/end locations
+    problem->maxBranchingFactor = (variablesCount - 1) - 2 + 1;
     problem->start = 0;
     problem->end = 1;
+
+    // Init variables
+    for(unsigned int variableIdx = 0; variableIdx < variablesCount; variableIdx += 1)
+    {
+        if(variableIdx == 0)
+        {
+            new (problem->variables[variableIdx]) OP::Variable(0, 0);
+        }
+        else if (variableIdx == variablesCount - 1)
+        {
+            new (problem->variables[variableIdx]) OP::Variable(1, 1);
+        }
+        else
+        {
+            new(problem->variables[variableIdx]) OP::Variable(2, variablesCount - 1);
+        }
+    }
 
     // Init pickups and deliveries
     for(OP::ValueType pickup = 2; pickup < variablesCount; pickup += 2)

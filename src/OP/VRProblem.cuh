@@ -1,12 +1,9 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
 #include <Containers/Array.cuh>
 #include <Containers/Vector.cuh>
-
+#include "../DP/Context.cuh"
 #include "Problem.cuh"
-#include "../DP/State.cuh"
 
 namespace OP
 {
@@ -14,17 +11,18 @@ namespace OP
     {
         // Members
         public:
-            ValueType start;
-            ValueType end;
-            Vector<ValueType> pickups;
-            Vector<ValueType> deliveries;
-            Array<DP::CostType> distances;
+        ValueType start;
+        ValueType end;
+        Vector<ValueType> pickups;
+        Vector<ValueType> deliveries;
+        Array<DP::CostType> distances;
 
         // Functions
         public:
-            VRProblem(unsigned int variablesCount, Memory::MallocType mallocType);
-            __host__ __device__ unsigned int getDistance(ValueType from, ValueType to) const;
-            static OP::VRProblem * parseGrubHubInstance(char const * problemFileName, Memory::MallocType mallocType);
+        __host__ __device__ unsigned int getDistance(ValueType from, ValueType to) const;
+        static VRProblem* parseGrubHubInstance(char const * problemFileName, Memory::MallocType mallocType);
+        protected:
+        VRProblem(unsigned int variablesCount, Memory::MallocType mallocType);
     };
 }
 

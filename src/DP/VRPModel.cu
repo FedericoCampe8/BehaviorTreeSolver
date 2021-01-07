@@ -1,17 +1,11 @@
-#include <thrust/binary_search.h>
-#include <thrust/equal.h>
+#include <thrust/find.h>
 
 #include "VRPModel.cuh"
 
-DP::VRPModel::VRPModel(OP::VRProblem const * problem) :
-    problem(problem)
-{}
-
-
-void DP::VRPModel::makeRoot(VRPState* root) const
+void DP::makeRoot(OP::VRProblem const * problem, VRPState* root)
 {
     root->cost = 0;
-    root->admissibleValues.pushBack(&problem->start);
+    root->selectedValues.pushBack(&problem->start);
     root->admissibleValues.pushBack(&problem->end);
     for (OP::ValueType const * pickup = problem->pickups.begin(); pickup != problem->pickups.end(); pickup += 1)
     {
@@ -19,71 +13,59 @@ void DP::VRPModel::makeRoot(VRPState* root) const
     }
 }
 
-__host__ __device__
-void DP::VRPModel::calcCosts(unsigned int variableIdx, VRPState const * state, LNS::Neighbourhood const * neighbourhood, CostType* costs) const
+__global__
+void DP::calcCosts(OP::VRProblem const * problem, unsigned int variableIdx, Vector<VRPState>* currentStates, Vector<CostType>* costs)
 {
-    OP::Variable const * const variable = problem->variables[variableIdx];
-    for(OP::ValueType const * value = state->admissibleValues.begin(); value != state->admissibleValues.end(); value += 1)
+    unsigned int const currentStateIdx = blockIdx.x;
+    VRPState* const currentState = currentStates->at(currentStateIdx);
+    unsigned int const admissibleValueIdx = threadIdx.x;
+    if (admissibleValueIdx < currentState->admissibleValues.getSize())
     {
-        if (variable->minValue <= *value and *value <= variable->maxValue)
+        OP::ValueType const value = *currentState->admissibleValues[admissibleValueIdx];
+        OP::Variable const * const variable = problem->variables[variableIdx];
+        if (variable->minValue <= value and value <= variable->maxValue)
         {
-            LNS::ConstraintType const variableConstraint = *neighbourhood->constraints[variableIdx];
-            bool const condition0 = variableConstraint == LNS::ConstraintType::None and (not *neighbourhood->fixedValue[*value]);
-            bool const condition1 = variableConstraint == LNS::ConstraintType::Eq and *neighbourhood->solution[variableIdx] == *value;
-            bool const condition2 = variableConstraint == LNS::ConstraintType::Neq and *neighbourhood->solution[variableIdx] != *value;
-
-            if (condition0 or condition1 or condition2)
-            {
-                DP::CostType edgeCost = not state->selectedValues.isEmpty() ? problem->getDistance(*state->selectedValues.back(), *value) : 0;
-                unsigned int edgeIdx = *value - variable->minValue;
-                costs[edgeIdx] = state->cost + edgeCost;
-            }
+            OP::ValueType const from = *currentState->selectedValues.back();
+            OP::ValueType const to = value;
+            unsigned int valueIdx = value - problem->variables[variableIdx]->minValue;
+            DP::CostType* const cost = costs->at(problem->maxBranchingFactor * currentStateIdx + valueIdx);
+            *cost = currentState->cost + problem->getDistance(from, to);
         }
     }
 }
 
-__host__ __device__
-void DP::VRPModel::makeState(VRPState const * parentState, OP::ValueType value, unsigned int childStateCost, VRPState* childState) const
+__global__
+void DP::makeStates(OP::VRProblem const * problem, unsigned int variableIdx, Vector<VRPState> const * currentStates, Vector<VRPState> const * nextStates, Vector<uint32_t> const * indices, Vector<CostType> const * costs)
 {
-    // Initialize child state
-    *childState = *parentState;
-    childState->cost = childStateCost;
-
-    // Remove value from admissible values
-    assert(parentState->isAdmissible(value));
-    childState->removeFromAdmissibles(value);
-
-    // Add value to selected values
-    childState->selectedValues.pushBack(&value);
-
-    ifPickupAddDelivery(value, childState);
-}
-
-__host__ __device__
-void DP::VRPModel::mergeState(VRPState const * parentState, OP::ValueType value, VRPState* childState) const
-{
-    // Merge admissible values
-    for (OP::ValueType const * admissibleValue = parentState->admissibleValues.begin(); admissibleValue != parentState->admissibleValues.end();  admissibleValue += 1)
+    unsigned int nextStateIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    if(nextStateIdx < nextStates->getSize())
     {
-        if (*admissibleValue != value and (not childState->isAdmissible(*admissibleValue)))
-        {
-            childState->admissibleValues.pushBack(admissibleValue);
-        }
-    };
-    ifPickupAddDelivery(value, childState);
-}
+        uint32_t const index = *indices->at(nextStateIdx);
+        unsigned int const currentStateIdx = index / problem->maxBranchingFactor;
+        OP::ValueType const valueIdx = index % problem->maxBranchingFactor;
+        OP::ValueType const value = problem->variables[variableIdx]->minValue + valueIdx;
+        VRPState* const nextState = nextStates->at(nextStateIdx);
 
-__host__ __device__
-void DP::VRPModel::ifPickupAddDelivery(OP::ValueType value, VRPState* state) const
-{
-    OP::ValueType const * const pickup = thrust::find(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
-    if (pickup < problem->pickups.end())
-    {
-        unsigned int const deliveryIdx = problem->pickups.indexOf(pickup);
-        OP::ValueType const delivery = *problem->deliveries[deliveryIdx];
-        if(not state->isAdmissible(delivery))
+        // Initialize next state
+        *nextState = *currentStates->at(currentStateIdx);
+        nextState->cost = *costs->at(nextStateIdx);
+
+        // Remove value from admissible values
+        nextState->removeFromAdmissibles(value);
+
+        // Add value to selected values
+        nextState->selectedValues.pushBack(&value);
+
+        // If pickup add delivery
+        OP::ValueType const * const pickup = thrust::find(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
+        if (pickup < problem->pickups.end())
         {
-            state->admissibleValues.pushBack(&delivery);
+            unsigned int const deliveryIdx = problem->pickups.indexOf(pickup);
+            OP::ValueType const delivery = *problem->deliveries[deliveryIdx];
+            if(not nextState->isAdmissible(delivery))
+            {
+                nextState->admissibleValues.pushBack(&delivery);
+            }
         }
     }
 }
