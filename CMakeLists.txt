@@ -44,7 +44,7 @@ set(SOURCES
     src/DP/State.cu
     src/DP/State.cuh
     src/DP/Context.cuh
-    src/OP/Context.cuh)
+    src/OP/Context.cuh src/DD/BuildMetadata.cuh)
 
 # Add include path
 include_directories(include)

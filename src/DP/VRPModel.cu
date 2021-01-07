@@ -2,7 +2,6 @@
 
 #include "VRPModel.cuh"
 
-__global__
 void DP::makeRoot(OP::VRProblem const * problem, VRPState* root)
 {
     root->cost = 0;
@@ -15,7 +14,7 @@ void DP::makeRoot(OP::VRProblem const * problem, VRPState* root)
 }
 
 __global__
-void DP::calcCosts(OP::VRProblem const * problem, unsigned int variableIdx, Vector<VRPState>* currentStates, Vector<CostType>* costs)
+void DP::calcCosts(OP::VRProblem const * problem, unsigned int variableIdx, Vector<VRPState>* currentStates, Vector<DD::BuildMetadata>* buildMetadata)
 {
     unsigned int const currentStateIdx = blockIdx.x;
     VRPState* const currentState = currentStates->at(currentStateIdx);
@@ -29,19 +28,19 @@ void DP::calcCosts(OP::VRProblem const * problem, unsigned int variableIdx, Vect
             OP::ValueType const from = *currentState->selectedValues.back();
             OP::ValueType const to = value;
             unsigned int valueIdx = value - problem->variables[variableIdx]->minValue;
-            DP::CostType* const cost = costs->at(problem->maxBranchingFactor * currentStateIdx + valueIdx);
+            DP::CostType* const cost = &buildMetadata->at(problem->maxBranchingFactor * currentStateIdx + valueIdx)->cost;
             *cost = currentState->cost + problem->getDistance(from, to);
         }
     }
 }
 
 __global__
-void DP::makeStates(OP::VRProblem const * problem, unsigned int variableIdx, Vector<VRPState> const * currentStates, Vector<VRPState> const * nextStates, Vector<uint32_t> const * indices, Vector<CostType> const * costs)
+void DP::makeStates(OP::VRProblem const * problem, unsigned int variableIdx, Vector<VRPState> const * currentStates, Vector<VRPState> const * nextStates, Vector<DD::BuildMetadata>* buildMetadata)
 {
     unsigned int nextStateIdx = blockDim.x * blockIdx.x + threadIdx.x;
     if(nextStateIdx < nextStates->getSize())
     {
-        uint32_t const index = *indices->at(nextStateIdx);
+        uint32_t const index = buildMetadata->at(nextStateIdx)->index;
         unsigned int const currentStateIdx = index / problem->maxBranchingFactor;
         OP::ValueType const valueIdx = index % problem->maxBranchingFactor;
         OP::ValueType const value = problem->variables[variableIdx]->minValue + valueIdx;
@@ -49,7 +48,7 @@ void DP::makeStates(OP::VRProblem const * problem, unsigned int variableIdx, Vec
 
         // Initialize next state
         *nextState = *currentStates->at(currentStateIdx);
-        nextState->cost = *costs->at(nextStateIdx);
+        nextState->cost = buildMetadata->at(nextStateIdx)->cost;
 
         // Remove value from admissible values
         nextState->removeFromAdmissibles(value);

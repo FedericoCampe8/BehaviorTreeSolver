@@ -1,13 +1,12 @@
 #include <thrust/binary_search.h>
-#include <thrust/fill.h>
-#include <thrust/sequence.h>
-#include <thrust/sort.h>
 #include <Utils/Chrono.cuh>
 #include "DP/VRPModel.cuh"
+#include "DD/BuildMetadata.cuh"
 
 using namespace std;
 using namespace Memory;
 using namespace Chrono;
+using namespace DD;
 using namespace DP;
 using namespace OP;
 using ProblemType = VRProblem;
@@ -15,6 +14,9 @@ using StateType = VRPState;
 
 // Auxiliary functions
 void configGPU();
+
+// Build
+__global__ void initBuildMetadata(Vector<BuildMetadata> * buildMetadata);
 
 // Debug
 void printElapsedTime(uint64_t elapsedTimeMs);
@@ -41,7 +43,7 @@ int main(int argc, char ** argv)
     unsigned int memorySize = sizeof(Vector<StateType>);
     byte* memory = safeMalloc(memorySize, MallocType::Managed);
     Vector<StateType> * const currentStates = new (memory) Vector<StateType>(maxWidth, MallocType::Managed);
-    memory = StateType::mallocStorages(problem, maxWidth, MallocType::Device);
+    memory = StateType::mallocStorages(problem, maxWidth, MallocType::Managed);
     memorySize = StateType::sizeOfStorage(problem);
     for(unsigned int stateIdx = 0; stateIdx < currentStates->getCapacity(); stateIdx += 1)
     {
@@ -61,66 +63,65 @@ int main(int argc, char ** argv)
         memory += memorySize;
     }
 
-    // Auxiliary information
-    memorySize = sizeof(Vector<DP::CostType>);
+    // Build metadata
+    memorySize = sizeof(Vector<BuildMetadata>);
     memory = safeMalloc(memorySize, MallocType::Managed);
-    Vector<DP::CostType> * const costs = new (memory) Vector<DP::CostType>(problem->maxBranchingFactor * maxWidth, MallocType::Managed);
-    memorySize = sizeof(Vector<uint32_t>);
+    Vector<BuildMetadata> * const buildMetadata = new (memory) Vector<BuildMetadata>(problem->maxBranchingFactor * maxWidth, MallocType::Device);
+    memorySize = sizeof(BuildMetadata);
     memory = safeMalloc(memorySize, MallocType::Managed);
-    Vector<uint32_t> * const indices = new (memory) Vector<uint32_t>(problem->maxBranchingFactor * maxWidth, MallocType::Managed);
+    BuildMetadata const * const invalidBuildMetadata = new (memory) BuildMetadata();
 
     // Root
     currentStates->resize(1);
     StateType* const root = currentStates->back();
-    DP::makeRoot<<<1,1>>>(problem, root);
-    cudaDeviceSynchronize();
-
-    //Solution
-    unsigned int const variablesCount = problem->variables.getCapacity();
-    Array<ValueType> solution(variablesCount, MallocType::Std);
+    DP::makeRoot(problem, root);
 
     // Build
-
+    unsigned int const variablesCount = problem->variables.getCapacity();
     unsigned int visitedStatesCount = 0;
     uint64_t buildStartTime = now();
     bool printMaxWidthAlert = true;
     for(unsigned int variableIdx = root->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
     {
-        // Initialize indices
-        indices->resize(problem->maxBranchingFactor * currentStates->getSize());
-        thrust::sequence(thrust::device, indices->begin(), indices->end());
-
-        // Initialize costs
-        costs->resize(problem->maxBranchingFactor * currentStates->getSize());
-        thrust::fill(thrust::device, costs->begin(), costs->end(), DP::MaxCost);
-
-        // Calculate costs
-        DP::calcCosts<<<currentStates->getSize(), problem->maxBranchingFactor>>>(problem, variableIdx, currentStates, costs);
+        // Initialize build metadata
+        buildMetadata->resize(problem->maxBranchingFactor * currentStates->getSize());
+        unsigned int const blockSize = 256;
+        unsigned int blockCount = (buildMetadata->getSize() / 256) + 1;
+        initBuildMetadata<<<blockCount, blockSize>>>(buildMetadata);
         cudaDeviceSynchronize();
 
-        // Sort indices by costs
-        thrust::sort_by_key(thrust::device, costs->begin(), costs->end(), indices->begin());
+        // Calculate costs
+        DP::calcCosts<<<currentStates->getSize(), problem->maxBranchingFactor>>>(problem, variableIdx, currentStates, buildMetadata);
+        cudaDeviceSynchronize();
+
+        // Sort build metadata
+        thrust::sort(thrust::device, buildMetadata->begin(), buildMetadata->end());
+
 
         // Discards bad edges by cost
-        uint32_t const * const costsEnd = thrust::lower_bound(thrust::device, costs->begin(), costs->end(), DP::MaxCost);
-        if (costsEnd != costs->end())
+        BuildMetadata const * const buildMetadataEnd = thrust::lower_bound(thrust::device, buildMetadata->begin(), buildMetadata->end(), *invalidBuildMetadata);
+        if (buildMetadataEnd != buildMetadata->end())
         {
-            unsigned int const size = costs->indexOf(costsEnd);
+            unsigned int const size = buildMetadata->indexOf(buildMetadataEnd);
             assert(size > 0);
-            costs->resize(size);
-            indices->resize(size);
+            buildMetadata->resize(size);
         }
 
         // Adjust next states size
         if (variableIdx < variablesCount - 1)
         {
 
-            if (indices->getSize() > maxWidth and printMaxWidthAlert)
+            if (buildMetadata->getSize() > maxWidth and printMaxWidthAlert)
             {
                 printMaxWidthAlert = false;
-                printf("[INFO] Max width reached, the solution could not be optimal\n");
+                clearLine();
+                printf("[INFO] Max width reached");
+                printf(" | Time: ");
+                printElapsedTime(now() - buildStartTime);
+                printf(" | Progress: %u/%u", variableIdx + 1, variablesCount);
+                printf(" | Visited: %u\n", visitedStatesCount);
             }
-            unsigned int const size = min(maxWidth, indices->getSize());
+            unsigned int const size = min(maxWidth, buildMetadata->getSize());
             nextStates->resize(size);
         }
         else
@@ -130,21 +131,22 @@ int main(int argc, char ** argv)
         visitedStatesCount += nextStates->getSize();
 
         // Add next states
-        unsigned int const blockSize = 256;
-        unsigned int const blockCount = (nextStates->getSize() / 256) + 1;
-        DP::makeStates<<<blockCount, blockSize>>>(problem, variableIdx, currentStates, nextStates, indices, costs);
+        blockCount = (nextStates->getSize() / 256) + 1;
+        DP::makeStates<<<blockCount, blockSize>>>(problem, variableIdx, currentStates, nextStates, buildMetadata);
         cudaDeviceSynchronize();
 
+        clearLine();
         printf("[INFO] Time: ");
         printElapsedTime(now() - buildStartTime);
         printf(" | Value: %u", nextStates->at(0)->cost);
         printf(" | Progress: %u/%u", variableIdx + 1, variablesCount);
         printf(" | Visited: %u", visitedStatesCount);
         printf(" | Solution: ");
-        cudaMemcpy(nextStates->at(0)->selectedValues.begin(),solution.begin(), solution.sizeOfStorage(solution.getCapacity()),cudaMemcpyHostToDevice);
-        solution.print();
+        nextStates->at(0)->selectedValues.print(false);
+        printf("%s", variableIdx + 1 < variablesCount ? "\r" : "\n");
+        fflush(stdout);
 
-        //Prepare for the next loop
+        // Prepare for the next loop
         LightVector<StateType>::swap(*currentStates, *nextStates);
     }
 
@@ -153,8 +155,10 @@ int main(int argc, char ** argv)
 
 void configGPU()
 {
+    cudaDeviceReset();
+
     //Heap
-    std::size_t sizeHeap = 3ul * 1024ul * 1024ul * 1024ul;
+    std::size_t sizeHeap = 100ul * 1024ul * 1024ul;
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, sizeHeap);
 
     //Stack
@@ -162,10 +166,19 @@ void configGPU()
     cudaDeviceSetLimit(cudaLimitStackSize, sizeStackThread);
 
     //Cache
-    cudaDeviceSetCacheConfig(cudaFuncCachePreferEqual );
+    cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
 }
 
 
+__global__
+void initBuildMetadata(Vector<BuildMetadata> * buildMetadata)
+{
+    unsigned int buildMetadataIdx = blockDim.x * blockIdx.x + threadIdx.x;
+    if(buildMetadataIdx < buildMetadata->getSize())
+    {
+        new (buildMetadata->at(buildMetadataIdx)) BuildMetadata(DP::MaxCost, buildMetadataIdx);
+    }
+}
 
 void printElapsedTime(uint64_t elapsedTimeMs)
 {
