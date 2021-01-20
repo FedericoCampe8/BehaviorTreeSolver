@@ -15,25 +15,25 @@ class LightArray
 {
     // Members
     protected:
-        unsigned int capacity;
-        T * storage;
+    unsigned int capacity;
+    T * storage;
 
     // Functions
     public:
-        __host__ __device__ LightArray(unsigned int capacity, T* storage);
-        __host__ __device__ ~LightArray();
-        __host__ __device__ inline T* at(unsigned int index) const;
-        __host__ __device__ inline T* begin() const;
-        __host__ __device__ inline T* end() const;
-        __host__ __device__ inline unsigned int getCapacity() const;
-        __host__ __device__ inline unsigned int indexOf(T const * t) const;
-        __host__ __device__ void operator=(LightArray<T> const & other);
-        __host__ __device__ inline T* operator[](unsigned int index) const;
-        __host__ __device__ void print(bool endLine = true) const;
-        __host__ __device__ inline static unsigned int sizeOfStorage(unsigned int capacity);
-        __host__ __device__ inline static void swap(LightArray<T>& a0, LightArray<T>& a1);
+    __host__ __device__ LightArray(unsigned int capacity, T* storage);
+    __host__ __device__ ~LightArray();
+    __host__ __device__ inline T* at(unsigned int index) const;
+    __host__ __device__ inline T* begin() const;
+    __host__ __device__ inline T* end() const;
+    __host__ __device__ inline unsigned int getCapacity() const;
+    __host__ __device__ inline unsigned int indexOf(T const * t) const;
+    __host__ __device__ LightArray<T>& operator=(LightArray<T> const & other);
+    __host__ __device__ inline T* operator[](unsigned int index) const;
+    __host__ __device__ void print(bool endLine = true) const;
+    __host__ __device__ inline static unsigned int sizeOfStorage(unsigned int capacity);
+    __host__ __device__ inline static void swap(LightArray<T>& a0, LightArray<T>& a1);
     protected:
-        __host__ __device__ void print(unsigned int beginIdx, unsigned int endIdx, bool endLine) const;
+    __host__ __device__ void print(unsigned int beginIdx, unsigned int endIdx, bool endLine) const;
 
 };
 
@@ -91,10 +91,11 @@ unsigned int LightArray<T>::indexOf(T const * t) const
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::operator=(LightArray<T> const & other)
+LightArray<T>& LightArray<T>::operator=(LightArray<T> const & other)
 {
-    this->capacity = other.capacity;
-    this->storage = other.storage;
+    capacity = other.capacity;
+    storage = other.storage;
+    return *this;
 }
 
 template<typename T>
@@ -135,12 +136,14 @@ void LightArray<T>::print(unsigned int beginIdx, unsigned int endIdx, bool endLi
         printf("[");
         if (beginIdx < endIdx)
         {
-            printf("%d", static_cast<int>(*at(beginIdx)));
+            printf("%d",static_cast<int>(*at(beginIdx)));
+            printf(",");
             for (unsigned int index = beginIdx + 1; index < endIdx; index += 1)
             {
-                printf(",%d", static_cast<int>(*at(index)));
+                printf(",");
+                printf("%d", static_cast<int>(*at(index)));
             }
         }
-        printf("]%c", endLine ? '\n' : '\0');
+        printf(endLine ? "]\n" : "]");
     }
 }

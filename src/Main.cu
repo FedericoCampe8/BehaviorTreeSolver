@@ -1,15 +1,8 @@
-#include <cstdio>
-#include <cinttypes>
-#include <cstddef>
 #include <algorithm>
-#include <fstream>
-#include <Containers/Buffer.cuh>
-#include <Utils/Chrono.cuh>
-
 #include <thread>
-
-#include "BB/OffloadBuffer.cuh"
+#include <Utils/Chrono.cuh>
 #include "DP/VRPModel.cuh"
+#include "OffloadBuffer.cuh"
 #include "BB/PriorityQueue.cuh"
 
 using namespace std;
@@ -19,47 +12,34 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using namespace LNS;
-using ModelType = VRPModel;
 using ProblemType = VRProblem;
 using StateType = VRPState;
 
 // Auxiliary functions
 void configGPU();
 
-// Comparators
-template<typename StateType>
-bool hasSmallerCost(StateMetadata<StateType> const & sm0, StateMetadata<StateType> const & sm1);
-
-// Queues
-template<typename StateType>
-bool boundsChk(DP::CostType bestCost, StateMetadata<StateType> const * stateMetadata);
-
-template<typename StateType>
-void updatePriorityQueue(DP::CostType bestCost, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<StateType>* offloadBuffer);
-
 // Search
-template<typename StateType>
-bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution, OffloadBuffer<StateType>* offloadBuffer);
+template<typename ProblemType, typename StateType>
+void updatePriorityQueue(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
+
+template<typename ProblemType, typename StateType>
+bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution, OffloadBuffer<ProblemType,StateType>* offloadBuffer);
 
 // Offload
-template<typename StateType>
-void prepareOffload(DP::CostType bestCost, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<StateType>* offloadBuffer);
+template<typename ProblemType, typename StateType>
+void prepareOffload(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
 
-template<typename StateType>
-void prepareOffload(StateMetadata<StateType> const * rootMetadata, OffloadBuffer<StateType>* offloadBuffer);
+template<typename ProblemType, typename StateType>
+void prepareOffload(AugmentedState<StateType> const * augmentedState, OffloadBuffer<ProblemType,StateType>* offloadBuffer);
 
-template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadCpuAsync(DD::MDD<ModelType, ProblemType, StateType> const * mdd, OffloadBuffer<StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem);
+template<typename ProblemType, typename StateType>
+void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads);
 
-template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadGpuAsync(DD::MDD<ModelType, ProblemType, StateType> const * mdd, OffloadBuffer<StateType>* gpuOffloadBuffer);
+template<typename ProblemType, typename StateType>
+void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer);
 
-template<typename ModelType, typename ProblemType, typename StateType>
-__host__ __device__ void doOffload(DD::MDD<ModelType,ProblemType,StateType> const * mdd, OffloadBuffer<StateType>* offloadBuffer, unsigned int index, std::byte* scratchpadMem);
-
-template<typename ModelType, typename ProblemType, typename StateType>
-__global__ void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, OffloadBuffer<StateType>* offloadBuffer);
+template<typename ProblemType, typename StateType>
+__global__ void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer);
 
 void waitOffloadCpu(Vector<std::thread>* cpuThreads);
 
@@ -97,51 +77,36 @@ int main(int argc, char ** argv)
         gpuMallocType = MallocType::Managed;
         configGPU();
     };
+    Vector<std::thread>* cpuThreads = new Vector<std::thread>(cpuMaxParallelism, MallocType::Std);
 
     // Problems
     ProblemType* const cpuProblem = VRProblem::parseGrubHubInstance(problemFileName, MallocType::Std);
     ProblemType* const gpuProblem = VRProblem::parseGrubHubInstance(problemFileName, gpuMallocType);
 
-    // Models
-    unsigned int memorySize = sizeof(ModelType);
-    std::byte* memory = safeMalloc(memorySize, MallocType::Std);
-    ModelType * const cpuModel = new (memory) ModelType(cpuProblem);
-    memory = safeMalloc(memorySize, gpuMallocType);
-    ModelType * const gpuModel = new (memory) ModelType(gpuProblem);
-
-    // MDDs
-    memorySize = sizeof(MDD<ModelType,ProblemType,StateType>);
-    memory = safeMalloc(memorySize, MallocType::Std);
-    MDD<ModelType,ProblemType,StateType>* const cpuMdd = new (memory) MDD<ModelType,ProblemType,StateType>(cpuModel, cpuMaxWidth);
-    memory = safeMalloc(memorySize, gpuMallocType);
-    MDD<ModelType,ProblemType,StateType>* const gpuMdd = new (memory) MDD<ModelType,ProblemType,StateType>(gpuModel, gpuMaxWidth);
-
-    // Context initialization
-    Vector<std::thread>* cpuThreads = new Vector<std::thread>(cpuMaxParallelism, MallocType::Std);
-    std::byte* scratchpadMem = safeMalloc(cpuMdd->scratchpadMemSize * cpuMaxParallelism, MallocType::Std);
-
-    // Queues
-    PriorityQueue<StateType> priorityQueue(cpuProblem, hasSmallerCost<StateType>, queueMaxSize);
+    // PriorityQueue
+    PriorityQueue<StateType> priorityQueue(cpuProblem, queueMaxSize);
 
     // Offload
-    memorySize = sizeof(OffloadBuffer<StateType>);
-    memory = safeMalloc(memorySize, MallocType::Std);
-    OffloadBuffer<StateType>* cpuOffloadBuffer = new (memory) OffloadBuffer<StateType>(cpuMdd, cpuMaxParallelism, MallocType::Std);
+    unsigned int memorySize = sizeof(OffloadBuffer<ProblemType,StateType>);
+    byte* memory = safeMalloc(memorySize, MallocType::Std);
+    OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer = new (memory) OffloadBuffer<ProblemType,StateType>(cpuProblem, cpuMaxWidth, cpuMaxParallelism, MallocType::Std);
     memory = safeMalloc(memorySize, gpuMallocType);
-    OffloadBuffer<StateType>* gpuOffloadBuffer = new (memory) OffloadBuffer<StateType>(gpuMdd, gpuMaxParallelism, gpuMallocType);
+    OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer = new (memory) OffloadBuffer<ProblemType,StateType>(gpuProblem, gpuMaxWidth, gpuMaxParallelism, gpuMallocType);
 
     // Solutions
     memorySize = sizeof(StateType);
     memory = safeMalloc(memorySize, MallocType::Std);
-    StateType* bestSolution = new (memory) StateType(cpuProblem, StateType::mallocStorages(cpuProblem, 1, MallocType::Std));
+    StateType* bestSolution = new (memory) StateType(cpuProblem, MallocType::Std);
     memory = safeMalloc(memorySize, MallocType::Std);
-    StateType* currentSolution = new (memory) StateType(cpuProblem, StateType::mallocStorages(cpuProblem, 1, MallocType::Std));
+    StateType* currentSolution = new (memory) StateType(cpuProblem, MallocType::Std);
 
     // Root
     memorySize = sizeof(StateType);
     memory = safeMalloc(memorySize, MallocType::Std);
-    StateType* root = new (memory) StateType(cpuProblem, StateType::mallocStorages(cpuProblem, 1, MallocType::Std));
-    cpuModel->makeRoot(root);
+    StateType* root = new (memory) StateType(cpuProblem, MallocType::Std);
+    makeRoot(cpuProblem, root);
+    AugmentedState<StateType> const augmentedRoot(DP::MaxCost, 0, root);
+    priorityQueue.insert(root);
 
     // Search
     unsigned int iterationsCount = 0;
@@ -151,11 +116,6 @@ int main(int argc, char ** argv)
     // ************
     // Begin search
     // ************
-
-    // Enqueue root
-    StateMetadata<StateType> const rootMetadata(0, DP::MaxCost, root);
-    priorityQueue.insert(&rootMetadata);
-
     uint64_t searchStartTime = now();
     do
     {
@@ -171,8 +131,8 @@ int main(int argc, char ** argv)
                     searchStatus = SearchStatus::LNS;
                 }
 
-                prepareOffload<StateType>(currentSolution->cost, &priorityQueue, cpuOffloadBuffer);
-                prepareOffload<StateType>(currentSolution->cost, &priorityQueue, gpuOffloadBuffer);
+                prepareOffload(&priorityQueue, cpuOffloadBuffer);
+                prepareOffload(&priorityQueue, gpuOffloadBuffer);
             }
                 break;
             case SearchStatus::LNS:
@@ -180,8 +140,8 @@ int main(int argc, char ** argv)
                 clearLine();
                 printf("[INFO] Large neighborhood search");
 
-                prepareOffload<StateType>(&rootMetadata, cpuOffloadBuffer);
-                prepareOffload<StateType>(&rootMetadata, gpuOffloadBuffer);
+                prepareOffload(&augmentedRoot, cpuOffloadBuffer);
+                prepareOffload(&augmentedRoot, gpuOffloadBuffer);
                 cpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
                 gpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
                 currentSolution->reset();
@@ -190,10 +150,10 @@ int main(int argc, char ** argv)
         }
 
         uint64_t cpuOffloadStartTime = now();
-        doOffloadCpuAsync(cpuMdd, cpuOffloadBuffer, cpuThreads, scratchpadMem);
+        doOffloadCpuAsync(cpuOffloadBuffer, cpuThreads);
 
         uint64_t gpuOffloadStartTime = now();
-        doOffloadGpuAsync(gpuMdd, gpuOffloadBuffer);
+        doOffloadGpuAsync(gpuOffloadBuffer);
 
         waitOffloadCpu(cpuThreads);
         waitOffloadGpu();
@@ -205,8 +165,8 @@ int main(int argc, char ** argv)
                 checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadBuffer) or
                 checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadBuffer);
 
-        updatePriorityQueue(currentSolution->cost, &priorityQueue, cpuOffloadBuffer);
-        updatePriorityQueue(currentSolution->cost, &priorityQueue, gpuOffloadBuffer);
+        updatePriorityQueue(&priorityQueue, cpuOffloadBuffer);
+        updatePriorityQueue(&priorityQueue, gpuOffloadBuffer);
 
         if(foundBetterSolution)
         {
@@ -269,67 +229,48 @@ void configGPU()
     cudaDeviceSetLimit(cudaLimitStackSize, sizeStackThread);
 
     //Cache
-    cudaDeviceSetCacheConfig(cudaFuncCachePreferEqual );
+    cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
 }
 
-
-
 template<typename StateType>
-bool hasSmallerCost(StateMetadata<StateType> const & sm0, StateMetadata<StateType> const & sm1)
+bool hasSmallerCost(StateType const * const & s0, StateType const * const & s1)
 {
-    unsigned int const cost0 = sm0.state->cost;
-    unsigned int const cost1 = sm1.state->cost;
-    return cost0 < cost1;
+    return s0->cost < s1->cost;
 }
 
-template<typename StateType>
-bool boundsChk(DP::CostType bestCost, StateMetadata<StateType> const * stateMetadata)
-{
-    return
-        stateMetadata->lowerbound < stateMetadata->upperbound and
-        stateMetadata->lowerbound < bestCost and
-        stateMetadata->state->cost < bestCost;
-}
-
-
-template<typename StateType>
-void updatePriorityQueue(DP::CostType bestCost, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<StateType>* offloadBuffer)
+template<typename ProblemType, typename StateType>
+void updatePriorityQueue(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer)
 {
     for (unsigned int index = 0; index < offloadBuffer->getSize(); index += 1)
     {
-        StateMetadata<StateType> const * const offloadedStateMetadatata = offloadBuffer->getStateMetadata(index);
-        LightArray<StateType> cutset = offloadBuffer->getCutset(index);
-        for (StateType* cutsetState = cutset.begin(); cutsetState != cutset.end(); cutsetState += 1)
+        Vector<StateType> const * const cutset = offloadBuffer->getMDD(index)->getCutset();
+        for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
         {
-            StateMetadata<StateType> const cutsetStateMetadata(offloadedStateMetadatata->lowerbound, offloadedStateMetadatata->upperbound, cutsetState);
-            if(boundsChk(bestCost, &cutsetStateMetadata))
+            if(not priorityQueue->isFull())
             {
-                if(not priorityQueue->isFull())
-                {
-                    priorityQueue->insert(&cutsetStateMetadata);
-                }
+                priorityQueue->insert(cutsetState);
             }
         };
     };
 }
 
 
-template<typename StateType>
-bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution, OffloadBuffer<StateType>* offloadBuffer)
+template<typename ProblemType, typename StateType>
+bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution, OffloadBuffer<ProblemType,StateType>* offloadBuffer)
 {
     bool foundBetterSolution = false;
 
     for (unsigned int index = 0; index < offloadBuffer->getSize(); index += 1)
     {
-        unsigned int upperbound = offloadBuffer->getStateMetadata(index)->upperbound;
-        if (upperbound < currentSolution->cost)
+        StateType const * const approximateSolution = offloadBuffer->getMDD(index)->getBottom();
+        if (approximateSolution->cost < currentSolution->cost)
         {
-            *currentSolution = *offloadBuffer->getApproximateSolution(index);
+            *currentSolution = *approximateSolution;
         }
 
-        if (upperbound < bestSolution->cost)
+        if (approximateSolution->cost < bestSolution->cost)
         {
-            *bestSolution = *offloadBuffer->getApproximateSolution(index);
+            *bestSolution = *approximateSolution;
             foundBetterSolution = true;
         }
     };
@@ -337,82 +278,56 @@ bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution
     return foundBetterSolution;
 }
 
-template<typename StateType>
-void prepareOffload(DP::CostType bestCost, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<StateType>* offloadBuffer)
+template<typename ProblemType, typename StateType>
+void prepareOffload(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer)
 {
     offloadBuffer->clear();
     while (not (priorityQueue->isEmpty() or offloadBuffer->isFull()))
     {
-        StateMetadata<StateType> const * const stateMetadata = priorityQueue->front();
-        if (boundsChk(bestCost, stateMetadata))
-        {
-            offloadBuffer->enqueue(stateMetadata);
-        }
-        priorityQueue->erase(stateMetadata);
+        AugmentedState<StateType> const * const augmentedStates = priorityQueue->front();
+        offloadBuffer->enqueue(augmentedStates);
+        priorityQueue->popFront();
     }
 }
-template<typename StateType>
-void prepareOffload(StateMetadata<StateType> const * rootMetadata, OffloadBuffer<StateType>* offloadBuffer)
+
+template<typename ProblemType, typename StateType>
+void prepareOffload(AugmentedState<StateType> const * augmentedState, OffloadBuffer<ProblemType,StateType>* offloadBuffer)
 {
     offloadBuffer->clear();
     while (not offloadBuffer->isFull())
     {
-        offloadBuffer->enqueue(rootMetadata);
+        offloadBuffer->enqueue(augmentedState);
     }
 }
 
 
-template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadCpuAsync(MDD<ModelType, ProblemType, StateType> const * mdd, OffloadBuffer<StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, std::byte* scratchpadMem)
+template<typename ProblemType, typename StateType>
+void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads)
 {
-    if(not cpuOffloadBuffer->isEmpty())
+    cpuThreads->clear();
+    for (unsigned int index = 0; index < cpuOffloadBuffer->getSize(); index += 1)
     {
-        cpuThreads->clear();
-        for (unsigned int index = 0; index < cpuOffloadBuffer->getSize(); index += 1)
-        {
-            cpuThreads->resize(cpuThreads->getSize() + 1);
-            new (cpuThreads->back()) std::thread(&doOffload<ModelType, ProblemType, StateType>, mdd, cpuOffloadBuffer, index, &scratchpadMem[mdd->scratchpadMemSize * index]);
-        }
+        cpuThreads->resize(cpuThreads->getSize() + 1);
+        new (cpuThreads->back()) std::thread(&OffloadBuffer<ProblemType,StateType>::doOffload,cpuOffloadBuffer,index);
     }
 }
 
-template<typename ModelType, typename ProblemType, typename StateType>
-void doOffloadGpuAsync(MDD<ModelType, ProblemType, StateType> const * mdd, OffloadBuffer<StateType>* gpuOffloadBuffer)
+template<typename ProblemType, typename StateType>
+void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer)
 {
     if(not gpuOffloadBuffer->isEmpty())
     {
-        doOffloadKernel<ModelType, ProblemType, StateType><<<gpuOffloadBuffer->getSize(), 1, mdd->scratchpadMemSize>>>(mdd, gpuOffloadBuffer);
+        doOffloadKernel<ProblemType, StateType><<<gpuOffloadBuffer->getSize(), 1>>>(gpuOffloadBuffer);
     }
 }
 
-template<typename ModelType, typename ProblemType, typename StateType>
-__host__ __device__
-void doOffload(MDD<ModelType,ProblemType,StateType> const * mdd, OffloadBuffer<StateType>* offloadBuffer, unsigned int index, std::byte* scratchpadMem)
-{
-    //Preparation to build MDDs
-    StateMetadata<StateType>* const stateMetadata = offloadBuffer->getStateMetadata(index);
-    StateType const * const top = stateMetadata->state;
-    LightVector<StateType> cutset = offloadBuffer->getCutset(index);
-    StateType * const bottom = offloadBuffer->getApproximateSolution(index);
-    LNS::Neighbourhood const * const neighbourhood = offloadBuffer->getNeighbourhood(index);
-
-    //Build MDDs
-    mdd->buildTopDown(MDD<ModelType,ProblemType,StateType>::Type::Relaxed, top, &cutset, bottom, neighbourhood, scratchpadMem);
-    stateMetadata->lowerbound = bottom->cost;
-    mdd->buildTopDown(MDD<ModelType,ProblemType,StateType>::Type::Restricted, top, &cutset, bottom, neighbourhood, scratchpadMem);
-    stateMetadata->upperbound = bottom->cost;
-}
-
-template<typename ModelType, typename ProblemType, typename StateType>
+template<typename ProblemType, typename StateType>
 __global__
-void doOffloadKernel(DD::MDD<ModelType,ProblemType,StateType> const * mdd, OffloadBuffer<StateType>* offloadBuffer)
+void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer)
 {
-    extern __shared__ unsigned int sharedMem[];
-    std::byte* scratchpadMem = reinterpret_cast<std::byte*>(sharedMem);
-
     if(threadIdx.x == 0)
     {
-        doOffload(mdd, offloadBuffer, blockIdx.x, scratchpadMem);
+        offloadBuffer->doOffload(blockIdx.x);
     };
 }
 

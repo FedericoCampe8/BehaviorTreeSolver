@@ -2,9 +2,7 @@
 
 #include <Containers/Buffer.cuh>
 #include <Containers/MaxHeap.cuh>
-
-#include "../DD/MDD.cuh"
-#include "StateMetadata.cuh"
+#include "AugmentedState.cuh"
 
 namespace BB
 {
@@ -13,65 +11,64 @@ namespace BB
     {
         // Members
         private:
-            Buffer<StateType> statesBuffer;
-            MaxHeap<BB::StateMetadata<StateType>> queue;
+        Buffer<StateType> statesBuffer;
+        MaxHeap<BB::AugmentedState<StateType>> heap;
 
         // Functions
         public:
-            template<typename ProblemType>
-            PriorityQueue(ProblemType const * problem, typename MaxHeap<BB::StateMetadata<StateType>>::Comparator comparator, unsigned int capacity);
-            void erase(BB::StateMetadata<StateType> const * stateMetadata);
-            BB::StateMetadata<StateType> const * front() const;
-            void insert(BB::StateMetadata<StateType> const * stateMetadata);
-            bool isEmpty() const;
-            bool isFull() const;
+        template<typename ProblemType>
+        PriorityQueue(ProblemType const * problem, unsigned int capacity);
+        AugmentedState<StateType> const * front() const;
+        void insert(StateType const* state);
+        bool isEmpty() const;
+        bool isFull() const;
+        void popFront();
     };
+}
 
-    template<typename StateType>
-    template<typename ProblemType>
-    PriorityQueue<StateType>::PriorityQueue(ProblemType const * problem, typename MaxHeap<BB::StateMetadata<StateType>>::Comparator comparator, unsigned int capacity) :
-        statesBuffer(capacity, Memory::MallocType::Std),
-        queue(comparator, capacity, Memory::MallocType::Std)
+template<typename StateType>
+template<typename ProblemType>
+BB::PriorityQueue<StateType>::PriorityQueue(ProblemType const * problem, unsigned int capacity) :
+    statesBuffer(capacity, Memory::MallocType::Std),
+    heap(capacity, Memory::MallocType::Std)
+{
+    // States
+    for (unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
     {
-        unsigned int const storageSize =  StateType::sizeOfStorage(problem);
-        std::byte* const memory = StateType::mallocStorages(problem, capacity, Memory::MallocType::Std);
-        for(unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
-        {
-            new (statesBuffer[stateIdx]) StateType(problem, &memory[storageSize * stateIdx]);
-        }
+        new (statesBuffer[stateIdx]) StateType(problem, Memory::MallocType::Std);
     }
+}
 
-    template<typename StateType>
-    void PriorityQueue<StateType>::erase(const StateMetadata<StateType>* stateMetadata)
-    {
-        queue.erase(stateMetadata);
-        statesBuffer.erase(stateMetadata->state);
-    }
+template<typename StateType>
+BB::AugmentedState<StateType> const * BB::PriorityQueue<StateType>::front() const
+{
+    return heap.front();
+}
 
-    template<typename StateType>
-    StateMetadata<StateType> const * PriorityQueue<StateType>::front() const
-    {
-        return queue.front();
-    }
+template<typename StateType>
+void BB::PriorityQueue<StateType>::insert(StateType const* state)
+{
+    StateType const* const bufferedState = statesBuffer.insert(state);
+    AugmentedState<StateType> const augmentedState(bufferedState);
+    heap.pushBack(&augmentedState);
+}
 
-    template<typename StateType>
-    void PriorityQueue<StateType>::insert(BB::StateMetadata<StateType> const * stateMetadata)
-    {
-        StateType const * const bufferedState = statesBuffer.insert(stateMetadata->state);
-        StateMetadata<StateType> const bufferedStateMetadata(stateMetadata->lowerbound, stateMetadata->upperbound, bufferedState);
-        queue.pushBack(&bufferedStateMetadata);
-        queue.insertBack();
-    }
+template<typename StateType>
+bool BB::PriorityQueue<StateType>::isEmpty() const
+{
+    return heap.isEmpty();
+}
 
-    template<typename StateType>
-    bool PriorityQueue<StateType>::isEmpty() const
-    {
-        return queue.isEmpty();
-    }
+template<typename StateType>
+bool BB::PriorityQueue<StateType>::isFull() const
+{
+    return heap.isFull();
+}
 
-    template<typename StateType>
-    bool PriorityQueue<StateType>::isFull() const
-    {
-        return queue.isFull();
-    }
+template<typename StateType>
+void BB::PriorityQueue<StateType>::popFront()
+{
+    AugmentedState<StateType> const* const front = heap.front();
+    statesBuffer.erase(front->state);
+    heap.erase(front);
 }

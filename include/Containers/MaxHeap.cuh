@@ -6,31 +6,22 @@
 template<typename T>
 class MaxHeap : public Vector<T>
 {
-    // Aliases, Enums, ...
-    public:
-        typedef bool (*Comparator)(T const & t0, T const & t1);
-
-    // Members
-    private:
-        Comparator const comparator;
-
     // Functions
     public:
-        __host__ __device__ MaxHeap(Comparator cmp, unsigned int capacity, Memory::MallocType mallocType);
-        __host__ __device__ void erase(T const * t);
-        __host__ __device__ void insertBack();
+    __host__ __device__ MaxHeap(unsigned int capacity, Memory::MallocType mallocType);
+    __host__ __device__ void erase(T const * t);
+    __host__ __device__ void insert(T const * t);
     private:
-        __host__ __device__ void heapify(unsigned int index);
-        __host__ __device__ inline unsigned int left(unsigned int index);
-        __host__ __device__ inline unsigned int parent(unsigned int index);
-        __host__ __device__ inline unsigned int right(unsigned int index);
+    __host__ __device__ void heapify(unsigned int index);
+    __host__ __device__ inline unsigned int left(unsigned int index);
+    __host__ __device__ inline unsigned int parent(unsigned int index);
+    __host__ __device__ inline unsigned int right(unsigned int index);
 };
 
 template<typename T>
 __host__ __device__
-MaxHeap<T>::MaxHeap(Comparator cmp, unsigned int capacity, Memory::MallocType mallocType) :
-    Vector<T>(capacity, mallocType),
-    comparator(cmp)
+MaxHeap<T>::MaxHeap(unsigned int capacity, Memory::MallocType mallocType) :
+    Vector<T>(capacity, mallocType)
 {}
 
 template<typename T>
@@ -52,11 +43,12 @@ void MaxHeap<T>::erase(T const * t)
 
 template<typename T>
 __host__ __device__
-void MaxHeap<T>::insertBack()
+void MaxHeap<T>::insert(T const * t)
 {
+    pushBack(t);
     unsigned int i = this->size - 1;
     unsigned int p = parent(i);
-    while (i > 0 and (not comparator(*this->at(p), *this->at(i))))
+    while (i > 0 and (*this->at(p) < *this->at(i)))
     {
         T::swap(*this->at(p), *this->at(i));
         i = p;
@@ -71,11 +63,11 @@ void MaxHeap<T>::heapify(unsigned int index)
     unsigned int const l = left(index);
     unsigned int const r = right(index);
     unsigned int largest = index;
-    if (l < this->size and comparator(*this->at(l), *this->at(index)))
+    if (l < this->size and (*this->at(l) < *this->at(index)))
     {
         largest = l;
     }
-    if (r < this->size and comparator(*this->at(r), *this->at(largest)))
+    if (r < this->size and (*this->at(r) < *this->at(largest)))
     {
         largest = r;
     }

@@ -1,20 +1,30 @@
 #pragma once
 
-#include <cstdint>
+#include "Context.h"
 
 namespace OP
 {
-    using ValueType = uint8_t;
-
     class Variable
     {
         // Members
         public:
-            ValueType minValue;
-            ValueType maxValue;
+        ValueType minValue;
+        ValueType maxValue;
 
         // Functions
         public:
-            Variable(ValueType minValue, ValueType maxValue);
+        Variable(ValueType minValue, ValueType maxValue);
+        __host__ __device__ bool boundsCheck(ValueType value);
     };
+}
+
+OP::Variable::Variable(ValueType minValue, ValueType maxValue) :
+    minValue(minValue),
+    maxValue(maxValue)
+{}
+
+__host__ __device__
+bool OP::Variable::boundsCheck(OP::ValueType value)
+{
+    return minValue <= value and value <= maxValue;
 }

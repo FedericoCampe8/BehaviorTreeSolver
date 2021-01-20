@@ -4,197 +4,211 @@
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/swap.h>
-
-#include "../DP/State.cuh"
+#include <Containers/Vector.cuh>
+#include "../DP/VRPState.cuh"
+#include "../DP/VRPModel.cuh"
 #include "../OP/Problem.cuh"
-#include "../LNS/Neighbourhood.cuh"
+#include "../Neighbourhood.cuh"
+#include "Context.h"
+#include "AuxiliaryData.cuh"
 
 namespace DD
 {
-    template<typename ModelType, typename ProblemType, typename StateType>
+    template<typename ProblemType, typename StateType>
     class MDD
     {
-
-        // Aliases, Enums, ...
-        public:
-            enum Type {Relaxed, Restricted};
-
         // Members
-        public:
-            ModelType const * model;
-            unsigned int width;
-            unsigned int maxValue;
-            unsigned int scratchpadMemSize;
+        private:
+        unsigned int const width;
+        ProblemType const * const problem;
+        Vector<StateType> cutset;
+        Vector<StateType> currentStates;
+        Vector<StateType> nextStates;
+        Vector<AuxiliaryData> auxiliaryData;
 
         // Functions
         public:
-            MDD(ModelType const * model, unsigned int width);
-            __host__ __device__ void buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, LNS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const;
-            unsigned int calcCutsetMaxSize() const;
+        MDD(ProblemType const* problem, unsigned int width, Memory::MallocType mallocType);
+        __host__ __device__ void buildTopDown(DD::Type type, Neighbourhood const * neighbourhood);
+        __host__ __device__ Vector<StateType> const * getCutset() const;
+        __host__ __device__ StateType* getBottom() const;
+        __host__ __device__ void setTop(StateType const * state);
         private:
-            unsigned int calcScratchpadMemSize() const;
-
+        __host__ __device__ void calcAuxiliaryData(unsigned int variableIdx, Neighbourhood const * neighbourhood);
+        __host__ __device__ void calcNextStates(unsigned int variableIdx);
+        __host__ __device__ void mergeNextStates(unsigned int variableIdx);
+        __host__ __device__ void resetAuxiliaryData();
+        __host__ __device__ void resizeNextStates(unsigned int variableIdx, unsigned int variablesCount);
+        __host__ __device__ void saveCutset();
+        __host__ __device__ void shirkToFitAuxiliaryData();
     };
+}
 
-    template<typename ModelType, typename ProblemType, typename StateType>
-    MDD<ModelType,ProblemType,StateType>::MDD(ModelType const * model, unsigned int width) :
-        model(model),
-        width(width),
-        maxValue(model->problem->calcMaxValue()),
-        scratchpadMemSize(calcScratchpadMemSize())
-    {}
+template<typename ProblemType, typename StateType>
+DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, unsigned int width, Memory::MallocType mallocType) :
+    width(width),
+    problem(problem),
+    cutset(width * problem->maxBranchingFactor, mallocType),
+    currentStates(width, mallocType),
+    nextStates(width, mallocType),
+    auxiliaryData(width * problem->maxBranchingFactor, mallocType)
+{}
 
-    template<typename ModelType, typename ProblemType, typename StateType>
-    __host__ __device__
-    void MDD<ModelType,ProblemType,StateType>::buildTopDown(Type type, StateType const * top, LightVector<StateType>* cutset, StateType* bottom, LNS::Neighbourhood const * neighbourhood, std::byte* scratchpadMem) const
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::buildTopDown(DD::Type type, Neighbourhood const * neighbourhood)
+{
+    // Build
+    bool cutsetSaved = false;
+    unsigned int const variablesCount = problem->variables.getCapacity();
+    for (unsigned int variableIdx = currentStates[0]->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
     {
-        std::byte* freeScratchpadMem = scratchpadMem;
-
-        // Current states
-        LightVector<StateType> currentStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8u, currentStates.LightArray<StateType>::end());
-        unsigned int const storageSize = StateType::sizeOfStorage(model->problem);
-        for(unsigned int stateIdx = 0; stateIdx < currentStates.getCapacity(); stateIdx += 1)
+        // Calculate auxiliary data
+        resetAuxiliaryData();
+        calcAuxiliaryData(variableIdx, neighbourhood);
+        thrust::sort(thrust::seq, auxiliaryData.begin(), auxiliaryData.end());
+        shirkToFitAuxiliaryData();
+        if (auxiliaryData.isEmpty())
         {
-            new (currentStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
-            freeScratchpadMem += storageSize;
-        }
-        freeScratchpadMem = Memory::align(8u, freeScratchpadMem);
-
-        // Next states
-        LightVector<StateType> nextStates(width, reinterpret_cast<StateType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8u, nextStates.LightArray<StateType>::end());
-        for(unsigned int stateIdx = 0; stateIdx < nextStates.getCapacity(); stateIdx += 1)
-        {
-            new (nextStates.LightArray<StateType>::at(stateIdx)) StateType(model->problem, freeScratchpadMem);
-            freeScratchpadMem += storageSize;
-        }
-        freeScratchpadMem = Memory::align(8u, freeScratchpadMem);
-
-        // Auxiliary information
-        LightVector<DP::CostType> costs(maxValue * width, reinterpret_cast<DP::CostType*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8u, costs.LightArray<DP::CostType>::end());
-
-        assert(width * maxValue < UINT32_MAX);
-        LightVector<uint32_t> indices(maxValue * width, reinterpret_cast<uint32_t*>(freeScratchpadMem));
-        freeScratchpadMem = Memory::align(8u, indices.LightArray<uint32_t>::end());
-
-        assert(freeScratchpadMem < scratchpadMem + scratchpadMemSize);
-
-        // Root
-        currentStates.pushBack(top);
-
-        // Build
-        bool cutsetInitialized = false;
-        unsigned int const variablesCount = model->problem->variables.getCapacity();
-        for(unsigned int variableIdx = top->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
-        {
-            // Initialize indices
-            indices.resize(maxValue * currentStates.getSize());
-            thrust::sequence(thrust::seq, indices.begin(), indices.end());
-
-            // Initialize costs
-            costs.resize(maxValue * currentStates.getSize());
-            thrust::fill(thrust::seq, costs.begin(), costs.end(), DP::MaxCost);
-
-            // Calculate costs
-            for (unsigned int currentStateIdx = 0; currentStateIdx < currentStates.getSize(); currentStateIdx += 1)
-            {
-                model->calcCosts(variableIdx, currentStates[currentStateIdx], neighbourhood, costs[maxValue * currentStateIdx]);
-            }
-
-            // Sort indices by costs
-            thrust::sort_by_key(thrust::seq, costs.begin(), costs.end(), indices.begin());
-
-            // Discards bad egdes by cost
-            uint32_t* const costsEnd = thrust::lower_bound(thrust::seq, costs.begin(), costs.end(), DP::MaxCost);
-            if (costsEnd != costs.end())
-            {
-                unsigned int size = costs.indexOf(costsEnd);
-                if (size > 0)
-                {
-                    costs.resize(size);
-                    indices.resize(size);
-                }
-                else
-                {
-                    *bottom = *top;
-                    bottom->cost = DP::MaxCost;
-                    return;
-                }
-            }
-
-            if (variableIdx < variablesCount - 1)
-            {
-                nextStates.resize(min(width, indices.getSize()));
-            }
-            else
-            {
-                nextStates.resize(1);
-            }
-
-            // Save cutset
-            if(type == Type::Relaxed and (not cutsetInitialized))
-            {
-                cutset->resize(indices.getSize());
-                for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < indices.getSize(); cutsetStateIdx += 1)
-                {
-                    uint32_t const index = *indices[cutsetStateIdx];
-                    unsigned int const currentStateIdx = index / maxValue;
-                    unsigned int const edgeIdx = index % maxValue;
-                    OP::ValueType const value = model->problem->variables[variableIdx]->minValue + edgeIdx;
-                    model->makeState(currentStates[currentStateIdx], value, *costs[cutsetStateIdx], cutset->at(cutsetStateIdx));
-                };
-
-                cutsetInitialized = true;
-            }
-
-            // Add next states
-            for(unsigned int nextStateIdx = 0; nextStateIdx < indices.getSize(); nextStateIdx += 1)
-            {
-                uint32_t const index = *indices[nextStateIdx];
-                unsigned int const currentStateIdx = index / maxValue;
-                unsigned int const edgeIdx = index % maxValue;
-                OP::ValueType const value = model->problem->variables[variableIdx]->minValue + edgeIdx;
-                if (nextStateIdx < nextStates.getSize())
-                {
-                    model->makeState(currentStates[currentStateIdx], value, *costs[nextStateIdx], nextStates[nextStateIdx]);
-                }
-                else if (type == Type::Relaxed)
-                {
-                    model->mergeState(currentStates[currentStateIdx], value, nextStates.back());
-                }
-            }
-
-            //Prepare for the next loop
-            LightVector<StateType>::swap(currentStates, nextStates);
+            getBottom()->reset();
+            return;
         }
 
-        //Copy bottom
-        *bottom = *currentStates[0];
-    }
+        // Calculate next states
+        resizeNextStates(variableIdx, variablesCount);
+        calcNextStates(variableIdx);
+        if (type == Type::Relaxed)
+        {
+            mergeNextStates(variableIdx);
+        }
+        else if (not cutsetSaved)
+        {
+            saveCutset();
+            cutsetSaved = true;
+        }
 
-    template<typename ModelType, typename ProblemType, typename StateType>
-    unsigned int MDD<ModelType, ProblemType, StateType>::calcCutsetMaxSize() const
+        //Prepare for the next loop
+        LightVector<StateType>::swap(currentStates, nextStates);
+    }
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+Vector<StateType> const * DD::MDD<ProblemType, StateType>::getCutset() const
+{
+    return &cutset;
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+StateType* DD::MDD<ProblemType, StateType>::getBottom() const
+{
+    return currentStates[0];
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::setTop(StateType const * state)
+{
+    *currentStates[0] = *state;
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::calcAuxiliaryData(unsigned int variableIdx, Neighbourhood const * neighbourhood)
+{
+    for(unsigned int currentStateIdx = 0; currentStateIdx < currentStates.getSize(); currentStateIdx += 1)
     {
-        return width * maxValue;
+        StateType const * const currentState = currentStates[currentStateIdx];
+        for(unsigned int admissibleValueIdx = 0; admissibleValueIdx < currentState->admissibleValues.getSize(); admissibleValueIdx += 1)
+        {
+            OP::ValueType const value = *currentState->admissibleValues[admissibleValueIdx];
+            bool boundsChk = problem->variables[variableIdx]->boundsCheck(value);
+            bool constraintsChk = neighbourhood->constraintsCheck(variableIdx, value);
+            if (boundsChk and constraintsChk)
+            {
+                unsigned int const valueIdx = value - problem->variables[variableIdx]->minValue;
+                unsigned int const auxiliaryDataIdx = problem->maxBranchingFactor * currentStateIdx + valueIdx;
+                auxiliaryData[auxiliaryDataIdx]->cost = calcCost(problem, currentState, value);
+            }
+        }
     }
+}
 
-    template<typename ModelType, typename ProblemType, typename StateType>
-    unsigned int MDD<ModelType,ProblemType,StateType>::calcScratchpadMemSize() const
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::calcNextStates(unsigned int variableIdx)
+{
+    for(unsigned int nextStateIdx = 0; nextStateIdx < nextStates.getSize(); nextStateIdx += 1)
     {
-        unsigned int const stateSize = sizeof(StateType);
-        unsigned int const stateStorageSize = StateType::sizeOfStorage(model->problem);
-        unsigned int const cutsetMaxSize = calcCutsetMaxSize();
-
-        return
-            stateSize * width + // currentStates
-            stateStorageSize * width  +
-            stateSize * width + // nextStates
-            stateStorageSize * width  +
-            sizeof(DP::CostType) * cutsetMaxSize + // costs
-            sizeof(uint32_t) * cutsetMaxSize + // indices
-            8 * 6; // Alignment
+        AuxiliaryData ad = *auxiliaryData[nextStateIdx];
+        unsigned int const currentStateIdx = ad.index / problem->maxBranchingFactor ;
+        unsigned int const valueIdx = ad.index % problem->maxBranchingFactor ;
+        OP::ValueType const value = problem->variables[variableIdx]->minValue + valueIdx;
+        makeState(problem, currentStates[currentStateIdx],value,auxiliaryData[nextStateIdx]->cost,nextStates[nextStateIdx]);
     }
+}
 
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::mergeNextStates(unsigned int variableIdx)
+{
+    for(unsigned int auxiliaryDataIdx = nextStates.getSize(); auxiliaryDataIdx < auxiliaryData.getSize(); auxiliaryDataIdx += 1)
+    {
+        AuxiliaryData ad = *auxiliaryData[auxiliaryDataIdx];
+        unsigned int const currentStateIdx = ad.index / problem->maxBranchingFactor ;
+        unsigned int const valueIdx = ad.index % problem->maxBranchingFactor ;
+        OP::ValueType const value = problem->variables[variableIdx]->minValue + valueIdx;
+        mergeState(problem, currentStates[currentStateIdx], value, auxiliaryData[auxiliaryDataIdx]->cost, nextStates.back());
+    }
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::resetAuxiliaryData()
+{
+    for(unsigned int auxiliaryDataIdx = 0; auxiliaryDataIdx < auxiliaryData.getSize(); auxiliaryDataIdx += 1)
+    {
+        auxiliaryData[auxiliaryDataIdx]->cost = DP::MaxCost;
+        auxiliaryData[auxiliaryDataIdx]->index = auxiliaryDataIdx;
+    }
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::resizeNextStates(unsigned int variableIdx, unsigned int variablesCount)
+{
+    if (variableIdx < variablesCount - 1)
+    {
+        nextStates.resize(min(width, auxiliaryData.getSize()));
+    }
+    else
+    {
+        nextStates.resize(1);
+    }
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::saveCutset()
+{
+    cutset.resize(nextStates.getSize());
+    for(unsigned int cutsetStateIdx = 0; cutsetStateIdx < cutset.getSize(); cutsetStateIdx += 1)
+    {
+        *cutset[cutsetStateIdx] = *nextStates[cutsetStateIdx];
+    }
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::shirkToFitAuxiliaryData()
+{
+    AuxiliaryData const invalidMetadata(DP::MaxCost, 0);
+    AuxiliaryData const* const auxiliaryDataEnd = thrust::lower_bound(thrust::seq, auxiliaryData.begin(), auxiliaryData.end(), invalidMetadata);
+    if (auxiliaryDataEnd != auxiliaryData.end())
+    {
+        unsigned int size = auxiliaryData.indexOf(auxiliaryDataEnd);
+        auxiliaryData.resize(size);
+    }
 }

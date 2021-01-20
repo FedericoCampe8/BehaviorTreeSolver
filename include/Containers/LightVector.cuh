@@ -1,43 +1,34 @@
 #pragma once
 
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <thrust/copy.h>
-#include <thrust/distance.h>
-#include <thrust/swap.h>
 #include <Containers/LightArray.cuh>
-#include <Utils/Memory.cuh>
 
 template<typename T>
 class LightVector : public LightArray<T>
 {
     // Members
     protected:
-        unsigned int size;
+    unsigned int size;
 
     // Functions
     public:
-        __host__ __device__ LightVector(unsigned int capacity, T* storage);
-        __host__ __device__ ~LightVector();
-        __host__ __device__ inline T* at(unsigned int index) const;
-        __host__ __device__ inline T* back() const;
-        __host__ __device__ inline void clear();
-        __host__ __device__ inline T* end() const;
-        __host__ __device__ inline T* front() const;
-        __host__ __device__ inline unsigned int getSize() const;
-        __host__ __device__ inline bool isEmpty() const;
-        __host__ __device__ inline bool isFull() const;
-        __host__ __device__ inline unsigned int indexOf(T const * t) const;
-        __host__ __device__ void operator=(LightVector<T> const & other);
-        __host__ __device__ inline T* operator[](unsigned int index) const;
-        __host__ __device__ inline void popBack();
-        __host__ __device__ void print(bool endLine = true) const;
-        __host__ __device__ void pushBack(T const * t);
-        __host__ __device__ inline void resize(unsigned int size);
-
-        __host__ __device__ inline static void swap(LightVector<T>& v0, LightVector<T>& v1);
+    __host__ __device__ LightVector(unsigned int capacity, T* storage);
+    __host__ __device__ ~LightVector();
+    __host__ __device__ inline T* at(unsigned int index) const;
+    __host__ __device__ inline T* back() const;
+    __host__ __device__ inline void clear();
+    __host__ __device__ inline T* end() const;
+    __host__ __device__ inline T* front() const;
+    __host__ __device__ inline unsigned int getSize() const;
+    __host__ __device__ inline bool isEmpty() const;
+    __host__ __device__ inline bool isFull() const;
+    __host__ __device__ inline unsigned int indexOf(T const * t) const;
+    __host__ __device__ LightVector<T>& operator=(LightVector<T> const & other);
+    __host__ __device__ inline T* operator[](unsigned int index) const;
+    __host__ __device__ inline void popBack();
+    __host__ __device__ void print(bool endLine = true) const;
+    __host__ __device__ void pushBack(T const * t);
+    __host__ __device__ inline void resize(unsigned int size);
+    __host__ __device__ inline static void swap(LightVector<T>& v0, LightVector<T>& v1);
 };
 
 template<typename T>
@@ -87,7 +78,7 @@ __host__ __device__
 T* LightVector<T>::front() const
 {
     assert(size > 0);
-    return this->at(0);
+    return at(0);
 }
 
 template<typename T>
@@ -115,7 +106,7 @@ template<typename T>
 __host__ __device__
 unsigned int LightVector<T>::indexOf(T const * t) const
 {
-    T const * const b = this->begin();
+    T const* const b = this->begin();
     assert(b <= t);
     assert(t < end());
     return static_cast<unsigned int>(thrust::distance(b, t));
@@ -123,10 +114,11 @@ unsigned int LightVector<T>::indexOf(T const * t) const
 
 template<typename T>
 __host__ __device__
-void LightVector<T>::operator=(LightVector<T> const & other)
+LightVector<T>& LightVector<T>::operator=(LightVector<T> const & other)
 {
     LightArray<T>::operator=(other);
     size = other.size;
+    return *this;
 }
 
 template<typename T>
