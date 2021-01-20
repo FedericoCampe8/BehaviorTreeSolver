@@ -19,6 +19,7 @@ namespace BB
         template<typename ProblemType>
         PriorityQueue(ProblemType const * problem, unsigned int capacity);
         AugmentedState<StateType> const * front() const;
+        unsigned int getSize() const;
         void insert(StateType const* state);
         bool isEmpty() const;
         bool isFull() const;
@@ -43,6 +44,12 @@ template<typename StateType>
 BB::AugmentedState<StateType> const * BB::PriorityQueue<StateType>::front() const
 {
     return heap.front();
+}
+
+template<typename StateType>
+unsigned int BB::PriorityQueue<StateType>::getSize() const
+{
+    return statesBuffer.getSize();
 }
 
 template<typename StateType>

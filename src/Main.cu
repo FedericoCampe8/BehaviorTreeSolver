@@ -20,14 +20,17 @@ void configGPU();
 
 // Search
 template<typename ProblemType, typename StateType>
-void updatePriorityQueue(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
+void updatePriorityQueue(StateType* bestSolution, unsigned int * filteredStatesCount, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
+
+template<typename StateType>
+bool boundsCheck(StateType* bestSolution, AugmentedState<StateType> const * augmentedState);
 
 template<typename ProblemType, typename StateType>
 bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution, OffloadBuffer<ProblemType,StateType>* offloadBuffer);
 
 // Offload
 template<typename ProblemType, typename StateType>
-void prepareOffload(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
+void prepareOffload(StateType* bestSolution, unsigned int * filteredStatesCount, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
 
 template<typename ProblemType, typename StateType>
 void prepareOffload(AugmentedState<StateType> const * augmentedState, OffloadBuffer<ProblemType,StateType>* offloadBuffer);
@@ -97,8 +100,10 @@ int main(int argc, char ** argv)
     memorySize = sizeof(StateType);
     memory = safeMalloc(memorySize, MallocType::Std);
     StateType* bestSolution = new (memory) StateType(cpuProblem, MallocType::Std);
+    bestSolution->cost = DP::MaxCost;
     memory = safeMalloc(memorySize, MallocType::Std);
     StateType* currentSolution = new (memory) StateType(cpuProblem, MallocType::Std);
+    currentSolution->cost = DP::MaxCost;
 
     // Root
     memorySize = sizeof(StateType);
@@ -112,6 +117,7 @@ int main(int argc, char ** argv)
     unsigned int iterationsCount = 0;
     enum SearchStatus {BB, LNS} searchStatus = SearchStatus::BB;
     unsigned int visitedStatesCount = 0;
+    unsigned int filteredStatesCount = 0;
 
     // ************
     // Begin search
@@ -131,8 +137,8 @@ int main(int argc, char ** argv)
                     searchStatus = SearchStatus::LNS;
                 }
 
-                prepareOffload(&priorityQueue, cpuOffloadBuffer);
-                prepareOffload(&priorityQueue, gpuOffloadBuffer);
+                prepareOffload(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
+                prepareOffload(bestSolution, &filteredStatesCount, &priorityQueue, gpuOffloadBuffer);
             }
                 break;
             case SearchStatus::LNS:
@@ -165,8 +171,8 @@ int main(int argc, char ** argv)
                 checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadBuffer) or
                 checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadBuffer);
 
-        updatePriorityQueue(&priorityQueue, cpuOffloadBuffer);
-        updatePriorityQueue(&priorityQueue, gpuOffloadBuffer);
+        updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
+        updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, gpuOffloadBuffer);
 
         if(foundBetterSolution)
         {
@@ -177,7 +183,7 @@ int main(int argc, char ** argv)
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iterations: %u", iterationsCount);
-            printf(" | Visited states: %u\n", visitedStatesCount);
+            printf(" | States: %u - %u - %u\n", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
         }
         else
         {
@@ -200,20 +206,22 @@ int main(int argc, char ** argv)
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Iteration: %u", iterationsCount);
+            printf(" | States: %u - %u - %u", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
             printf(" | Speed: %lu - %lu\r", cpuSpeed, gpuSpeed);
         }
         fflush(stdout);
         iterationsCount += 1;
     }
-    while(now() - searchStartTime < timeoutSeconds * 1000);
+    while(now() - searchStartTime < timeoutSeconds * 1000 and (not priorityQueue.isEmpty()));
 
+    clearLine();
     printf("[RESULT] Solution: ");
     bestSolution->selectedValues.print(false);
     printf(" | Value: %u", bestSolution->cost);
     printf(" | Time: ");
     printElapsedTime(now() - searchStartTime);
     printf(" | Iterations: %u", iterationsCount);
-    printf(" | Visited states: %u\n", visitedStatesCount);
+    printf(" | States: %u - %u - %u\n", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
 
     return EXIT_SUCCESS;
 }
@@ -232,28 +240,38 @@ void configGPU()
     cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
 }
 
-template<typename StateType>
-bool hasSmallerCost(StateType const * const & s0, StateType const * const & s1)
-{
-    return s0->cost < s1->cost;
-}
-
 template<typename ProblemType, typename StateType>
-void updatePriorityQueue(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer)
+void updatePriorityQueue(StateType* bestSolution, unsigned int * filteredStatesCount, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer)
 {
     for (unsigned int index = 0; index < offloadBuffer->getSize(); index += 1)
     {
-        Vector<StateType> const * const cutset = offloadBuffer->getMDD(index)->getCutset();
-        for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
+        if(boundsCheck(bestSolution, offloadBuffer->getAugmentedState(index)))
         {
-            if(not priorityQueue->isFull())
+            Vector<StateType> const* const cutset = offloadBuffer->getMDD(index)->getCutset();
+            for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
             {
-                priorityQueue->insert(cutsetState);
-            }
-        };
+
+                if (not priorityQueue->isFull())
+                {
+                    priorityQueue->insert(cutsetState);
+                }
+            };
+        }
+        else
+        {
+            *filteredStatesCount += 1;
+        }
     };
 }
 
+template<typename StateType>
+bool boundsCheck(StateType* bestSolution, AugmentedState<StateType> const * augmentedState)
+{
+    return
+        augmentedState->lowerbound < augmentedState->upperbound and
+        augmentedState->lowerbound < bestSolution->cost and
+        augmentedState->state->cost <= bestSolution->cost;
+}
 
 template<typename ProblemType, typename StateType>
 bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution, OffloadBuffer<ProblemType,StateType>* offloadBuffer)
@@ -279,14 +297,21 @@ bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution
 }
 
 template<typename ProblemType, typename StateType>
-void prepareOffload(PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer)
+void prepareOffload(StateType* bestSolution, unsigned int * filteredStatesCount, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer)
 {
     offloadBuffer->clear();
     while (not (priorityQueue->isEmpty() or offloadBuffer->isFull()))
     {
-        AugmentedState<StateType> const * const augmentedStates = priorityQueue->front();
-        offloadBuffer->enqueue(augmentedStates);
-        priorityQueue->popFront();
+        AugmentedState<StateType> const * const augmentedState = priorityQueue->front();
+        if(boundsCheck(bestSolution, augmentedState))
+        {
+            offloadBuffer->enqueue(augmentedState);
+            priorityQueue->popFront();
+        }
+        else
+        {
+            *filteredStatesCount += 1;
+        }
     }
 }
 

@@ -52,7 +52,28 @@ DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, unsigned int w
     currentStates(width, mallocType),
     nextStates(width, mallocType),
     auxiliaryData(width * problem->maxBranchingFactor, mallocType)
-{}
+{
+    // Cutset states
+    LightArray<StateType> cutsetArray = cutset;
+    for (unsigned int cutsetStateIdx = 0; cutsetStateIdx < cutsetArray.getCapacity(); cutsetStateIdx += 1)
+    {
+        new (cutsetArray[cutsetStateIdx]) StateType(problem, mallocType);
+    }
+
+    // Current states
+    LightArray<StateType> currentStatesArray = currentStates;
+    for (unsigned int currentStateIdx = 0; currentStateIdx < currentStatesArray.getCapacity(); currentStateIdx += 1)
+    {
+        new (currentStatesArray[currentStateIdx]) StateType(problem, mallocType);
+    }
+
+    // Next states
+    LightArray<StateType> nextStatesArray = nextStates;
+    for (unsigned int nextStateIdx = 0; nextStateIdx < nextStatesArray.getCapacity(); nextStateIdx += 1)
+    {
+        new (nextStatesArray[nextStateIdx]) StateType(problem, mallocType);
+    }
+}
 
 
 template<typename ProblemType, typename StateType>
@@ -111,7 +132,11 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 void DD::MDD<ProblemType, StateType>::setTop(StateType const * state)
 {
-    *currentStates[0] = *state;
+    currentStates.clear();
+    nextStates.clear();
+    cutset.clear();
+
+    currentStates.pushBack(state);
 }
 
 template<typename ProblemType, typename StateType>
@@ -140,13 +165,14 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 void DD::MDD<ProblemType, StateType>::calcNextStates(unsigned int variableIdx)
 {
+
     for(unsigned int nextStateIdx = 0; nextStateIdx < nextStates.getSize(); nextStateIdx += 1)
     {
         AuxiliaryData ad = *auxiliaryData[nextStateIdx];
         unsigned int const currentStateIdx = ad.index / problem->maxBranchingFactor ;
         unsigned int const valueIdx = ad.index % problem->maxBranchingFactor ;
         OP::ValueType const value = problem->variables[variableIdx]->minValue + valueIdx;
-        makeState(problem, currentStates[currentStateIdx],value,auxiliaryData[nextStateIdx]->cost,nextStates[nextStateIdx]);
+        makeState(problem, currentStates[currentStateIdx], value, auxiliaryData[nextStateIdx]->cost, nextStates[nextStateIdx]);
     }
 }
 
@@ -168,6 +194,7 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 void DD::MDD<ProblemType, StateType>::resetAuxiliaryData()
 {
+    auxiliaryData.resize(currentStates.getSize() * problem->maxBranchingFactor);
     for(unsigned int auxiliaryDataIdx = 0; auxiliaryDataIdx < auxiliaryData.getSize(); auxiliaryDataIdx += 1)
     {
         auxiliaryData[auxiliaryDataIdx]->cost = DP::MaxCost;

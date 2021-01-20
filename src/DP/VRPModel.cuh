@@ -18,7 +18,7 @@ namespace DP
 void DP::makeRoot(OP::VRProblem const * problem, VRPState* root)
 {
     root->cost = 0;
-    root->admissibleValues.pushBack(&problem->start);
+    root->selectedValues.pushBack(&problem->start);
     root->admissibleValues.pushBack(&problem->end);
     for (OP::ValueType const * pickup = problem->pickups.begin(); pickup != problem->pickups.end(); pickup += 1)
     {

@@ -39,7 +39,7 @@ __host__ __device__
 bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType value) const
 {
     Neighbourhood::ConstraintType const constraint = *constraints[variableIdx];
-    bool const isFree = constraint == ConstraintType::None and (not fixedValue[value]);
+    bool const isFree = constraint == ConstraintType::None and (not *fixedValue[value]);
     bool const isEq   = constraint == ConstraintType::Eq   and *solution[variableIdx] == value;
     bool const isNeq  = constraint == ConstraintType::Neq  and *solution[variableIdx] != value;
     return isFree or isEq or isNeq;

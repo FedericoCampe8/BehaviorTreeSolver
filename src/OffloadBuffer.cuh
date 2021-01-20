@@ -21,6 +21,7 @@ class OffloadBuffer
     void enqueue(BB::AugmentedState<StateType> const * augmentedState);
     void generateNeighbourhoods(StateType const * currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng);
     __host__ __device__ void doOffload(unsigned int index);
+    BB::AugmentedState<StateType> const * getAugmentedState(unsigned int index) const;
     DD::MDD<ProblemType,StateType> const * getMDD(unsigned int index) const;
     unsigned int getSize() const;
     bool isEmpty() const;
@@ -71,7 +72,6 @@ void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index)
     mdds[index]->setTop(augmentedStates[index]->state);
     mdds[index]->buildTopDown(DD::Type::Restricted, neighbourhoods[index]);
     augmentedStates[index]->upperbound = mdds[index]->getBottom()->cost;
-    augmentedStates[index]->state = mdds[index]->getBottom();
 }
 
 template<typename ProblemType, typename StateType>
@@ -98,6 +98,12 @@ void OffloadBuffer<ProblemType,StateType>::generateNeighbourhoods(StateType cons
 }
 
 template<typename ProblemType, typename StateType>
+BB::AugmentedState<StateType> const * OffloadBuffer<ProblemType, StateType>::getAugmentedState(unsigned int index) const
+{
+    return augmentedStates[index];
+}
+
+template<typename ProblemType, typename StateType>
 DD::MDD<ProblemType, StateType> const * OffloadBuffer<ProblemType, StateType>::getMDD(unsigned int index) const
 {
     return mdds[index];
@@ -118,5 +124,5 @@ bool OffloadBuffer<ProblemType,StateType>::isEmpty() const
 template<typename ProblemType, typename StateType>
 bool OffloadBuffer<ProblemType,StateType>::isFull() const
 {
-    return size == neighbourhoods.getCapacity();
+    return size == statesBuffer.getCapacity();
 }
