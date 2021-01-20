@@ -137,7 +137,6 @@ void LightArray<T>::print(unsigned int beginIdx, unsigned int endIdx, bool endLi
         if (beginIdx < endIdx)
         {
             printf("%d",static_cast<int>(*at(beginIdx)));
-            printf(",");
             for (unsigned int index = beginIdx + 1; index < endIdx; index += 1)
             {
                 printf(",");

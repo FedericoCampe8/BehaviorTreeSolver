@@ -18,9 +18,10 @@ namespace DD
     class MDD
     {
         // Members
-        private:
+        public:
         unsigned int const width;
         ProblemType const * const problem;
+        private:
         Vector<StateType> cutset;
         Vector<StateType> currentStates;
         Vector<StateType> nextStates;

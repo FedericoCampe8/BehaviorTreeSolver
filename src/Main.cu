@@ -306,12 +306,12 @@ void prepareOffload(StateType* bestSolution, unsigned int * filteredStatesCount,
         if(boundsCheck(bestSolution, augmentedState))
         {
             offloadBuffer->enqueue(augmentedState);
-            priorityQueue->popFront();
         }
         else
         {
             *filteredStatesCount += 1;
         }
+        priorityQueue->popFront();
     }
 }
 
@@ -342,7 +342,11 @@ void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer)
 {
     if(not gpuOffloadBuffer->isEmpty())
     {
-        doOffloadKernel<ProblemType, StateType><<<gpuOffloadBuffer->getSize(), 1>>>(gpuOffloadBuffer);
+        DD::MDD<ProblemType,StateType> const * const mdd = gpuOffloadBuffer->getMDD(0);
+        unsigned int const blocksCount = gpuOffloadBuffer->getSize();
+        unsigned int const blockSize = mdd->width * mdd->problem->maxBranchingFactor;
+        assert(blockSize <= 1024);
+        doOffloadKernel<ProblemType, StateType><<<blocksCount, 1>>>(gpuOffloadBuffer);
     }
 }
 
@@ -350,10 +354,7 @@ template<typename ProblemType, typename StateType>
 __global__
 void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer)
 {
-    if(threadIdx.x == 0)
-    {
-        offloadBuffer->doOffload(blockIdx.x);
-    };
+    offloadBuffer->doOffload(blockIdx.x);
 }
 
 void waitOffloadCpu(Vector<std::thread>* cpuThreads)

@@ -39,13 +39,7 @@ OffloadBuffer<ProblemType,StateType>::OffloadBuffer(ProblemType const * problem,
     // States
     for (unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
     {
-        new (statesBuffer[stateIdx]) StateType(problem, Memory::MallocType::Std);
-    }
-
-    // Augmented states
-    for (unsigned int augmentedStatesIdx = 0; augmentedStatesIdx < augmentedStates.getCapacity(); augmentedStatesIdx += 1)
-    {
-        augmentedStates[augmentedStatesIdx]->state = statesBuffer[augmentedStatesIdx];
+        new (statesBuffer[stateIdx]) StateType(problem, mallocType);
     }
 
     // MDDs
@@ -84,7 +78,8 @@ template<typename ProblemType, typename StateType>
 void OffloadBuffer<ProblemType,StateType>::enqueue(BB::AugmentedState<StateType> const * augmentedState)
 {
     unsigned int const index = size;
-    *augmentedStates[index] = *augmentedState;
+    *statesBuffer[index] = *augmentedState->state;
+    augmentedStates[index]->state = statesBuffer[index];
     size += 1;
 }
 

@@ -37,7 +37,7 @@ template<typename StateType>
 __host__ __device__
 bool BB::AugmentedState<StateType>::operator<(AugmentedState<StateType>& other) const
 {
-    return state->cost < other.state->cost;
+    return upperbound < other.upperbound;
 }
 
 template<typename StateType>
