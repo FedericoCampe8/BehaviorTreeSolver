@@ -20,7 +20,7 @@ class OffloadBuffer
     void clear();
     void enqueue(BB::AugmentedState<StateType> const * augmentedState);
     void generateNeighbourhoods(StateType const * currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng);
-    __host__ __device__ void doOffload(unsigned int index);
+    __host__ __device__ void doOffload(unsigned int index, bool onlyRestricted);
     BB::AugmentedState<StateType> const * getAugmentedState(unsigned int index) const;
     DD::MDD<ProblemType,StateType> const * getMDD(unsigned int index) const;
     unsigned int getSize() const;
@@ -57,15 +57,46 @@ OffloadBuffer<ProblemType,StateType>::OffloadBuffer(ProblemType const * problem,
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index)
+void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index, bool onlyRestricted)
 {
-    mdds[index]->setTop(augmentedStates[index]->state);
-    mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
-    augmentedStates[index]->lowerbound = mdds[index]->getBottom()->cost;
+#ifdef __CUDA_ARCH__
+
+    if(not onlyRestricted)
+    {
+        if (threadIdx.x == 0)
+        {
+            mdds[index]->setTop(augmentedStates[index]->state);
+        }
+        __syncthreads();
+        mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
+        __syncthreads();
+        if (threadIdx.x == 0)
+        {
+            augmentedStates[index]->lowerbound =  mdds[index]->getBottom()->cost;
+        }
+    }
+    if(threadIdx.x == 0)
+    {
+        mdds[index]->setTop(augmentedStates[index]->state);
+    }
+    __syncthreads();
+    mdds[index]->buildTopDown(DD::Type::Restricted, neighbourhoods[index]);
+    if(threadIdx.x == 0)
+    {
+        augmentedStates[index]->upperbound = mdds[index]->getBottom()->cost;
+    }
+#else
+    if(not onlyRestricted)
+    {
+        mdds[index]->setTop(augmentedStates[index]->state);
+        mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
+        augmentedStates[index]->lowerbound = mdds[index]->getBottom()->cost;
+    }
 
     mdds[index]->setTop(augmentedStates[index]->state);
     mdds[index]->buildTopDown(DD::Type::Restricted, neighbourhoods[index]);
     augmentedStates[index]->upperbound = mdds[index]->getBottom()->cost;
+#endif
 }
 
 template<typename ProblemType, typename StateType>

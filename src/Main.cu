@@ -36,13 +36,13 @@ template<typename ProblemType, typename StateType>
 void prepareOffload(AugmentedState<StateType> const * augmentedState, OffloadBuffer<ProblemType,StateType>* offloadBuffer);
 
 template<typename ProblemType, typename StateType>
-void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads);
+void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, bool onlyRestricted);
 
 template<typename ProblemType, typename StateType>
-void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer);
+void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, bool onlyRestricted);
 
 template<typename ProblemType, typename StateType>
-__global__ void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer);
+__global__ void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, bool onlyRestricted);
 
 void waitOffloadCpu(Vector<std::thread>* cpuThreads);
 
@@ -135,6 +135,8 @@ int main(int argc, char ** argv)
                 if (priorityQueue.isFull())
                 {
                     searchStatus = SearchStatus::LNS;
+                    clearLine();
+                    printf("[INFO] Switching to Large neighborhood search\n");
                 }
 
                 prepareOffload(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
@@ -150,16 +152,16 @@ int main(int argc, char ** argv)
                 prepareOffload(&augmentedRoot, gpuOffloadBuffer);
                 cpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
                 gpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
-                currentSolution->reset();
+                currentSolution->setInvalid();
             }
                 break;
         }
 
         uint64_t cpuOffloadStartTime = now();
-        doOffloadCpuAsync(cpuOffloadBuffer, cpuThreads);
+        doOffloadCpuAsync(cpuOffloadBuffer, cpuThreads, searchStatus == SearchStatus::LNS);
 
         uint64_t gpuOffloadStartTime = now();
-        doOffloadGpuAsync(gpuOffloadBuffer);
+        doOffloadGpuAsync(gpuOffloadBuffer, searchStatus == SearchStatus::LNS);
 
         waitOffloadCpu(cpuThreads);
         waitOffloadGpu();
@@ -250,7 +252,6 @@ void updatePriorityQueue(StateType* bestSolution, unsigned int * filteredStatesC
             Vector<StateType> const* const cutset = offloadBuffer->getMDD(index)->getCutset();
             for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
             {
-
                 if (not priorityQueue->isFull())
                 {
                     priorityQueue->insert(cutsetState);
@@ -327,18 +328,18 @@ void prepareOffload(AugmentedState<StateType> const * augmentedState, OffloadBuf
 
 
 template<typename ProblemType, typename StateType>
-void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads)
+void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, bool onlyRestricted)
 {
     cpuThreads->clear();
     for (unsigned int index = 0; index < cpuOffloadBuffer->getSize(); index += 1)
     {
         cpuThreads->resize(cpuThreads->getSize() + 1);
-        new (cpuThreads->back()) std::thread(&OffloadBuffer<ProblemType,StateType>::doOffload,cpuOffloadBuffer,index);
+        new (cpuThreads->back()) std::thread(&OffloadBuffer<ProblemType,StateType>::doOffload,cpuOffloadBuffer,index, onlyRestricted);
     }
 }
 
 template<typename ProblemType, typename StateType>
-void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer)
+void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, bool onlyRestricted)
 {
     if(not gpuOffloadBuffer->isEmpty())
     {
@@ -346,15 +347,15 @@ void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer)
         unsigned int const blocksCount = gpuOffloadBuffer->getSize();
         unsigned int const blockSize = mdd->width * mdd->problem->maxBranchingFactor;
         assert(blockSize <= 1024);
-        doOffloadKernel<ProblemType, StateType><<<blocksCount, 1>>>(gpuOffloadBuffer);
+        doOffloadKernel<ProblemType, StateType><<<blocksCount, blockSize>>>(gpuOffloadBuffer, onlyRestricted);
     }
 }
 
 template<typename ProblemType, typename StateType>
 __global__
-void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer)
+void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, bool onlyRestricted)
 {
-    offloadBuffer->doOffload(blockIdx.x);
+    offloadBuffer->doOffload(blockIdx.x, onlyRestricted);
 }
 
 void waitOffloadCpu(Vector<std::thread>* cpuThreads)

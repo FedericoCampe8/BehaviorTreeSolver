@@ -43,7 +43,7 @@ set(SOURCES
     src/Neighbourhood.cuh
     src/OP/Context.h
     src/DP/Context.h
-    src/BB/PriorityQueue.cuh src/DD/AuxiliaryData.cuh src/BB/AugmentedState.cuh src/DD/Context.h)
+    src/BB/PriorityQueue.cuh src/DD/AuxiliaryData.cuh src/BB/AugmentedState.cuh src/DD/Context.h include/Utils/Algorithms.cuh)
 
 # Add include path
 include_directories(include)

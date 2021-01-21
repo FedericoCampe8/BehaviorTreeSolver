@@ -8,10 +8,10 @@
 namespace DP
 {
     void makeRoot(OP::VRProblem const * problem, VRPState* root);
-    __host__ __device__ DP::CostType calcCost(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType const value);
-    __host__ __device__ void makeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, DP::CostType cost, VRPState* nextState);
-    __host__ __device__ void mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, DP::CostType cost, VRPState* nextState);
-    __host__ __device__ void ifPickupAddDelivery(OP::VRProblem const * problem, OP::ValueType value, VRPState* state);
+    __host__ __device__ inline DP::CostType calcCost(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType const value);
+    __host__ __device__ inline void makeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, DP::CostType cost, VRPState* nextState);
+    __host__ __device__ inline void mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, DP::CostType cost, VRPState* nextState);
+    __host__ __device__ inline void ifPickupAddDelivery(OP::VRProblem const * problem, OP::ValueType value, VRPState* state);
 }
 
 
@@ -54,7 +54,7 @@ void DP::mergeState(OP::VRProblem const * problem, VRPState const * currentState
         {
             nextState->admissibleValues.pushBack(admissibleValue);
         }
-    };
+    }
     ifPickupAddDelivery(problem, value, nextState);
 }
 
@@ -68,6 +68,7 @@ void DP::ifPickupAddDelivery(OP::VRProblem const * problem, OP::ValueType value,
         OP::ValueType const delivery = *problem->deliveries[deliveryIdx];
         if(not state->isAdmissible(delivery))
         {
+            assert(not state->isAdmissible(delivery));
             state->admissibleValues.pushBack(&delivery);
         }
     }

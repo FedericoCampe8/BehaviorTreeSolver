@@ -21,7 +21,7 @@ namespace DP
         __host__ __device__ bool isAdmissible(OP::ValueType value) const;
         __host__ __device__ State& operator=(State const & other);
         __host__ __device__ void removeFromAdmissibles(OP::ValueType value);
-        __host__ __device__ void reset();
+        __host__ __device__ void setInvalid();
         __host__ __device__ static void swap(State & s0, State & s1);
     };
 }
@@ -62,9 +62,9 @@ void DP::State::removeFromAdmissibles(OP::ValueType value)
 }
 
 __host__ __device__
-void DP::State::reset()
+void DP::State::setInvalid()
 {
-    cost = 0;
+    cost = DP::MaxCost;
     selectedValues.clear();
     admissibleValues.clear();
 }
