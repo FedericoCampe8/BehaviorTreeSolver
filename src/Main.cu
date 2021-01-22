@@ -111,7 +111,7 @@ int main(int argc, char ** argv)
     StateType* root = new (memory) StateType(cpuProblem, MallocType::Std);
     makeRoot(cpuProblem, root);
     AugmentedState<StateType> const augmentedRoot(DP::MaxCost, 0, root);
-    priorityQueue.insert(root);
+    priorityQueue.insert(&augmentedRoot);
 
     // Search
     unsigned int iterationsCount = 0;
@@ -122,6 +122,8 @@ int main(int argc, char ** argv)
     // ************
     // Begin search
     // ************
+    clearLine();
+    printf("[INFO] Start branch and bound search\n");
     uint64_t searchStartTime = now();
     do
     {
@@ -129,14 +131,11 @@ int main(int argc, char ** argv)
         {
             case SearchStatus::BB:
             {
-                clearLine();
-                printf("[INFO] Branch and bound");
-
                 if (priorityQueue.isFull())
                 {
                     searchStatus = SearchStatus::LNS;
                     clearLine();
-                    printf("[INFO] Switching to Large neighborhood search\n");
+                    printf("[INFO] Switching to large neighborhood search\n");
                 }
 
                 prepareOffload(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
@@ -145,9 +144,6 @@ int main(int argc, char ** argv)
                 break;
             case SearchStatus::LNS:
             {
-                clearLine();
-                printf("[INFO] Large neighborhood search");
-
                 prepareOffload(&augmentedRoot, cpuOffloadBuffer);
                 prepareOffload(&augmentedRoot, gpuOffloadBuffer);
                 cpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
@@ -202,7 +198,7 @@ int main(int argc, char ** argv)
                 uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
                 gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
             }
-            printf(" | Solution: ");
+            printf("[INFO] Solution: ");
             currentSolution->selectedValues.print(false);
             printf(" | Value: %u", currentSolution->cost);
             printf(" | Time: ");
@@ -247,14 +243,16 @@ void updatePriorityQueue(StateType* bestSolution, unsigned int * filteredStatesC
 {
     for (unsigned int index = 0; index < offloadBuffer->getSize(); index += 1)
     {
-        if(boundsCheck(bestSolution, offloadBuffer->getAugmentedState(index)))
+        AugmentedState<StateType> const * parentAugmentedState = offloadBuffer->getAugmentedState(index);
+        if(boundsCheck(bestSolution, parentAugmentedState))
         {
             Vector<StateType> const* const cutset = offloadBuffer->getMDD(index)->getCutset();
             for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
             {
                 if (not priorityQueue->isFull())
                 {
-                    priorityQueue->insert(cutsetState);
+                    AugmentedState<StateType> const childAugmentedState(parentAugmentedState->upperbound, parentAugmentedState->lowerbound, cutsetState);
+                    priorityQueue->insert(&childAugmentedState);
                 }
             };
         }
@@ -269,7 +267,7 @@ template<typename StateType>
 bool boundsCheck(StateType* bestSolution, AugmentedState<StateType> const * augmentedState)
 {
     return
-        augmentedState->lowerbound < augmentedState->upperbound and
+       augmentedState->lowerbound < augmentedState->upperbound and
         augmentedState->lowerbound < bestSolution->cost and
         augmentedState->state->cost <= bestSolution->cost;
 }
@@ -334,7 +332,7 @@ void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, V
     for (unsigned int index = 0; index < cpuOffloadBuffer->getSize(); index += 1)
     {
         cpuThreads->resize(cpuThreads->getSize() + 1);
-        new (cpuThreads->back()) std::thread(&OffloadBuffer<ProblemType,StateType>::doOffload,cpuOffloadBuffer,index, onlyRestricted);
+        new (cpuThreads->back()) std::thread(&OffloadBuffer<ProblemType,StateType>::doOffload, cpuOffloadBuffer, index, onlyRestricted);
     }
 }
 

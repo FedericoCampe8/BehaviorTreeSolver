@@ -20,7 +20,7 @@ namespace BB
         PriorityQueue(ProblemType const * problem, unsigned int capacity);
         AugmentedState<StateType> const * front() const;
         unsigned int getSize() const;
-        void insert(StateType const* state);
+        void insert(AugmentedState<StateType> const * augmentedState);
         bool isEmpty() const;
         bool isFull() const;
         void popFront();
@@ -53,11 +53,11 @@ unsigned int BB::PriorityQueue<StateType>::getSize() const
 }
 
 template<typename StateType>
-void BB::PriorityQueue<StateType>::insert(StateType const* state)
+void BB::PriorityQueue<StateType>::insert(AugmentedState<StateType> const * augmentedState)
 {
-    StateType const* const bufferedState = statesBuffer.insert(state);
-    AugmentedState<StateType> const augmentedState(bufferedState);
-    heap.pushBack(&augmentedState);
+    StateType const * const bufferedState = statesBuffer.insert(augmentedState->state);
+    AugmentedState<StateType> const bufferedAugmentedState(augmentedState->upperbound, augmentedState->lowerbound, bufferedState);
+    heap.pushBack(&bufferedAugmentedState);
 }
 
 template<typename StateType>

@@ -37,9 +37,12 @@ OffloadBuffer<ProblemType,StateType>::OffloadBuffer(ProblemType const * problem,
     neighbourhoods(capacity, mallocType)
 {
     // States
+    unsigned int storageSize = StateType::sizeOfStorage(problem);
+    std::byte* storages = StateType::getStorages(problem, capacity, mallocType);
     for (unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
     {
-        new (statesBuffer[stateIdx]) StateType(problem, mallocType);
+        new (statesBuffer[stateIdx]) StateType(problem, storages);
+        storages += storageSize;
     }
 
     // MDDs
@@ -72,7 +75,7 @@ void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index, bool o
         __syncthreads();
         if (threadIdx.x == 0)
         {
-            augmentedStates[index]->lowerbound =  mdds[index]->getBottom()->cost;
+            augmentedStates[index]->lowerbound = mdds[index]->getBottom()->cost;
         }
     }
     if(threadIdx.x == 0)
@@ -81,6 +84,7 @@ void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index, bool o
     }
     __syncthreads();
     mdds[index]->buildTopDown(DD::Type::Restricted, neighbourhoods[index]);
+    __syncthreads();
     if(threadIdx.x == 0)
     {
         augmentedStates[index]->upperbound = mdds[index]->getBottom()->cost;

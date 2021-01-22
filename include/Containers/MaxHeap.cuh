@@ -48,7 +48,7 @@ void MaxHeap<T>::insert(T const * t)
     pushBack(t);
     unsigned int i = this->size - 1;
     unsigned int p = parent(i);
-    while (i > 0 and (*this->at(p) < *this->at(i)))
+    while (i > 0 and (not *this->at(p) < *this->at(i)))
     {
         T::swap(*this->at(p), *this->at(i));
         i = p;

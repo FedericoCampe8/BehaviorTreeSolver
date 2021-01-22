@@ -25,6 +25,7 @@ class LightArray
     __host__ __device__ inline T* at(unsigned int index) const;
     __host__ __device__ inline T* begin() const;
     __host__ __device__ inline T* end() const;
+    __host__ __device__ inline std::byte* endOfStorage() const;
     __host__ __device__ inline unsigned int getCapacity() const;
     __host__ __device__ inline unsigned int indexOf(T const * t) const;
     __host__ __device__ LightArray<T>& operator=(LightArray<T> const & other);
@@ -70,6 +71,13 @@ __host__ __device__
 T* LightArray<T>::end() const
 {
     return storage + capacity;
+}
+
+template<typename T>
+__host__ __device__
+std::byte* LightArray<T>::endOfStorage() const
+{
+    return reinterpret_cast<std::byte*>(storage + capacity);
 }
 
 template<typename T>

@@ -57,6 +57,7 @@ void Algorithms::oddEvenSort(T* array, unsigned int size)
 {
     for(unsigned int round = 0; round < size; round += 1)
     {
+        __syncthreads();
         unsigned int const i = threadIdx.x;
         if (i % 2 == 0 and i <= size - 2)
         {
@@ -66,7 +67,6 @@ void Algorithms::oddEvenSort(T* array, unsigned int size)
             }
         }
         __syncthreads();
-
         if (i % 2 == 1 and i <= size - 2)
         {
             if (not (array[i] < array[i + 1]))
@@ -74,5 +74,6 @@ void Algorithms::oddEvenSort(T* array, unsigned int size)
                 T::swap(array[i], array[i + 1]);
             }
         }
+
     }
 }

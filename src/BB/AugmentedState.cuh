@@ -17,6 +17,7 @@ namespace BB
         AugmentedState(StateType const* state);
         AugmentedState(DP::CostType upperbound, DP::CostType lowerbound, StateType const* state);
         __host__ __device__ bool operator<(AugmentedState<StateType>& other) const;
+        __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ static void swap(AugmentedState<StateType>& as0, AugmentedState<StateType>& as1);
     };
 }
@@ -34,11 +35,22 @@ BB::AugmentedState<StateType>::AugmentedState(DP::CostType upperbound, DP::CostT
 {}
 
 template<typename StateType>
-__host__ __device__
 bool BB::AugmentedState<StateType>::operator<(AugmentedState<StateType>& other) const
 {
-    return upperbound < other.upperbound;
+    unsigned int const avgCost0 = state->cost;// / state->selectedValues.getSize();;
+    unsigned int const avgCost1 = other.state->cost;// / other.state->selectedValues.getSize();;
+
+    return avgCost0 < avgCost1;
 }
+
+template<typename StateType>
+__host__ __device__
+void BB::AugmentedState<StateType>::print(bool endLine) const
+{
+    printf("Lowerbound: %u | Cost: %u | Upperbound: %u", lowerbound, state->cost, upperbound);
+    printf(endLine ? "\n" : "");
+}
+
 
 template<typename StateType>
 __host__ __device__
