@@ -30,7 +30,7 @@ bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution
 
 // Offload
 template<typename ProblemType, typename StateType>
-void prepareOffload(StateType* bestSolution, unsigned int * filteredStatesCount, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
+void prepareOffload(StateType* bestSolution, unsigned int* filteredStatesCount, PriorityQueue<StateType>* priorityQueue, OffloadBuffer<ProblemType, StateType>* offloadBuffer);
 
 template<typename ProblemType, typename StateType>
 void prepareOffload(AugmentedState<StateType> const * augmentedState, OffloadBuffer<ProblemType,StateType>* offloadBuffer);
@@ -42,11 +42,16 @@ template<typename ProblemType, typename StateType>
 void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, bool onlyRestricted);
 
 template<typename ProblemType, typename StateType>
+void doOffloadsAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, bool onlyRestricted);
+
+template<typename ProblemType, typename StateType>
 __global__ void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, bool onlyRestricted);
 
-void waitOffloadCpu(Vector<std::thread>* cpuThreads);
+void waitOffloadCpu(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime);
 
-void waitOffloadGpu();
+void waitOffloadGpu(uint64_t* gpuOffloadEndTime);
+
+void waitOffloads(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime, uint64_t* gpuOffloadEndTime);
 
 // Debug
 void printElapsedTime(uint64_t elapsedTimeMs);
@@ -60,17 +65,37 @@ int main(int argc, char ** argv)
     unsigned int const queueMaxSize = std::stoi(argv[2]);
     unsigned int const timeoutSeconds = std::stoi(argv[3]);
     unsigned int const cpuMaxWidth = std::stoi(argv[4]);
-    unsigned int const cpuMaxParallelism = std::stoi(argv[5]);
-    unsigned int const gpuMaxWidth = std::stoi(argv[6]);
-    unsigned int const gpuMaxParallelism = std::stoi(argv[7]);
-    unsigned int const lnsEqPercentage = std::stoi(argv[8]);
-    unsigned int const lnsNeqPercentage = std::stoi(argv[9]);
-    unsigned int const randomSeed = std::stoi(argv[10]);
+    unsigned int const gpuMaxWidth = std::stoi(argv[5]);
+    unsigned int const lnsEqPercentage = std::stoi(argv[6]);
+    unsigned int const lnsNeqPercentage = std::stoi(argv[7]);
+    unsigned int const randomSeed = argc > 8 ? std::stoi(argv[8]) : static_cast<unsigned int>(now());
     assert(lnsEqPercentage + lnsNeqPercentage <= 100);
 
     // *******************
     // Data initialization
     // *******************
+    printf("[INFO] Random seed: %u\n", randomSeed);
+
+    // Parallelism
+    unsigned int const cpuWorkloadMultiplier = 4;
+    unsigned int const gpuWorkloadMultiplier = 2;
+    unsigned int cpuMaxParallelism = 0;
+    if (cpuMaxWidth > 0)
+    {
+        unsigned int const coresCount = std::thread::hardware_concurrency();
+        cpuMaxParallelism = cpuWorkloadMultiplier * coresCount;
+        printf("[INFO] CPU max parallelism: %u\n", cpuMaxParallelism);
+    }
+    unsigned int gpuMaxParallelism = 0;
+    if (gpuMaxWidth > 0)
+    {
+        cudaDeviceProp deviceProp;
+        cudaGetDeviceProperties(&deviceProp, 0);
+        unsigned int const multiProcessorCount = deviceProp.multiProcessorCount;
+        unsigned int const maxBlocksPerMultiProcessor = deviceProp.maxBlocksPerMultiProcessor;
+        gpuMaxParallelism = gpuWorkloadMultiplier * multiProcessorCount * maxBlocksPerMultiProcessor;
+        printf("[INFO] GPU max parallelism: %u\n", gpuMaxParallelism);
+    }
 
     // Context initialization
     std::mt19937 rng(randomSeed);
@@ -154,13 +179,12 @@ int main(int argc, char ** argv)
         }
 
         uint64_t cpuOffloadStartTime = now();
-        doOffloadCpuAsync(cpuOffloadBuffer, cpuThreads, searchStatus == SearchStatus::LNS);
-
         uint64_t gpuOffloadStartTime = now();
-        doOffloadGpuAsync(gpuOffloadBuffer, searchStatus == SearchStatus::LNS);
+        doOffloadsAsync(cpuOffloadBuffer, cpuThreads, gpuOffloadBuffer, searchStatus == SearchStatus::LNS);
 
-        waitOffloadCpu(cpuThreads);
-        waitOffloadGpu();
+        uint64_t cpuOffloadEndTime;
+        uint64_t gpuOffloadEndTime;
+        waitOffloads(cpuThreads, &cpuOffloadEndTime, &gpuOffloadEndTime);
 
         visitedStatesCount += cpuOffloadBuffer->getSize();
         visitedStatesCount += gpuOffloadBuffer->getSize();
@@ -188,14 +212,14 @@ int main(int argc, char ** argv)
             unsigned long int cpuSpeed = 0;
             if (cpuOffloadBuffer->getSize() > 0)
             {
-                uint64_t cpuOffloadElapsedTime = max(1ul, now() - cpuOffloadStartTime);
+                uint64_t cpuOffloadElapsedTime = max(1ul, cpuOffloadEndTime - cpuOffloadStartTime);
                 cpuSpeed = cpuOffloadBuffer->getSize() * 1000 / cpuOffloadElapsedTime;
             }
 
             unsigned long int gpuSpeed = 0;
             if (gpuOffloadBuffer->getSize() > 0)
             {
-                uint64_t gpuOffloadElapsedTime = max(1ul, now() - gpuOffloadStartTime);
+                uint64_t gpuOffloadElapsedTime = max(1ul, gpuOffloadEndTime - gpuOffloadStartTime);
                 gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
             }
             printf("[INFO] Solution: ");
@@ -350,13 +374,20 @@ void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, b
 }
 
 template<typename ProblemType, typename StateType>
+void doOffloadsAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, bool onlyRestricted)
+{
+    doOffloadCpuAsync(cpuOffloadBuffer, cpuThreads, onlyRestricted);
+    doOffloadGpuAsync(gpuOffloadBuffer, onlyRestricted);
+}
+
+template<typename ProblemType, typename StateType>
 __global__
 void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, bool onlyRestricted)
 {
     offloadBuffer->doOffload(blockIdx.x, onlyRestricted);
 }
 
-void waitOffloadCpu(Vector<std::thread>* cpuThreads)
+void waitOffloadCpu(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime)
 {
     for (std::thread* thread = cpuThreads->begin(); thread != cpuThreads->end(); thread += 1)
     {
@@ -365,13 +396,23 @@ void waitOffloadCpu(Vector<std::thread>* cpuThreads)
             thread->join();
         }
     }
+    *cpuOffloadEndTime = now();
 }
 
-void waitOffloadGpu()
+void waitOffloadGpu(uint64_t* gpuOffloadEndTime)
 {
     cudaDeviceSynchronize();
+    *gpuOffloadEndTime = now();
 }
 
+void waitOffloads(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime, uint64_t* gpuOffloadEndTime)
+{
+    std::thread waitCpu(waitOffloadCpu, cpuThreads, cpuOffloadEndTime);
+    std::thread waitGpu(waitOffloadGpu, gpuOffloadEndTime);
+
+    waitCpu.join();
+    waitGpu.join();
+}
 
 void printElapsedTime(uint64_t elapsedTimeMs)
 {
