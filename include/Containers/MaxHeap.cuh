@@ -1,16 +1,21 @@
 #pragma once
 
-#include <thrust/swap.h>
-#include <thrust/distance.h>
-
+#include "Containers/Vector.cuh"
 template<typename T>
-class MaxHeap : public Vector<T>
+class MaxHeap
 {
+    // Members
+    private:
+    Vector<T> vector;
+
     // Functions
     public:
     __host__ __device__ MaxHeap(unsigned int capacity, Memory::MallocType mallocType);
     __host__ __device__ void erase(T const * t);
+    __host__ __device__ inline T* front() const;
     __host__ __device__ void insert(T const * t);
+    __host__ __device__ inline bool isEmpty() const;
+    __host__ __device__ inline bool isFull() const;
     private:
     __host__ __device__ void heapify(unsigned int index);
     __host__ __device__ inline unsigned int left(unsigned int index);
@@ -21,39 +26,60 @@ class MaxHeap : public Vector<T>
 template<typename T>
 __host__ __device__
 MaxHeap<T>::MaxHeap(unsigned int capacity, Memory::MallocType mallocType) :
-    Vector<T>(capacity, mallocType)
+    vector(capacity, mallocType)
 {}
 
 template<typename T>
 __host__ __device__
 void MaxHeap<T>::erase(T const * t)
 {
-    unsigned int i = this->indexOf(t);
+    unsigned int i = vector.indexOf(t);
     unsigned int p = parent(i);
     while (i > 0)
     {
-        T::swap(*this->at(i), *this->at(p));
+        T::swap(*vector[i], *vector[p]);
         i = p;
         p = parent(i);
     }
-    T::swap(*this->front(), *this->back());
-    this->popBack();
+    T::swap(*vector.front(), *vector.back());
+    vector.popBack();
     heapify(0);
+}
+
+template<typename T>
+__host__ __device__
+T* MaxHeap<T>::front() const
+{
+    return vector.front();
 }
 
 template<typename T>
 __host__ __device__
 void MaxHeap<T>::insert(T const * t)
 {
-    pushBack(t);
-    unsigned int i = this->size - 1;
+    vector.pushBack(t);
+    unsigned int i = vector.getSize() - 1;
     unsigned int p = parent(i);
-    while (i > 0 and (not *this->at(p) < *this->at(i)))
+    while (i > 0 and (not (*vector[p] < *vector[i])))
     {
-        T::swap(*this->at(p), *this->at(i));
+        T::swap(*vector[p], *vector[i]);
         i = p;
         p = parent(i);
     }
+}
+
+template<typename T>
+__host__ __device__
+bool MaxHeap<T>::isEmpty() const
+{
+    return vector.isEmpty();
+}
+
+template<typename T>
+__host__ __device__
+bool MaxHeap<T>::isFull() const
+{
+    return vector.isFull();
 }
 
 template<typename T>
@@ -63,20 +89,19 @@ void MaxHeap<T>::heapify(unsigned int index)
     unsigned int const l = left(index);
     unsigned int const r = right(index);
     unsigned int largest = index;
-    if (l < this->size and (*this->at(l) < *this->at(index)))
+    if (l < vector.getSize() and (*vector[l] < *vector[index]))
     {
         largest = l;
     }
-    if (r < this->size and (*this->at(r) < *this->at(largest)))
+    if (r < vector.getSize() and (*vector[r] < *vector[largest]))
     {
         largest = r;
     }
     if (largest != index)
     {
-        T::swap(*this->at(index), *this->at(largest));
+        T::swap(*vector[index], *vector[largest]);
         heapify(largest);
-    }
-}
+    }}
 
 template<typename T>
 __host__ __device__

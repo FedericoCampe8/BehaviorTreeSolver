@@ -1,12 +1,10 @@
 #pragma once
 
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <type_traits>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/swap.h>
 #include <Utils/Memory.cuh>
 
@@ -91,10 +89,10 @@ template<typename T>
 __host__ __device__
 unsigned int LightArray<T>::indexOf(T const * t) const
 {
-    T const * const b = begin();
-    assert(b <= t);
+    T const * const begin = this->begin();
+    assert(begin <= t);
     assert(t < end());
-    return static_cast<unsigned int>(thrust::distance(b, t));
+    return static_cast<unsigned int>(t - begin);
 }
 
 template<typename T>

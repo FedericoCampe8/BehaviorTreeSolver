@@ -6,63 +6,53 @@
 
 namespace Memory
 {
-    enum MallocType {Std, Managed};
+    enum MallocType {Managed, Std};
     template<typename T>
-    __host__ __device__ inline std::byte* align(std::size_t alignment, T const * ptr);
-    __host__ __device__ inline std::byte* safeMalloc(std::size_t size, MallocType type);
-    __host__ __device__ inline std::byte* safeStdMalloc(std::size_t size);
-    __host__ inline std::byte* safeManagedMalloc(std::size_t size);
+    __host__ __device__ std::byte* align(unsigned int alignment, T const * ptr);
+    __host__ __device__ std::byte* safeMalloc(unsigned int size, MallocType type);
+    __host__ __device__ std::byte* safeStdMalloc(unsigned int size);
+    std::byte* safeManagedMalloc(unsigned int size);
 }
+
 template<typename T>
 __host__ __device__
-std::byte* Memory::align(std::size_t alignment, T const * ptr)
+std::byte* Memory::align(unsigned int alignment, T const * ptr)
 {
-    uintptr_t const intPtr = reinterpret_cast<uintptr_t>(ptr);
-    uintptr_t const aligned = intPtr + (intPtr % alignment);
+    uintptr_t const address = reinterpret_cast<uintptr_t>(ptr);
+    uintptr_t const aligned = address + (address % alignment);
     return reinterpret_cast<std::byte*>(aligned);
 }
 
-
 __host__ __device__
-std::byte* Memory::safeMalloc(std::size_t size, MallocType type)
+std::byte* Memory::safeMalloc(unsigned int size, MallocType type)
 {
-#ifdef __CUDA_ARCH__
-    switch(type)
+    switch (type)
     {
         case Std:
             return safeStdMalloc(size);
-        default:
-            assert(false);
-            return nullptr;
-    }
-#else
-    switch(type)
-    {
-        case Std:
-            return safeStdMalloc(size);
+#ifndef __CUDA_ARCH__
         case Managed:
             return safeManagedMalloc(size);
+#endif
         default:
             assert(false);
             return nullptr;
     }
-#endif
 }
 
 __host__ __device__
-std::byte* Memory::safeStdMalloc(std::size_t size)
+std::byte* Memory::safeStdMalloc(unsigned int size)
 {
-    void* mem = malloc(size);
-    assert(mem != nullptr);
-    return static_cast<std::byte*>(mem);
+    void* memory = malloc(size);
+    assert(memory != nullptr);
+    return static_cast<std::byte*>(memory);
 }
 
-__host__
-std::byte* Memory::safeManagedMalloc(std::size_t size)
+std::byte* Memory::safeManagedMalloc(unsigned int size)
 {
-    void* mem;
-    cudaError_t status = cudaMallocManaged(&mem, size);
+    void* memory;
+    cudaError_t status = cudaMallocManaged(& memory, size);
     assert(status == cudaSuccess);
-    assert(mem != nullptr);
-    return static_cast<std::byte*>(mem);
+    assert(memory != nullptr);
+    return static_cast<std::byte*>(memory);
 }

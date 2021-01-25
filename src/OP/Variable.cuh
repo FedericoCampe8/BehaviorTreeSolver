@@ -14,7 +14,7 @@ namespace OP
         // Functions
         public:
         Variable(ValueType minValue, ValueType maxValue);
-        __host__ __device__ bool boundsCheck(ValueType value);
+        __host__ __device__ inline bool boundsCheck(ValueType value);
     };
 }
 

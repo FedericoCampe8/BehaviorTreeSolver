@@ -246,7 +246,7 @@ void updatePriorityQueue(StateType* bestSolution, unsigned int * filteredStatesC
         AugmentedState<StateType> const * parentAugmentedState = offloadBuffer->getAugmentedState(index);
         if(boundsCheck(bestSolution, parentAugmentedState))
         {
-            Vector<StateType> const* const cutset = offloadBuffer->getMDD(index)->getCutset();
+            Vector<StateType> const * const cutset = &offloadBuffer->getMDD(index)->cutset;
             for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
             {
                 if (not priorityQueue->isFull())
@@ -279,7 +279,7 @@ bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution
 
     for (unsigned int index = 0; index < offloadBuffer->getSize(); index += 1)
     {
-        StateType const * const approximateSolution = offloadBuffer->getMDD(index)->getBottom();
+        StateType const * const approximateSolution = &offloadBuffer->getMDD(index)->bottom;
         if (approximateSolution->cost < currentSolution->cost)
         {
             *currentSolution = *approximateSolution;
@@ -345,7 +345,7 @@ void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, b
         unsigned int const blocksCount = gpuOffloadBuffer->getSize();
         unsigned int const blockSize = mdd->width * mdd->problem->maxBranchingFactor;
         assert(blockSize <= 1024);
-        doOffloadKernel<ProblemType, StateType><<<blocksCount, blockSize>>>(gpuOffloadBuffer, onlyRestricted);
+        doOffloadKernel<ProblemType, StateType><<<blocksCount, blockSize, mdd->sizeOfScratchpadMemory()>>>(gpuOffloadBuffer, onlyRestricted);
     }
 }
 

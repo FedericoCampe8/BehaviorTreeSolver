@@ -12,7 +12,7 @@ namespace BB
         // Members
         private:
         Buffer<StateType> statesBuffer;
-        MaxHeap<BB::AugmentedState<StateType>> heap;
+        MaxHeap<BB::AugmentedState<StateType>> maxHeap;
 
         // Functions
         public:
@@ -31,19 +31,22 @@ template<typename StateType>
 template<typename ProblemType>
 BB::PriorityQueue<StateType>::PriorityQueue(ProblemType const * problem, unsigned int capacity) :
     statesBuffer(capacity, Memory::MallocType::Std),
-    heap(capacity, Memory::MallocType::Std)
+    maxHeap(capacity, Memory::MallocType::Std)
 {
     // States
+    unsigned int const storageSize = StateType::sizeOfStorage(problem);
+    std::byte* storages = StateType::mallocStorages(problem, capacity, Memory::MallocType::Std);
     for (unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
     {
-        new (statesBuffer[stateIdx]) StateType(problem, Memory::MallocType::Std);
+        new (statesBuffer[stateIdx]) StateType(problem, storages);
+        storages += storageSize;
     }
 }
 
 template<typename StateType>
 BB::AugmentedState<StateType> const * BB::PriorityQueue<StateType>::front() const
 {
-    return heap.front();
+    return maxHeap.front();
 }
 
 template<typename StateType>
@@ -57,25 +60,25 @@ void BB::PriorityQueue<StateType>::insert(AugmentedState<StateType> const * augm
 {
     StateType const * const bufferedState = statesBuffer.insert(augmentedState->state);
     AugmentedState<StateType> const bufferedAugmentedState(augmentedState->upperbound, augmentedState->lowerbound, bufferedState);
-    heap.pushBack(&bufferedAugmentedState);
+    maxHeap.insert(&bufferedAugmentedState);
 }
 
 template<typename StateType>
 bool BB::PriorityQueue<StateType>::isEmpty() const
 {
-    return heap.isEmpty();
+    return maxHeap.isEmpty();
 }
 
 template<typename StateType>
 bool BB::PriorityQueue<StateType>::isFull() const
 {
-    return heap.isFull();
+    return maxHeap.isFull();
 }
 
 template<typename StateType>
 void BB::PriorityQueue<StateType>::popFront()
 {
-    AugmentedState<StateType> const* const front = heap.front();
+    AugmentedState<StateType> const * const front = maxHeap.front();
     statesBuffer.erase(front->state);
-    heap.erase(front);
+    maxHeap.erase(front);
 }

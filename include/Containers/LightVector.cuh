@@ -3,7 +3,7 @@
 #include <Containers/LightArray.cuh>
 
 template<typename T>
-class LightVector : public LightArray<T>
+class LightVector: public LightArray<T>
 {
     // Members
     protected:
@@ -21,12 +21,12 @@ class LightVector : public LightArray<T>
     __host__ __device__ inline unsigned int getSize() const;
     __host__ __device__ inline bool isEmpty() const;
     __host__ __device__ inline bool isFull() const;
-    __host__ __device__ inline unsigned int indexOf(T const * t) const;
-    __host__ __device__ LightVector<T>& operator=(LightVector<T> const & other);
+    __host__ __device__ inline unsigned int indexOf(T const* t) const;
+    __host__ __device__ LightVector<T>& operator=(LightVector<T> const& other);
     __host__ __device__ inline T* operator[](unsigned int index) const;
     __host__ __device__ inline void popBack();
     __host__ __device__ void print(bool endLine = true) const;
-    __host__ __device__ void pushBack(T const * t);
+    __host__ __device__ void pushBack(T const* t);
     __host__ __device__ inline void resize(unsigned int size);
     __host__ __device__ inline static void swap(LightVector<T>& v0, LightVector<T>& v1);
 };
@@ -104,17 +104,17 @@ bool LightVector<T>::isFull() const
 
 template<typename T>
 __host__ __device__
-unsigned int LightVector<T>::indexOf(T const * t) const
+unsigned int LightVector<T>::indexOf(T const* t) const
 {
-    T const* const b = this->begin();
-    assert(b <= t);
+    T const * const begin = this->begin();
+    assert(begin <= t);
     assert(t < end());
-    return static_cast<unsigned int>(thrust::distance(b, t));
+    return static_cast<unsigned int>(t - begin);
 }
 
 template<typename T>
 __host__ __device__
-LightVector<T>& LightVector<T>::operator=(LightVector<T> const & other)
+LightVector<T>& LightVector<T>::operator=(LightVector<T> const& other)
 {
     LightArray<T>::operator=(other);
     size = other.size;
@@ -144,10 +144,10 @@ void LightVector<T>::print(bool endLine) const
 
 template<typename T>
 __host__ __device__
-void LightVector<T>::pushBack(T const * t)
+void LightVector<T>::pushBack(T const* t)
 {
     resize(size + 1);
-    *back() = *t;
+    * back() = * t;
 }
 
 template<typename T>

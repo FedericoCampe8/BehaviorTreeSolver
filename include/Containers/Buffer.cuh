@@ -1,6 +1,5 @@
 #pragma once
 
-#include <thrust/sequence.h>
 #include <Containers/Array.cuh>
 #include <Containers/Vector.cuh>
 
