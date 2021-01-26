@@ -35,7 +35,9 @@ set(SOURCES
     src/Main.cu
     src/OP/Variable.cuh
     src/DP/VRPModel.cuh
+    src/DP/CTWModel.cuh
     src/DD/MDD.cuh
+    src/OP/CTWProblem.cuh
     src/OP/VRProblem.cuh
     src/OP/Problem.cuh
     src/DP/State.cuh
@@ -47,7 +49,7 @@ set(SOURCES
     src/BB/AugmentedState.cuh
     src/BB/PriorityQueue.cuh
     src/DD/Context.h
-    include/Utils/Algorithms.cuh)
+    include/Utils/Algorithms.cuh include/Containers/Pair.cuh src/Options.h)
 
 # Add include path
 include_directories(include)

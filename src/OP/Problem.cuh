@@ -17,6 +17,9 @@ namespace OP
         Problem(unsigned int variablesCount, Memory::MallocType mallocType);
         ValueType calcMaxValue() const;
     };
+
+    template<typename ProblemType>
+    ProblemType* parseInstance(char const * problemFilename, Memory::MallocType mallocType);
 }
 
 OP::Problem::Problem(unsigned int variablesCount, Memory::MallocType mallocType) :

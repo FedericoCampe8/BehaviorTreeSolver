@@ -3,7 +3,7 @@
 #include <fstream>
 #include <Containers/Array.cuh>
 #include <Containers/Vector.cuh>
-#include <External/NlohmannJson.hpp>
+#include <External/Nlohmann/json.hpp>
 #include "../DP/Context.h"
 #include "Problem.cuh"
 
@@ -23,8 +23,10 @@ namespace OP
         public:
         VRProblem(unsigned int variablesCount, Memory::MallocType mallocType);
         __host__ __device__ inline DP::CostType getDistance(ValueType from, ValueType to) const;
-        static OP::VRProblem* parseGrubHubInstance(char const * problemFilename, Memory::MallocType mallocType);
     };
+
+    template<>
+    OP::VRProblem* parseInstance<OP::VRProblem>(char const * problemFilename, Memory::MallocType mallocType);
 }
 
 OP::VRProblem::VRProblem(unsigned int variablesCount, Memory::MallocType mallocType) :
@@ -40,7 +42,7 @@ unsigned int OP::VRProblem::getDistance(ValueType from, ValueType to) const
     return *distances[(from * variables.getCapacity()) + to];
 }
 
-OP::VRProblem* OP::VRProblem::parseGrubHubInstance(char const * problemFilename, Memory::MallocType mallocType)
+OP::VRProblem* OP::parseInstance(char const * problemFilename, Memory::MallocType mallocType)
 {
     // Parse instance
     std::ifstream problemFile(problemFilename);

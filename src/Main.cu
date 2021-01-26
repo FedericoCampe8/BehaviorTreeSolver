@@ -1,9 +1,12 @@
 #include <algorithm>
 #include <thread>
+#include <External/AnyOption/anyoption.h>
 #include <Utils/Chrono.cuh>
 #include "DP/VRPModel.cuh"
+#include "DP/CTWModel.cuh"
 #include "OffloadBuffer.cuh"
 #include "BB/PriorityQueue.cuh"
+#include "Options.h"
 
 using namespace std;
 using namespace Memory;
@@ -16,6 +19,8 @@ using ProblemType = VRProblem;
 using StateType = VRPState;
 
 // Auxiliary functions
+AnyOption* parseOptions(int argc, char* argv[]);
+
 void configGPU();
 
 // Search
@@ -58,68 +63,46 @@ void printElapsedTime(uint64_t elapsedTimeMs);
 
 void clearLine();
 
-int main(int argc, char ** argv)
+int main(int argc, char* argv[])
 {
     // Input parsing
-    char const * problemFileName = argv[1];
-    unsigned int const queueMaxSize = std::stoi(argv[2]);
-    unsigned int const timeoutSeconds = std::stoi(argv[3]);
-    unsigned int const cpuMaxWidth = std::stoi(argv[4]);
-    unsigned int const gpuMaxWidth = std::stoi(argv[5]);
-    unsigned int const lnsEqPercentage = std::stoi(argv[6]);
-    unsigned int const lnsNeqPercentage = std::stoi(argv[7]);
-    unsigned int const randomSeed = argc > 8 ? std::stoi(argv[8]) : static_cast<unsigned int>(now());
-    assert(lnsEqPercentage + lnsNeqPercentage <= 100);
+    Options options;
+    if (not options.parseOptions(argc, argv))
+    {
+        return EXIT_FAILURE;
+    }
+    else
+    {
+        options.printOptions();
+    }
 
     // *******************
     // Data initialization
     // *******************
-    printf("[INFO] Random seed: %u\n", randomSeed);
-
-    // Parallelism
-    unsigned int const cpuWorkloadMultiplier = 4;
-    unsigned int const gpuWorkloadMultiplier = 2;
-    unsigned int cpuMaxParallelism = 0;
-    if (cpuMaxWidth > 0)
-    {
-        unsigned int const coresCount = std::thread::hardware_concurrency();
-        cpuMaxParallelism = cpuWorkloadMultiplier * coresCount;
-        printf("[INFO] CPU max parallelism: %u\n", cpuMaxParallelism);
-    }
-    unsigned int gpuMaxParallelism = 0;
-    if (gpuMaxWidth > 0)
-    {
-        cudaDeviceProp deviceProp;
-        cudaGetDeviceProperties(&deviceProp, 0);
-        unsigned int const multiProcessorCount = deviceProp.multiProcessorCount;
-        unsigned int const maxBlocksPerMultiProcessor = deviceProp.maxBlocksPerMultiProcessor;
-        gpuMaxParallelism = gpuWorkloadMultiplier * multiProcessorCount * maxBlocksPerMultiProcessor;
-        printf("[INFO] GPU max parallelism: %u\n", gpuMaxParallelism);
-    }
 
     // Context initialization
-    std::mt19937 rng(randomSeed);
+    std::mt19937 rng(options.randomSeed);
     MallocType gpuMallocType = MallocType::Std;
-    if (gpuMaxParallelism > 0)
+    if (options.parallelismGpu > 0)
     {
         gpuMallocType = MallocType::Managed;
         configGPU();
     };
-    Vector<std::thread>* cpuThreads = new Vector<std::thread>(cpuMaxParallelism, MallocType::Std);
+    Vector<std::thread>* cpuThreads = new Vector<std::thread>(options.parallelismCpu, MallocType::Std);
 
     // Problems
-    ProblemType* const cpuProblem = VRProblem::parseGrubHubInstance(problemFileName, MallocType::Std);
-    ProblemType* const gpuProblem = VRProblem::parseGrubHubInstance(problemFileName, gpuMallocType);
+    ProblemType* const cpuProblem = parseInstance<ProblemType>(options.inputFilename, MallocType::Std);
+    ProblemType* const gpuProblem = parseInstance<ProblemType>(options.inputFilename, gpuMallocType);
 
     // PriorityQueue
-    PriorityQueue<StateType> priorityQueue(cpuProblem, queueMaxSize);
+    PriorityQueue<StateType> priorityQueue(cpuProblem, options.queueSize);
 
     // Offload
     unsigned int memorySize = sizeof(OffloadBuffer<ProblemType,StateType>);
     byte* memory = safeMalloc(memorySize, MallocType::Std);
-    OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer = new (memory) OffloadBuffer<ProblemType,StateType>(cpuProblem, cpuMaxWidth, cpuMaxParallelism, MallocType::Std);
+    OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer = new (memory) OffloadBuffer<ProblemType,StateType>(cpuProblem, options.widthCpu, options.parallelismCpu, MallocType::Std);
     memory = safeMalloc(memorySize, gpuMallocType);
-    OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer = new (memory) OffloadBuffer<ProblemType,StateType>(gpuProblem, gpuMaxWidth, gpuMaxParallelism, gpuMallocType);
+    OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer = new (memory) OffloadBuffer<ProblemType,StateType>(gpuProblem, options.widthGpu, options.parallelismGpu, gpuMallocType);
 
     // Solutions
     memorySize = sizeof(StateType);
@@ -171,8 +154,8 @@ int main(int argc, char ** argv)
             {
                 prepareOffload(&augmentedRoot, cpuOffloadBuffer);
                 prepareOffload(&augmentedRoot, gpuOffloadBuffer);
-                cpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
-                gpuOffloadBuffer->generateNeighbourhoods(currentSolution, lnsEqPercentage, lnsNeqPercentage, &rng);
+                cpuOffloadBuffer->generateNeighbourhoods(currentSolution, options.eqProbability, options.neqProbability, &rng);
+                gpuOffloadBuffer->generateNeighbourhoods(currentSolution, options.eqProbability, options.neqProbability, &rng);
                 currentSolution->setInvalid();
             }
                 break;
@@ -234,7 +217,7 @@ int main(int argc, char ** argv)
         fflush(stdout);
         iterationsCount += 1;
     }
-    while(now() - searchStartTime < timeoutSeconds * 1000 and (not priorityQueue.isEmpty()));
+    while(now() - searchStartTime < options.timeout * 1000 and (not priorityQueue.isEmpty()));
 
     clearLine();
     printf("[RESULT] Solution: ");
