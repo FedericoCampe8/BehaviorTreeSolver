@@ -39,9 +39,7 @@ DP::State::State(OP::Problem const* problem, std::byte* storage) :
 
 __host__ __device__
 DP::State::State(OP::Problem const* problem, Memory::MallocType mallocType) :
-    cost(0),
-    selectedValues(problem->variables.getCapacity(), mallocType),
-    admissibleValues(problem->variables.getCapacity(), mallocType)
+    State(problem, mallocStorages(problem,1,mallocType))
 {}
 
 __host__ __device__
@@ -57,7 +55,7 @@ std::byte* DP::State::mallocStorages(const OP::Problem* problem, unsigned int st
 }
 
 __host__ __device__
-DP::State& DP::State::operator=(DP::State const& other)
+DP::State& DP::State::operator=(DP::State const & other)
 {
     cost = other.cost;
     selectedValues.resize(other.selectedValues.getSize());

@@ -4,6 +4,7 @@
 #include <Containers/Vector.cuh>
 #include <Containers/Pair.cuh>
 #include <External/Nlohmann/json.hpp>
+#include <Utils/Algorithms.cuh>
 #include "../DP/Context.h"
 #include "Problem.cuh"
 
@@ -13,11 +14,12 @@ namespace OP
     {
         // Members
         public:
-        ValueType b;
-        ValueType k;
-        Vector<Pair<ValueType>> atomicConstraints;
-        Vector<Pair<ValueType>> softAtomicConstraints;
-        Vector<Pair<Pair<ValueType>>> disjunctiveConstraints;
+        ValueType const b;
+        ValueType const k;
+        Array<LightVector<ValueType>> atomicConstraints;
+        Array<LightVector<ValueType>> disjunctiveConstraints1;
+        Array<LightVector<ValueType>> disjunctiveConstraints2;
+        Array<LightVector<ValueType>> softAtomicConstraints;
 
         // Functions
         public:
@@ -32,10 +34,26 @@ OP::CTWProblem::CTWProblem(unsigned int variablesCount, Memory::MallocType mallo
     Problem(variablesCount, mallocType),
     b(variablesCount / 2),
     k(variablesCount),
-    atomicConstraints(k * k, mallocType),
-    softAtomicConstraints(k * k, mallocType),
-    disjunctiveConstraints(k * k * k * 2, mallocType)
-{}
+    atomicConstraints(k, mallocType),
+    disjunctiveConstraints1(k, mallocType),
+    disjunctiveConstraints2(k, mallocType),
+    softAtomicConstraints(k, mallocType)
+{
+    unsigned int const storagesSize = sizeof(ValueType) * k * k * 4;
+    ValueType* storages = reinterpret_cast<ValueType*>(Memory::safeMalloc(storagesSize, mallocType));
+    ValueType* atomicConstraintsStorages = &storages[k * k * 0];
+    ValueType* disjunctiveConstraints1Storages = &storages[k * k * 1];
+    ValueType* disjunctiveConstraints2Storages = &storages[k * k * 2];
+    ValueType* softAtomicConstraintsStorages = &storages[k * k * 3];
+
+    for (unsigned int index = 0; index < k; index += 1)
+    {
+        new (atomicConstraints[index]) LightVector<ValueType>(k, &atomicConstraintsStorages[k * index]);
+        new (disjunctiveConstraints1[index]) LightVector<ValueType>(k, &disjunctiveConstraints1Storages[ k * index]);
+        new (disjunctiveConstraints2[index]) LightVector<ValueType>(k, &disjunctiveConstraints2Storages[k * index]);
+        new (softAtomicConstraints[index]) LightVector<ValueType>(k, &softAtomicConstraintsStorages[k * index]);
+    }
+}
 
 OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocType mallocType)
 {
@@ -49,32 +67,36 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
     OP::CTWProblem* const problem = reinterpret_cast<OP::CTWProblem*>(Memory::safeMalloc(problemSize, mallocType));
     unsigned int const variablesCount = problemJson["k"];
     new (problem) OP::CTWProblem(variablesCount, mallocType);
-    problem->maxBranchingFactor = (variablesCount - 1) - 2 + 1;
+    problem->maxBranchingFactor = variablesCount;
 
     // Atomic constraints
     for (unsigned int atomicConstraintIdx = 0; atomicConstraintIdx < problemJson["AtomicConstraints"].size(); atomicConstraintIdx += 1)
     {
         auto& constraint = problemJson["AtomicConstraints"][atomicConstraintIdx];
-        Pair<OP::ValueType> atomicConstraint(constraint[0],constraint[1]);
-        problem->atomicConstraints.pushBack(&atomicConstraint);
+        problem->atomicConstraints[constraint[0]]->pushBack(&constraint[1]);
     }
 
     // Disjunctive constraints
     for (unsigned int disjunctiveConstraintIdx = 0; disjunctiveConstraintIdx < problemJson["DisjunctiveConstraints"].size(); disjunctiveConstraintIdx += 1)
     {
         auto& constraint = problemJson["DisjunctiveConstraints"][disjunctiveConstraintIdx];
-        Pair<OP::ValueType> disjunctiveConstraint0(constraint[0], constraint[1]);
-        Pair<OP::ValueType> disjunctiveConstraint1(constraint[2], constraint[3]);
-        Pair<Pair<OP::ValueType>> disjunctiveConstraint(disjunctiveConstraint0,disjunctiveConstraint1);
-        problem->disjunctiveConstraints.pushBack(&disjunctiveConstraint);
+        if(constraint[0] == constraint[2])
+        {
+            problem->disjunctiveConstraints1[constraint[0]]->pushBack(&constraint[1]);
+            problem->disjunctiveConstraints1[constraint[0]]->pushBack(&constraint[3]);
+        }
+        else
+        {
+            problem->disjunctiveConstraints2[constraint[0]]->pushBack(&constraint[1]);
+            problem->disjunctiveConstraints2[constraint[0]]->pushBack(&constraint[2]);
+        }
     }
 
     // Soft atomic constraints
     for (unsigned int softAtomicConstraintIdx = 0; softAtomicConstraintIdx < problemJson["SoftAtomicConstraints"].size(); softAtomicConstraintIdx += 1)
     {
-        auto& constraint = problemJson["SoftAtomicConstraints"][softAtomicConstraintIdx];
-        Pair<OP::ValueType> softAtomicConstraint(constraint[0], constraint[1]);
-        problem->softAtomicConstraints.pushBack(&softAtomicConstraint);
+        auto& constraint = problemJson["AtomicConstraints"][softAtomicConstraintIdx];
+        problem->softAtomicConstraints[constraint[0]]->pushBack(&constraint[1]);
     }
 
     return problem;

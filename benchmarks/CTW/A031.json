@@ -1,5 +1,6 @@
 {
   "k": 18,
+  "b" : 9,
   "AtomicConstraints": [
     [4, 8],
     [5, 8],

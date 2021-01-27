@@ -4,6 +4,9 @@ namespace Algorithms
 {
     template<typename T>
     __device__ inline void oddEvenSort(T* array, unsigned int size);
+
+    template<typename T>
+    __host__ __device__ void orderedInsertion(T* array, unsigned int size, T const * value);
 }
 
 template<typename T>
@@ -33,6 +36,24 @@ void Algorithms::oddEvenSort(T* array, unsigned int size)
             {
                 T::swap(array[idx0], array[idx1]);
             }
+        }
+    }
+}
+
+template<typename T>
+__host__ __device__
+void Algorithms::orderedInsertion(T* array, unsigned int size, T const * value)
+{
+    for (int index = size - 1; index >= 0; index -= 1)
+    {
+        if (not (array[index] < *value))
+        {
+            T::swap(array[index], array[index+1]);
+        }
+        else
+        {
+            array[index] = *value;
+            break;
         }
     }
 }

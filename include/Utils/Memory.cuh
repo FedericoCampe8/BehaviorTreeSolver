@@ -7,20 +7,21 @@
 namespace Memory
 {
     enum MallocType {Managed, Std};
-    template<typename T>
-    __host__ __device__ std::byte* align(unsigned int alignment, T const * ptr);
+    unsigned int const AlignmentPadding = 8;
+    template<typename FromType, typename ToType>
+    __host__ __device__ ToType* align(FromType const * ptr);
     __host__ __device__ std::byte* safeMalloc(unsigned int size, MallocType type);
     __host__ __device__ std::byte* safeStdMalloc(unsigned int size);
     std::byte* safeManagedMalloc(unsigned int size);
 }
 
-template<typename T>
+template<typename FromType, typename ToType>
 __host__ __device__
-std::byte* Memory::align(unsigned int alignment, T const * ptr)
+ToType* Memory::align(FromType const * ptr)
 {
     uintptr_t const address = reinterpret_cast<uintptr_t>(ptr);
-    uintptr_t const aligned = address + (address % alignment);
-    return reinterpret_cast<std::byte*>(aligned);
+    uintptr_t const aligned = address + (address % sizeof(ToType));
+    return reinterpret_cast<ToType*>(aligned);
 }
 
 __host__ __device__

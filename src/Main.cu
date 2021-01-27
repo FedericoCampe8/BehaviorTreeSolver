@@ -331,7 +331,6 @@ void prepareOffload(AugmentedState<StateType> const * augmentedState, OffloadBuf
     }
 }
 
-
 template<typename ProblemType, typename StateType>
 void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, bool onlyRestricted)
 {

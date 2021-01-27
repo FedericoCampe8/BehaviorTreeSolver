@@ -131,7 +131,7 @@ unsigned int DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory() const
         StateType::sizeOfStorage(problem) * width +  // nextStates
         sizeof(LightVector<AuxiliaryData>) +
         LightVector<AuxiliaryData>::sizeOfStorage(width * problem->maxBranchingFactor) +
-        8 * 7; // alignment
+        Memory::AlignmentPadding * 7; // alignment
 }
 
 template<typename ProblemType, typename StateType>
