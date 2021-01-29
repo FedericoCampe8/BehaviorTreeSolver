@@ -28,6 +28,7 @@ class LightVector: public LightArray<T>
     __host__ __device__ void print(bool endLine = true) const;
     __host__ __device__ void pushBack(T const* t);
     __host__ __device__ inline void resize(unsigned int size);
+    __host__ __device__ inline void resize(T const * end);
     __host__ __device__ inline static void swap(LightVector<T>& v0, LightVector<T>& v1);
 };
 
@@ -156,6 +157,14 @@ void LightVector<T>::resize(unsigned int size)
 {
     assert(size <= this->capacity);
     this->size = size;
+}
+
+template<typename T>
+__host__ __device__
+void LightVector<T>::resize(T const * end)
+{
+    unsigned int const size = this->indexOf(end);
+    resize(size);
 }
 
 template<typename T>

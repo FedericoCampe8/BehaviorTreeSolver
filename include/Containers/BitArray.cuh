@@ -3,34 +3,33 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
-#include <type_traits>
 #include <thrust/copy.h>
 #include <thrust/swap.h>
 #include <Utils/Memory.cuh>
 
 template<typename T>
-class LightArray
+class BitArray
 {
     // Members
     protected:
-    unsigned int capacity;
+    uint32_t capacity;
     T * storage;
 
     // Functions
     public:
-    __host__ __device__ LightArray(unsigned int capacity, T* storage);
-    __host__ __device__ ~LightArray();
+    __host__ __device__ BitArray(unsigned int capacity, T* storage);
+    __host__ __device__ ~BitArray();
     __host__ __device__ inline T* at(unsigned int index) const;
     __host__ __device__ inline thrust::detail::seq_t begin() const;
     __host__ __device__ inline T* end() const;
     __host__ __device__ inline std::byte* endOfStorage() const;
     __host__ __device__ inline unsigned int getCapacity() const;
     __host__ __device__ inline unsigned int indexOf(T const * t) const;
-    __host__ __device__ LightArray<T>& operator=(LightArray<T> const & other);
+    __host__ __device__ BitArray<T>& operator=(BitArray<T> const & other);
     __host__ __device__ inline T* operator[](unsigned int index) const;
     __host__ __device__ void print(bool endLine = true) const;
     __host__ __device__ inline static unsigned int sizeOfStorage(unsigned int capacity);
-    __host__ __device__ inline static void swap(LightArray<T>& a0, LightArray<T>& a1);
+    __host__ __device__ inline static void swap(BitArray<T>& a0, BitArray<T>& a1);
     protected:
     __host__ __device__ void print(unsigned int beginIdx, unsigned int endIdx, bool endLine) const;
 
@@ -38,19 +37,19 @@ class LightArray
 
 template<typename T>
 __host__ __device__
-LightArray<T>::LightArray(unsigned int capacity, T* storage) :
+BitArray<T>::BitArray(unsigned int capacity, T* storage) :
     capacity(capacity),
     storage(storage)
 {}
 
 template<typename T>
 __host__ __device__
-LightArray<T>::~LightArray()
+BitArray<T>::~BitArray()
 {}
 
 template<typename T>
 __host__ __device__
-T* LightArray<T>::at(unsigned int index) const
+T* BitArray<T>::at(unsigned int index) const
 {
     assert(capacity > 0);
     assert(index < capacity);
@@ -59,35 +58,35 @@ T* LightArray<T>::at(unsigned int index) const
 
 template<typename T>
 __host__ __device__
-thrust::detail::seq_t LightArray<T>::begin() const
+thrust::detail::seq_t BitArray<T>::begin() const
 {
     return storage;
 }
 
 template<typename T>
 __host__ __device__
-T* LightArray<T>::end() const
+T* BitArray<T>::end() const
 {
     return storage + capacity;
 }
 
 template<typename T>
 __host__ __device__
-std::byte* LightArray<T>::endOfStorage() const
+std::byte* BitArray<T>::endOfStorage() const
 {
     return reinterpret_cast<std::byte*>(storage + capacity);
 }
 
 template<typename T>
 __host__ __device__
-unsigned int LightArray<T>::getCapacity() const
+unsigned int BitArray<T>::getCapacity() const
 {
     return capacity;
 }
 
 template<typename T>
 __host__ __device__
-unsigned int LightArray<T>::indexOf(T const * t) const
+unsigned int BitArray<T>::indexOf(T const * t) const
 {
     T const * const begin = this->begin();
     assert(begin <= t);
@@ -97,7 +96,7 @@ unsigned int LightArray<T>::indexOf(T const * t) const
 
 template<typename T>
 __host__ __device__
-LightArray<T>& LightArray<T>::operator=(LightArray<T> const & other)
+BitArray<T>& BitArray<T>::operator=(BitArray<T> const & other)
 {
     capacity = other.capacity;
     storage = other.storage;
@@ -106,28 +105,28 @@ LightArray<T>& LightArray<T>::operator=(LightArray<T> const & other)
 
 template<typename T>
 __host__ __device__
-T* LightArray<T>::operator[](unsigned int index) const
+T* BitArray<T>::operator[](unsigned int index) const
 {
     return at(index);
 }
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::print(bool endLine) const
+void BitArray<T>::print(bool endLine) const
 {
     print(0, capacity, endLine);
 }
 
 template<typename T>
 __host__ __device__
-unsigned int LightArray<T>::sizeOfStorage(unsigned int capacity)
+unsigned int BitArray<T>::sizeOfStorage(unsigned int capacity)
 {
     return sizeof(T) * capacity;
 }
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::swap(LightArray<T>& a0, LightArray<T>& a1)
+void BitArray<T>::swap(BitArray<T>& a0, BitArray<T>& a1)
 {
     thrust::swap(a0.capacity, a1.capacity);
     thrust::swap(a0.storage, a1.storage);
@@ -135,7 +134,7 @@ void LightArray<T>::swap(LightArray<T>& a0, LightArray<T>& a1)
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::print(unsigned int beginIdx, unsigned int endIdx, bool endLine) const
+void BitArray<T>::print(unsigned int beginIdx, unsigned int endIdx, bool endLine) const
 {
     if constexpr (std::is_integral_v<T>)
     {

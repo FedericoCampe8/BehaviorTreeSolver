@@ -101,7 +101,8 @@ void MaxHeap<T>::heapify(unsigned int index)
     {
         T::swap(*vector[index], *vector[largest]);
         heapify(largest);
-    }}
+    }
+}
 
 template<typename T>
 __host__ __device__

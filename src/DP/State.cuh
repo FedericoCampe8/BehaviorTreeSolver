@@ -20,6 +20,7 @@ namespace DP
         __host__ __device__ State(OP::Problem const * problem, std::byte* storage);
         __host__ __device__ State(OP::Problem const * problem, Memory::MallocType mallocType);
         __host__ __device__ bool isAdmissible(OP::ValueType value) const;
+        __host__ __device__ bool isSelected(OP::ValueType value) const;
         __host__ __device__ static std::byte* mallocStorages(OP::Problem const*  problem, unsigned int statesCount, Memory::MallocType mallocType);
         __host__ __device__ State& operator=(State const & other);
         __host__ __device__ void removeFromAdmissibles(OP::ValueType value);
@@ -46,6 +47,12 @@ __host__ __device__
 bool DP::State::isAdmissible(OP::ValueType value) const
 {
     return thrust::find(thrust::seq, admissibleValues.begin(), admissibleValues.end(), value) != admissibleValues.end();
+}
+
+__host__ __device__
+bool DP::State::isSelected(OP::ValueType value) const
+{
+    return thrust::find(thrust::seq, selectedValues.begin(), selectedValues.end(), value) != selectedValues.end();
 }
 
 __host__ __device__

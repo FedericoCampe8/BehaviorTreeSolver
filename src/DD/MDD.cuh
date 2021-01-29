@@ -377,11 +377,7 @@ void DD::MDD<ProblemType, StateType>::shirkToFitAuxiliaryData()
     {
         AuxiliaryData const invalidAuxiliaryData(DP::MaxCost, 0);
         AuxiliaryData const * const auxiliaryDataEnd = thrust::lower_bound(thrust::seq, auxiliaryData->begin(), auxiliaryData->end(), invalidAuxiliaryData);
-        if (auxiliaryDataEnd != auxiliaryData->end())
-        {
-            unsigned int const size = auxiliaryData->indexOf(auxiliaryDataEnd);
-            auxiliaryData->resize(size);
-        }
+        auxiliaryData->resize(auxiliaryDataEnd);
     }
 }
 
