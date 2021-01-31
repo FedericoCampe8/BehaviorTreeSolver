@@ -21,7 +21,7 @@ class LightArray
     __host__ __device__ LightArray(unsigned int capacity, T* storage);
     __host__ __device__ ~LightArray();
     __host__ __device__ inline T* at(unsigned int index) const;
-    __host__ __device__ inline thrust::detail::seq_t begin() const;
+    __host__ __device__ inline T* begin() const;
     __host__ __device__ inline T* end() const;
     __host__ __device__ inline std::byte* endOfStorage() const;
     __host__ __device__ inline unsigned int getCapacity() const;
@@ -59,7 +59,7 @@ T* LightArray<T>::at(unsigned int index) const
 
 template<typename T>
 __host__ __device__
-thrust::detail::seq_t LightArray<T>::begin() const
+T* LightArray<T>::begin() const
 {
     return storage;
 }

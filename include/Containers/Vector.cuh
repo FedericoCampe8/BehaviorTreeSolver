@@ -12,7 +12,7 @@ class Vector: public LightVector<T>
     __host__ __device__ ~Vector();
     __host__ __device__ Vector<T>& operator=(Vector<T> const & other);
     private:
-    __host__ __device__ static std::byte* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
+    __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
 };
 
 template<typename T>
@@ -24,7 +24,7 @@ Vector<T>::Vector(unsigned int capacity, T* storage) :
 template<typename T>
 __host__ __device__
 Vector<T>::Vector(unsigned int capacity, Memory::MallocType mallocType) :
-    LightVector<T>(capacity, reinterpret_cast<T*>(mallocStorage(capacity, mallocType)))
+    LightVector<T>(capacity, mallocStorage(capacity, mallocType))
 {}
 
 template<typename T>
@@ -39,14 +39,14 @@ __host__ __device__
 Vector<T>& Vector<T>::operator=(Vector<T> const & other)
 {
     resize(other.getSize());
-    thrust::copy(thrust::seq, other.begin(), other.end(), this->begin());
+    memcpy(this->storage, other.storage, sizeOfStorage(other.size));
     return *this;
 }
 
 template<typename T>
 __host__ __device__
-std::byte* Vector<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
+T* Vector<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
 {
     unsigned int const storageSize = LightArray<T>::sizeOfStorage(capacity);
-    return Memory::safeMalloc(storageSize, mallocType);
+    return reinterpret_cast<T*>(Memory::safeMalloc(storageSize, mallocType));
 }

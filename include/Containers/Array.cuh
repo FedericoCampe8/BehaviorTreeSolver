@@ -12,7 +12,7 @@ class Array : public LightArray<T>
     __host__ __device__ ~Array();
     __host__ __device__ Array<T>& operator=(Array<T> const & other);
     private:
-    __host__ __device__ static std::byte* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
+    __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
 };
 
 template<typename T>
@@ -39,14 +39,14 @@ __host__ __device__
 Array<T>& Array<T>::operator=(Array<T> const & other)
 {
     assert(this->capacity == other.getCapacity());
-    thrust::copy(thrust::seq, other.begin(), other.end(), this->begin());
+    memcpy(this->storage, other.storage, sizeOfStorage(other.capacity));
     return *this;
 }
 
 template<typename T>
 __host__ __device__
-std::byte* Array<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
+T* Array<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
 {
     unsigned int const storageSize = LightArray<T>::sizeOfStorage(capacity);
-    return Memory::safeMalloc(storageSize, mallocType);
+    return reinterpret_cast<T*>(Memory::safeMalloc(storageSize, mallocType));
 }

@@ -3,6 +3,7 @@
 #include "State.cuh"
 #include "../OP/CTWProblem.cuh"
 
+/*
 namespace DP
 {
     class CTWState : public State
@@ -76,5 +77,6 @@ void DP::CTWState::swap(DP::CTWState& ctws0, DP::CTWState& ctws1)
     thrust::swap(ctws0.n, ctws1.n);
     thrust::swap(ctws0.oldestOpenPairIdx, ctws1.oldestOpenPairIdx);
     thrust::swap(ctws0.openPairsCount, ctws1.openPairsCount);
-    Vector<unsigned int>::swap(ctws0.blockingConstraintsCount, ctws1.blockingConstraintsCount);
+    Array<unsigned int>::swap(ctws0.blockingConstraintsCount, ctws1.blockingConstraintsCount);
 }
+*/

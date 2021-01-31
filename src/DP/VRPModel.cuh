@@ -7,7 +7,7 @@
 namespace DP
 {
     __host__ __device__ inline DP::CostType calcCost(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType const value);
-    __host__ __device__ inline void ifPickupAddDelivery(OP::VRProblem const * problem, OP::ValueType value, VRPState* state);
+    __host__ __device__ inline void ifPickupAddDelivery(OP::ValueType value, VRPState* state);
     void makeRoot(OP::VRProblem const * problem, VRPState* root);    void makeRoot(OP::VRProblem const * problem, VRPState* root);
     __host__ __device__ inline void makeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, DP::CostType cost, VRPState* nextState);
     __host__ __device__ inline void mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, VRPState* nextState);
@@ -16,34 +16,35 @@ namespace DP
 __host__ __device__
 DP::CostType DP::calcCost(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType const value)
 {
-    OP::ValueType const from = *currentState->selectedValues.back();
-    OP::ValueType const to = value;
-    return currentState->cost + problem->getDistance(from, to);
-}
-
-__host__ __device__
-void DP::ifPickupAddDelivery(OP::VRProblem const* problem, OP::ValueType value, VRPState* state)
-{
-    OP::ValueType const * const pickup = thrust::find(thrust::seq, problem->pickups.begin(), problem->pickups.end(), value);
-    if (pickup < problem->pickups.end())
+    if(not currentState->selectedValues.isEmpty())
     {
-        unsigned int const deliveryIdx = problem->pickups.indexOf(pickup);
-        OP::ValueType const * const delivery = problem->deliveries[deliveryIdx];
-        if (not state->isAdmissible(*delivery))
-        {
-            state->admissibleValues.pushBack(delivery);
-        }
+        OP::ValueType const from = * currentState->selectedValues.back();
+        OP::ValueType const to = value;
+        return currentState->cost + problem->getDistance(from, to);
+    }
+    else
+    {
+        return 0;
     }
 }
+
+
+__host__ __device__
+void DP::ifPickupAddDelivery(OP::ValueType value, VRPState* state)
+{
+    if (value % 2 == 0)
+    {
+        state->admissibleValuesMap.insert(value + 1);
+    }
+}
+
 
 void DP::makeRoot(OP::VRProblem const* problem, VRPState* root)
 {
     root->cost = 0;
-    root->selectedValues.pushBack(&problem->start);
-    root->admissibleValues.pushBack(&problem->end);
-    for (OP::ValueType const * pickup = problem->pickups.begin(); pickup != problem->pickups.end(); pickup += 1)
+    for (OP::ValueType value = 0; value < problem->variables.getCapacity(); value +=2)
     {
-        root->admissibleValues.pushBack(pickup);
+        root->admissibleValuesMap.insert(value);
     }
 }
 
@@ -52,20 +53,14 @@ void DP::makeState(OP::VRProblem const * problem, VRPState const * currentState,
 {
     *nextState = *currentState;
     nextState->cost = cost;
-    nextState->removeFromAdmissibles(value);
+    nextState->admissibleValuesMap.erase(value);
     nextState->selectedValues.pushBack(&value);
-    ifPickupAddDelivery(problem, value, nextState);
+    ifPickupAddDelivery(value, nextState);
 }
 
 __host__ __device__
 void DP::mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, VRPState* nextState)
 {
-    for (OP::ValueType const* admissibleValue = currentState->admissibleValues.begin(); admissibleValue != currentState->admissibleValues.end(); admissibleValue += 1)
-    {
-        if (* admissibleValue != value and (not nextState->isAdmissible(* admissibleValue)))
-        {
-            nextState->admissibleValues.pushBack(admissibleValue);
-        }
-    }
-    ifPickupAddDelivery(problem, value, nextState);
+    nextState->admissibleValuesMap.merge(currentState->admissibleValuesMap);
+    ifPickupAddDelivery(value, nextState);
 }

@@ -131,7 +131,7 @@ unsigned int DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory() const
         StateType::sizeOfStorage(problem) * width +  // nextStates
         sizeof(LightVector<AuxiliaryData>) +
         LightVector<AuxiliaryData>::sizeOfStorage(width * problem->maxBranchingFactor) +
-        Memory::AlignmentPadding * 7; // alignment
+        Memory::DefaultAlignment * 7; // alignment
 }
 
 template<typename ProblemType, typename StateType>
@@ -156,20 +156,23 @@ void DD::MDD<ProblemType, StateType>::calcAuxiliaryData(unsigned int variableIdx
     {
         StateType const* const currentState = currentStates->at(currentStateIdx);
 #ifdef __CUDA_ARCH__
-        unsigned int const admissibleValueIdx = threadIdx.x % problem->maxBranchingFactor;
-        if (admissibleValueIdx < currentState->admissibleValues.getSize())
+        unsigned int const value = threadIdx.x % problem->maxBranchingFactor;
+        if (admissibleValueIdx < currentState->admissibleValuesMap.getCapacity())
 #else
-            for (unsigned int admissibleValueIdx = 0; admissibleValueIdx < currentState->admissibleValues.getSize(); admissibleValueIdx += 1)
+        for (unsigned int admissibleValueIdx = 0; admissibleValueIdx < currentState->admissibleValues.getCapacity(); admissibleValueIdx += 1)
 #endif
         {
-            OP::ValueType const value = * currentState->admissibleValues[admissibleValueIdx];
-            bool boundsChk = problem->variables[variableIdx]->boundsCheck(value);
-            bool constraintsChk = neighbourhood->constraintsCheck(variableIdx, value);
-            if (boundsChk and constraintsChk)
+            if(currentState->admissibleValuesMap.contains())
             {
-                unsigned int const valueIdx = value - problem->variables[variableIdx]->minValue;
-                unsigned int const auxiliaryDataIdx = problem->maxBranchingFactor * currentStateIdx + valueIdx;
-                auxiliaryData->at(auxiliaryDataIdx)->cost = calcCost(problem, currentState, value);
+                OP::ValueType const value = * currentState->admissibleValues[admissibleValueIdx];
+                bool boundsChk = problem->variables[variableIdx]->boundsCheck(value);
+                bool constraintsChk = neighbourhood->constraintsCheck(variableIdx, value);
+                if (boundsChk and constraintsChk)
+                {
+                    unsigned int const valueIdx = value - problem->variables[variableIdx]->minValue;
+                    unsigned int const auxiliaryDataIdx = problem->maxBranchingFactor * currentStateIdx + valueIdx;
+                    auxiliaryData->at(auxiliaryDataIdx)->cost = calcCost(problem, currentState, value);
+                }
             }
         }
     }
@@ -212,34 +215,34 @@ void DD::MDD<ProblemType, StateType>::initScratchpadMemory()
         // Current states
         currentStates = reinterpret_cast<LightVector<StateType>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<StateType>);
-        freeScratchpadMemory = Memory::align(8, freeScratchpadMemory);
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
         new (currentStates) LightVector<StateType>(width, reinterpret_cast<StateType*>(freeScratchpadMemory));
-        freeScratchpadMemory = Memory::align(8, currentStates->endOfStorage());
+        freeScratchpadMemory = Memory::align(currentStates->endOfStorage());
         unsigned int const storageSize = StateType::sizeOfStorage(problem);
         for (unsigned int stateIdx = 0; stateIdx < currentStates->getCapacity(); stateIdx += 1)
         {
             new (currentStates->LightArray<StateType>::at(stateIdx)) StateType(problem, freeScratchpadMemory);
             freeScratchpadMemory += storageSize;
         }
-        freeScratchpadMemory = Memory::align(8, freeScratchpadMemory);
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
 
         // Next states
         nextStates = reinterpret_cast<LightVector<StateType>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<StateType>);
-        freeScratchpadMemory = Memory::align(8, freeScratchpadMemory);
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
         new(nextStates) LightVector<StateType>(width, reinterpret_cast<StateType*>(freeScratchpadMemory));
-        freeScratchpadMemory = Memory::align(8, nextStates->endOfStorage());
+        freeScratchpadMemory = Memory::align(nextStates->endOfStorage());
         for (unsigned int stateIdx = 0; stateIdx < nextStates->getCapacity(); stateIdx += 1)
         {
             new (nextStates->LightArray<StateType>::at(stateIdx)) StateType(problem, freeScratchpadMemory);
             freeScratchpadMemory += storageSize;
         }
-        freeScratchpadMemory = Memory::align(8, freeScratchpadMemory);
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
 
         // Auxiliary information
         auxiliaryData = reinterpret_cast<LightVector<AuxiliaryData>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<AuxiliaryData>);
-        freeScratchpadMemory = Memory::align(8, freeScratchpadMemory);
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
         new (auxiliaryData) LightVector<AuxiliaryData>(width * problem->maxBranchingFactor, reinterpret_cast<AuxiliaryData*>(freeScratchpadMemory));
     }
 }
@@ -363,7 +366,7 @@ void DD::MDD<ProblemType, StateType>::setInvalid()
     if (threadIdx.x == 0)
 #endif
     {
-        bottom.setInvalid();
+        bottom.makeInvalid();
     }
 }
 

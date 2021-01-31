@@ -48,6 +48,7 @@ bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType val
 void Neighbourhood::generate(LightArray<OP::ValueType> const * solution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng)
 {
     std::uniform_int_distribution<unsigned int> randomDistribution(0, 100);
+    unsigned int neqCount = 0;
     for (unsigned int variableIdx = 0; variableIdx < solution->getCapacity(); variableIdx += 1)
     {
         ConstraintType* const constraint = constraints[variableIdx];
@@ -63,6 +64,7 @@ void Neighbourhood::generate(LightArray<OP::ValueType> const * solution, unsigne
         }
         else if (random < eqPercentage + neqPercentage)
         {
+            neqCount += 1;
             *constraint = ConstraintType::Neq;
             *this->solution[variableIdx] = value;
         }

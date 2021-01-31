@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
                 prepareOffload(&augmentedRoot, gpuOffloadBuffer);
                 cpuOffloadBuffer->generateNeighbourhoods(currentSolution, options.eqProbability, options.neqProbability, &rng);
                 gpuOffloadBuffer->generateNeighbourhoods(currentSolution, options.eqProbability, options.neqProbability, &rng);
-                currentSolution->setInvalid();
+                currentSolution->makeInvalid();
             }
                 break;
         }

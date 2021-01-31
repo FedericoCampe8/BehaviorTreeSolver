@@ -6,6 +6,7 @@
 #include "../OP/CTWProblem.cuh"
 #include "CTWState.cuh"
 
+/*
 namespace DP
 {
     __host__ __device__ inline DP::CostType calcCost(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value);
@@ -100,7 +101,6 @@ void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState
 }
 
 
-/*
 __host__ __device__
 void DP::mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, VRPState* nextState)
 {
@@ -113,7 +113,6 @@ void DP::mergeState(OP::VRProblem const * problem, VRPState const * currentState
     }
     ifPickupAddDelivery(problem, value, nextState);
 }
- */
 
 __host__ __device__
 OP::ValueType DP::calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value)
@@ -124,12 +123,14 @@ OP::ValueType DP::calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType con
 __host__ __device__
 void DP::closePair(OP::CTWProblem const * problem, DP::CTWState const * currentState, OP::ValueType const value)
 {
+
     OP::ValueType const otherEnd = calcOtherEnd(problem,value);
     OP::ValueType const * const openedPairsEnd = thrust::remove_if(thrust::seq, currentState->openedPairs.begin(), currentState->openedPairs.end(), [=] __host__ __device__ (Pair<OP::ValueType> const & pair) -> bool
     {
         pair.first == otherEnd;
     });
     currentState->openedPairs.resize(openedPairsEnd);
+
 }
 
 
@@ -137,7 +138,7 @@ __host__ __device__
 bool DP::pairClosed(OP::CTWProblem const * problem, DP::CTWState const * currentState, OP::ValueType const value)
 {
     OP::ValueType const otherEnd = calcOtherEnd(problem, value);
-    return thrust::find(thrust::seq, currentState->selectedValues.begin(), currentState->selectedValues.end(), otherEnd) != currentState->selectedValues.end();
+    return thrust::freinterpret_castind(thrust::seq, currentState->selectedValues.begin(), currentState->selectedValues.end(), otherEnd) != currentState->selectedValues.end();
 }
 
 __host__ __device__
@@ -156,7 +157,7 @@ DP::updateByAtomics(OP::CTWProblem const* problem, DP::CTWState const* nextState
         Pair<OP::ValueType> const * const atomicConstraint = problem->atomicConstraints[atomicConstraintIdx];
         if(value == atomicConstraint->first)
         {
-            nextState->blockingConstraintsCount[atomicConstraint->second] -= 1;
+            *nextState->blockingConstraintsCount[atomicConstraint->second] -= 1;
         }
     }
 }
@@ -191,4 +192,6 @@ void DP::updateByDisjunctive1(OP::CTWProblem const* problem, DP::CTWState const*
             }
         }
     }
+
 }
+*/
