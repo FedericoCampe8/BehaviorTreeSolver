@@ -14,41 +14,44 @@ class BitSet
 {
     // Members
     protected:
-    u32 capacity;
+    u32 maxValue;
     u32* storage;
 
     // Functions
     public:
-    __host__ __device__ BitSet(u32 capacity, u32* storage);
-    __host__ __device__ BitSet(u32 capacity, Memory::MallocType mallocType);
+    __host__ __device__ BitSet(u32 maxValue, u32* storage);
+    __host__ __device__ BitSet(u32 maxValue, Memory::MallocType mallocType);
     __host__ __device__ ~BitSet();
     __host__ __device__ inline bool contains(u32 value) const;
+    __host__ __device__ void clear();
     __host__ __device__ inline std::byte* endOfStorage() const;
     __host__ __device__ inline void erase(u32 value);
-    __host__ __device__ inline u32 getCapacity() const;
+    __host__ __device__ inline u32 getMaxValue() const;
     __host__ __device__ u32 getSize() const;
     __host__ __device__ inline void insert(u32 value);
     __host__ __device__ void merge(BitSet const & other);
     __host__ __device__ BitSet& operator=(BitSet const & other);
     __host__ __device__ void print(bool endLine = true) const;
-    __host__ __device__ inline static u32 sizeOfStorage(u32 capacity);
+    __host__ __device__ inline static u32 sizeOfStorage(u32 maxValue);
     __host__ __device__ inline static void swap(BitSet& bs0, BitSet& bs1);
     private:
-    __host__ __device__ inline static u32 chunksCount(u32 capacity);
+    __host__ __device__ inline static u32 chunksCount(u32 maxValue);
     __host__ __device__ inline static u32 chunkIndex(u32 value);
     __host__ __device__ inline static u32 chunkOffset(u32 value);
-    __host__ __device__ static u32* mallocStorage(u32 capacity, Memory::MallocType mallocType);
+    __host__ __device__ static u32* mallocStorage(u32 maxValue, Memory::MallocType mallocType);
 };
 
 __host__ __device__
-BitSet::BitSet(u32 capacity, u32* storage) :
-    capacity(capacity),
+BitSet::BitSet(u32 maxValue, u32* storage) :
+    maxValue(maxValue),
     storage(storage)
-{}
+{
+    clear();
+}
 
 __host__ __device__
-BitSet::BitSet(u32 capacity, Memory::MallocType mallocType) :
-    BitSet(capacity, mallocStorage(capacity, mallocType))
+BitSet::BitSet(u32 maxValue, Memory::MallocType mallocType) :
+    BitSet(maxValue, mallocStorage(maxValue, mallocType))
 {}
 
 __host__ __device__
@@ -60,7 +63,7 @@ BitSet::~BitSet()
 __host__ __device__
 bool BitSet::contains(u32 value) const
 {
-    assert(value < capacity);
+    assert(value <= maxValue);
     u32 const chunkIndex = BitSet::chunkIndex(value);
     u32 const chunkOffset = BitSet::chunkOffset(value);
     u32 const mask = 1u;
@@ -68,16 +71,22 @@ bool BitSet::contains(u32 value) const
 }
 
 __host__ __device__
+void BitSet::clear()
+{
+    memset(storage, 0, sizeOfStorage(maxValue));
+}
+
+__host__ __device__
 std::byte* BitSet::endOfStorage() const
 {
-    u32 const chunksCount = BitSet::chunksCount(capacity);
+    u32 const chunksCount = BitSet::chunksCount(maxValue);
     return reinterpret_cast<std::byte*>(storage + chunksCount);
 }
 
 __host__ __device__
 void BitSet::erase(u32 value)
 {
-    assert(value < capacity);
+    assert(value <= maxValue);
     u32 const chunkIndex = BitSet::chunkIndex(value);
     u32 const chunkOffset = BitSet::chunkOffset(value);
     u32 const mask = ~(1u << chunkOffset);
@@ -85,22 +94,22 @@ void BitSet::erase(u32 value)
 }
 
 __host__ __device__
-u32 BitSet::getCapacity() const
+u32 BitSet::getMaxValue() const
 {
-    return capacity;
+    return maxValue;
 }
 
 __host__ __device__
 u32 BitSet::getSize() const
 {
     u32 size = 0;
-    u32 const chunksCount = BitSet::chunksCount(capacity);
+    u32 const chunksCount = BitSet::chunksCount(maxValue);
     for(u32 chunkIndex = 0; chunkIndex < chunksCount; chunkIndex += 1)
     {
 #ifdef __CUDA_ARCH__
         size += __popc(storage[chunkIndex]);
 #else
-        size += __builtin__popcount(storage[chunkIndex])
+        size += __builtin_popcount(storage[chunkIndex]);
 #endif
     }
     return size;
@@ -109,7 +118,7 @@ u32 BitSet::getSize() const
 __host__ __device__
 void BitSet::insert(u32 value)
 {
-    assert(value < capacity);
+    assert(value <= maxValue);
     u32 const chunkIndex = BitSet::chunkIndex(value);
     u32 const chunkOffset = BitSet::chunkOffset(value);
     u32 const mask = 1u << chunkOffset;
@@ -119,8 +128,8 @@ void BitSet::insert(u32 value)
 __host__ __device__
 void BitSet::merge(BitSet const & other)
 {
-    assert(chunksCount(capacity) == other.chunksCount(other.capacity));
-    u32 const chunksCount = BitSet::chunksCount(capacity);
+    assert(maxValue == other.maxValue);
+    u32 const chunksCount = BitSet::chunksCount(maxValue);
     for(u32 chunkIndex = 0; chunkIndex < chunksCount; chunkIndex += 1)
     {
         storage[chunkIndex] |= other.storage[chunkIndex];
@@ -130,45 +139,49 @@ void BitSet::merge(BitSet const & other)
 __host__ __device__
 BitSet& BitSet::operator=(BitSet const & other)
 {
-    assert(chunksCount(capacity) == other.chunksCount(other.capacity));
-    memcpy(storage, other.storage, sizeOfStorage(other.capacity));
+    assert(maxValue == other.maxValue);
+    memcpy(storage, other.storage, sizeOfStorage(other.maxValue));
     return *this;
 }
 
 __host__ __device__
 void BitSet::print(bool endLine) const
 {
-    printf("[");
-    if (capacity > 0)
+    auto printValue = [&](u32 value) -> void
     {
-        u32 value = 0;
         printf(contains(value) ? "1" : "0");
-        for (value += 1; value < capacity; value += 1)
+    };
+
+    printf("[");
+    if(maxValue > 0)
+    {
+        printValue(0);
+        for (u32 value = 1; value <= maxValue; value += 1)
         {
             printf(",");
-            printf(contains(value) ? "1" : "0");
+            printValue(value);
         }
     }
     printf(endLine ? "]\n" : "]");
 }
 
 __host__ __device__
-u32 BitSet::sizeOfStorage(u32 capacity)
+u32 BitSet::sizeOfStorage(u32 maxValue)
 {
-    return sizeof(u32) * BitSet::chunksCount(capacity);
+    return sizeof(u32) * BitSet::chunksCount(maxValue);
 }
 
 __host__ __device__
 void BitSet::swap(BitSet& bs0, BitSet& bs1)
 {
-    thrust::swap(bs0.capacity, bs1.capacity);
+    thrust::swap(bs0.maxValue, bs1.maxValue);
     thrust::swap(bs0.storage, bs1.storage);
 }
 
 __host__ __device__
-u32 BitSet::chunksCount(u32 capacity)
+u32 BitSet::chunksCount(u32 maxValue)
 {
-    return (capacity + 31) / 32;
+    return chunkIndex(maxValue) + 1;
 }
 
 __host__ __device__
@@ -180,12 +193,12 @@ u32 BitSet::chunkIndex(u32 value)
 __host__ __device__
 u32 BitSet::chunkOffset(u32 value)
 {
-    return value % 32;
+    return 31 - (value % 32);
 }
 
 __host__ __device__
-u32* BitSet::mallocStorage(u32 capacity, Memory::MallocType mallocType)
+u32* BitSet::mallocStorage(u32 maxValue, Memory::MallocType mallocType)
 {
-    u32 const storageSize = sizeOfStorage(capacity);
+    u32 const storageSize = sizeOfStorage(maxValue);
     return reinterpret_cast<u32*>(Memory::safeMalloc(storageSize, mallocType));
 }

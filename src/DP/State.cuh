@@ -24,6 +24,8 @@ namespace DP
         __host__ __device__ static std::byte* mallocStorages(OP::Problem const*  problem, unsigned int statesCount, Memory::MallocType mallocType);
         __host__ __device__ State& operator=(State const & other);
         __host__ __device__ void makeInvalid();
+        __host__ __device__ void print(bool endLine = true) const;
+        __host__ __device__ void selectValue(OP::ValueType value);
         __host__ __device__ static unsigned int sizeOfStorage(OP::Problem const* problem);
         __host__ __device__ static void swap(State& s0, State& s1);
 
@@ -33,8 +35,8 @@ namespace DP
 __host__ __device__
 DP::State::State(OP::Problem const* problem, std::byte* storage) :
     cost(0),
-    selectedValuesMap(problem->variables.getCapacity(), reinterpret_cast<u32*>(storage)),
-    admissibleValuesMap(problem->variables.getCapacity(), Memory::align<u32>(selectedValuesMap.endOfStorage())),
+    selectedValuesMap(problem->maxValue, reinterpret_cast<u32*>(storage)),
+    admissibleValuesMap(problem->maxValue, Memory::align<u32>(selectedValuesMap.endOfStorage())),
     selectedValues(problem->variables.getCapacity(), Memory::align<OP::ValueType>(admissibleValuesMap.endOfStorage()))
 {}
 
@@ -66,11 +68,31 @@ void DP::State::makeInvalid()
 }
 
 __host__ __device__
+void DP::State::print(bool endLine) const
+{
+    printf("Values: ");
+    selectedValues.print(false);
+    printf(" | Values map: ");
+    selectedValuesMap.print(false);
+    printf(" | Admissibles map: ");
+    admissibleValuesMap.print(endLine);
+}
+
+__host__ __device__
+void DP::State::selectValue(OP::ValueType value)
+{
+    selectedValues.pushBack(&value);
+    selectedValuesMap.insert(value);
+}
+
+
+
+__host__ __device__
 unsigned int DP::State::sizeOfStorage(OP::Problem const * problem)
 {
     return
-        BitSet::sizeOfStorage(problem->variables.getCapacity()) + // selectedValuesMap
-        BitSet::sizeOfStorage(problem->variables.getCapacity()) + // admissibleValuesMap
+        BitSet::sizeOfStorage(problem->maxValue) + // selectedValuesMap
+        BitSet::sizeOfStorage(problem->maxValue) + // admissibleValuesMap
         Vector<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity());  // selectedValues
 }
 

@@ -9,6 +9,8 @@
 #include "../DP/Context.h"
 #include "Problem.cuh"
 
+
+/*
 namespace OP
 {
     class CTWProblem : public Problem
@@ -144,3 +146,4 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
 
     return problem;
 }
+ */

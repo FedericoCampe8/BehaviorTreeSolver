@@ -38,8 +38,8 @@ template<typename T>
 __host__ __device__
 Vector<T>& Vector<T>::operator=(Vector<T> const & other)
 {
-    resize(other.getSize());
-    memcpy(this->storage, other.storage, sizeOfStorage(other.size));
+    this->resize(other.size);
+    memcpy(this->storage, other.storage, Vector<T>::sizeOfStorage(other.size));
     return *this;
 }
 
@@ -47,6 +47,6 @@ template<typename T>
 __host__ __device__
 T* Vector<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
 {
-    unsigned int const storageSize = LightArray<T>::sizeOfStorage(capacity);
+    unsigned int const storageSize = Vector<T>::sizeOfStorage(capacity);
     return reinterpret_cast<T*>(Memory::safeMalloc(storageSize, mallocType));
 }

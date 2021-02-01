@@ -7,6 +7,7 @@
 #include <thrust/copy.h>
 #include <thrust/swap.h>
 #include <Utils/Memory.cuh>
+#include <Utils/TypeAlias.h>
 
 template<typename T>
 class LightArray
@@ -14,7 +15,7 @@ class LightArray
     // Members
     protected:
     unsigned int capacity;
-    T * storage;
+    T* storage;
 
     // Functions
     public:

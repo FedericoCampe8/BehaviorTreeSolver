@@ -21,7 +21,9 @@ namespace OP
 OP::Variable::Variable(ValueType minValue, ValueType maxValue) :
     minValue(minValue),
     maxValue(maxValue)
-{}
+{
+    assert(maxValue < MaxValue);
+}
 
 __host__ __device__
 bool OP::Variable::boundsCheck(OP::ValueType value)

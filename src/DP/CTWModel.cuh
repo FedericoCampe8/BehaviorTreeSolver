@@ -63,7 +63,7 @@ void DP::makeRoot(OP::CTWProblem const * problem, CTWState* root)
     {
         *root->blockingConstraintsCount[problem->atomicConstraints[atomicConstraintIdx]->second] += 1;
     }
-    for(OP::ValueType value = 0; value < root->blockingConstraintsCount.getCapacity(); value += 1)
+    for(OP::ValueType value = 0; value < root->blockingConstraintsCount.getMaxValue(); value += 1)
     {
         if(*root->blockingConstraintsCount[value] == 0)
         {

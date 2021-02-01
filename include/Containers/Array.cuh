@@ -38,8 +38,8 @@ template<typename T>
 __host__ __device__
 Array<T>& Array<T>::operator=(Array<T> const & other)
 {
-    assert(this->capacity == other.getCapacity());
-    memcpy(this->storage, other.storage, sizeOfStorage(other.capacity));
+    assert(this->capacity == other.capacity);
+    memcpy(this->storage, other.storage, Array<T>::sizeOfStorage(other.capacity));
     return *this;
 }
 
@@ -47,6 +47,6 @@ template<typename T>
 __host__ __device__
 T* Array<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
 {
-    unsigned int const storageSize = LightArray<T>::sizeOfStorage(capacity);
+    unsigned int const storageSize = Array<T>::sizeOfStorage(capacity);
     return reinterpret_cast<T*>(Memory::safeMalloc(storageSize, mallocType));
 }

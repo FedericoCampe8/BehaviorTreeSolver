@@ -18,7 +18,7 @@ DP::CostType DP::calcCost(OP::VRProblem const * problem, VRPState const * curren
 {
     if(not currentState->selectedValues.isEmpty())
     {
-        OP::ValueType const from = * currentState->selectedValues.back();
+        OP::ValueType const from = *currentState->selectedValues.back();
         OP::ValueType const to = value;
         return currentState->cost + problem->getDistance(from, to);
     }
@@ -42,7 +42,7 @@ void DP::ifPickupAddDelivery(OP::ValueType value, VRPState* state)
 void DP::makeRoot(OP::VRProblem const* problem, VRPState* root)
 {
     root->cost = 0;
-    for (OP::ValueType value = 0; value < problem->variables.getCapacity(); value +=2)
+    for (OP::ValueType value = 0; value <= problem->maxValue; value += 2)
     {
         root->admissibleValuesMap.insert(value);
     }
@@ -54,7 +54,7 @@ void DP::makeState(OP::VRProblem const * problem, VRPState const * currentState,
     *nextState = *currentState;
     nextState->cost = cost;
     nextState->admissibleValuesMap.erase(value);
-    nextState->selectedValues.pushBack(&value);
+    nextState->selectValue(value);
     ifPickupAddDelivery(value, nextState);
 }
 

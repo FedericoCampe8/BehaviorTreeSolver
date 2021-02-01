@@ -35,7 +35,7 @@ class OffloadBuffer
 };
 
 template<typename ProblemType, typename StateType>
-OffloadBuffer<ProblemType, StateType>::OffloadBuffer(ProblemType const* problem, unsigned int width, unsigned int capacity, Memory::MallocType mallocType) :
+OffloadBuffer<ProblemType, StateType>::OffloadBuffer(ProblemType const * problem, unsigned int width, unsigned int capacity, Memory::MallocType mallocType) :
     size(0),
     augmentedStates(capacity, mallocType),
     statesBuffer(capacity, mallocType),
@@ -68,6 +68,7 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index, bool onlyRestricted)
 {
+
     if (not onlyRestricted)
     {
         setTop(index);
@@ -153,7 +154,7 @@ void OffloadBuffer<ProblemType, StateType>::setLowerbound(unsigned int index) co
     if (threadIdx.x == 0)
 #endif
     {
-        augmentedStates[index]->lowerbound = mdds[index]->bottom.cost;
+        augmentedStates[index]->lowerbound = 0;// mdds[index]->bottom.cost;
     }
 }
 

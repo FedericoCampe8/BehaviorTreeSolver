@@ -242,7 +242,7 @@ void configGPU()
     cudaDeviceSetLimit(cudaLimitStackSize, sizeStackThread);
 
     //Cache
-    cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+    cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 }
 
 template<typename ProblemType, typename StateType>
