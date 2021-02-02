@@ -79,10 +79,11 @@ void DP::State::print(bool endLine) const
 {
     printf("Values: ");
     selectedValues.print(false);
-    printf(" | Values map: ");
-    selectedValuesMap.print(false);
-    printf(" | Admissibles map: ");
-    admissibleValuesMap.print(endLine);
+    printf(" | Cost: %d", cost);
+    //printf(" | Values map: ", cost);
+    //selectedValuesMap.print(false);
+    //printf(" | Admissibles map: ");
+    //admissibleValuesMap.print(endLine);
 }
 
 __host__ __device__
@@ -98,7 +99,8 @@ u32 DP::State::sizeOfStorage(OP::Problem const * problem)
     return
         BitSet::sizeOfStorage(problem->maxValue) + // selectedValuesMap
         BitSet::sizeOfStorage(problem->maxValue) + // admissibleValuesMap
-        Vector<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()); // selectedValues
+        Vector<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // selectedValues
+        Memory::DefaultAlignmentPadding; // alignment padding
 }
 
 __host__ __device__

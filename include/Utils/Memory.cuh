@@ -8,10 +8,10 @@
 namespace Memory
 {
     enum MallocType {Managed, Std};
-    u32 const DefaultAlignment = 8;
+    u32 const DefaultAlignmentPadding = 8;
     template<typename T>
     __host__ __device__ inline T* align(std::byte const * ptr);
-    __host__ __device__ inline std::byte* align(std::byte const * ptr, u32 alignment = DefaultAlignment);
+    __host__ __device__ inline std::byte* align(std::byte const * ptr, u32 alignment = DefaultAlignmentPadding);
     __host__ __device__ std::byte* safeMalloc(unsigned int size, MallocType type);
     __host__ __device__ std::byte* safeStdMalloc(unsigned int size);
     std::byte* safeManagedMalloc(unsigned int size);

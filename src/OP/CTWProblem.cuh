@@ -28,52 +28,52 @@ namespace OP
 
         // Functions
         public:
-        CTWProblem(unsigned int variablesCount, Memory::MallocType mallocType);
+        CTWProblem(u32 b, u32 k, Memory::MallocType mallocType);
     };
 
     template<>
     OP::CTWProblem* parseInstance<CTWProblem>(char const * problemFilename, Memory::MallocType mallocType);
 }
 
-OP::CTWProblem::CTWProblem(unsigned int variablesCount, Memory::MallocType mallocType) :
-    Problem(variablesCount, mallocType),
-    b(variablesCount / 2),
-    k(variablesCount),
+OP::CTWProblem::CTWProblem(u32 b, u32 k, Memory::MallocType mallocType) :
+    Problem(k + 1, mallocType),
+    b(b),
+    k(k),
     atomicConstraints(k * k, mallocType),
     disjunctiveConstraints1(k * k * k, mallocType),
     disjunctiveConstraints2(k * k * k, mallocType),
     softAtomicConstraints(k * k, mallocType),
-    atomicConstraintsMap(k, mallocType),
-    disjunctiveConstraints1Map(k, mallocType),
-    disjunctiveConstraints2Map(k, mallocType),
-    softAtomicConstraintsMap(k, mallocType)
+    atomicConstraintsMap((k + 1) , mallocType),
+    disjunctiveConstraints1Map((k + 1), mallocType),
+    disjunctiveConstraints2Map((k + 1), mallocType),
+    softAtomicConstraintsMap((k + 1), mallocType)
 {
-    u32 storagesSize = sizeof(u16) * k * atomicConstraints.getCapacity();
+    u32 storagesSize = sizeof(u16) * k * atomicConstraintsMap.getCapacity();
     u16* storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < atomicConstraintsMap.getCapacity(); index += 1)
+    for (u32 index = 0; index < atomicConstraintsMap.getCapacity(); index += 1)
     {
         new (atomicConstraintsMap[index]) LightVector<u16>(k, storages);
         storages = reinterpret_cast<u16*>(atomicConstraintsMap[index]->endOfStorage());
     }
 
-    storagesSize = sizeof(u16) * k * k * disjunctiveConstraints1.getCapacity();
+    storagesSize = sizeof(u16) * k * k * disjunctiveConstraints1Map.getCapacity();
     storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < disjunctiveConstraints1Map.getCapacity(); index += 1)
+    for (u32 index = 0; index < disjunctiveConstraints1Map.getCapacity(); index += 1)
     {
         new (disjunctiveConstraints1Map[index]) LightVector<u16>(k * k, storages);
         storages = reinterpret_cast<u16*>(disjunctiveConstraints1Map[index]->endOfStorage());
     }
 
     storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < disjunctiveConstraints2Map.getCapacity(); index += 1)
+    for (u32 index = 0; index < disjunctiveConstraints2Map.getCapacity(); index += 1)
     {
         new (disjunctiveConstraints2Map[index]) LightVector<u16>(k * k, storages);
         storages = reinterpret_cast<u16*>(disjunctiveConstraints2Map[index]->endOfStorage());
     }
 
-    storagesSize = sizeof(u16) * k * softAtomicConstraints.getCapacity();
+    storagesSize = sizeof(u16) * k * softAtomicConstraintsMap.getCapacity();
     storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < softAtomicConstraints.getCapacity(); index += 1)
+    for (u32 index = 0; index < softAtomicConstraintsMap.getCapacity(); index += 1)
     {
         new (softAtomicConstraintsMap[index]) LightVector<u16>(k, storages);
         storages = reinterpret_cast<u16*>(softAtomicConstraintsMap[index]->endOfStorage());
@@ -88,18 +88,30 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
     problemFile >> problemJson;
 
     // Init problem
-    unsigned int const problemSize = sizeof(OP::CTWProblem);
+    u32 const problemSize = sizeof(OP::CTWProblem);
     OP::CTWProblem* const problem = reinterpret_cast<OP::CTWProblem*>(Memory::safeMalloc(problemSize, mallocType));
-    unsigned int const variablesCount = problemJson["k"];
-    new (problem) OP::CTWProblem(variablesCount, mallocType);
+    u32 const b = problemJson["b"];
+    u32 const k = problemJson["k"];
+    new (problem) OP::CTWProblem(b, k, mallocType);
 
     // Init variables
-    ValueType const maxValue = static_cast<ValueType>(variablesCount - 1);
-    Variable variable(0,maxValue);
-    for (u32 variableIdx = 1; variableIdx < variablesCount; variableIdx += 1)
+    Variable variable(0,0);
+    problem->add(&variable);
+    variable.minValue = 1;
+    variable.maxValue = k;
+    for (u32 variableIdx = 1; variableIdx <= k; variableIdx += 1)
     {
         problem->add(&variable);
     }
+
+    /*
+    u32 optA031[19] = {0, 3, 12, 18, 17, 13, 4, 5, 14, 6, 8, 9, 7, 10, 1, 2, 11, 15, 16};
+    for(i32 i = 0; i < 19; i += 1)
+    {
+        problem->variables[i]->minValue = optA031[i];
+        problem->variables[i]->maxValue = optA031[i];
+    }
+     */
 
     // Atomic constraints
     for (u16 atomicConstraintIdx = 0; atomicConstraintIdx < problemJson["AtomicConstraints"].size(); atomicConstraintIdx += 1)

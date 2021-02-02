@@ -15,8 +15,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = VRProblem;
-using StateType = VRPState;
+using ProblemType = CTWProblem;
+using StateType = CTWState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);

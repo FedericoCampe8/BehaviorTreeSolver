@@ -8,11 +8,12 @@ import benchmarksCommon
 ### Main ###
 binPath = "../../cmake-build-remote-release/mdd-gpu"
 queueMaxSize = 50000
-cpuMaxWidth = 2500
+cpuMaxWidth = 100
 cpuMaxParallelism = 12
 gpuMaxWidth = 3
 gpuMaxParallelism = 1000
-lnsFixPercentage = 75;
+lnsEqPercentage = 25;
+lnsNeqPercentage = 15;
 randomSeed = 0
 
 outFileName = "VrpBenchmarksMDD-"+ str(int(time.time())) + ".csv"
@@ -22,15 +23,15 @@ for grubHubInstance in benchmarksCommon.grubHubInstances:
     for timeout in benchmarksCommon.timeouts:
         cmd = \
             [binPath] + \
-            [grubHubInstance] + \
-            [str(queueMaxSize)] + \
-            [str(timeout)] + \
-            [str(cpuMaxWidth)] + \
-            [str(cpuMaxParallelism)] + \
-            [str(gpuMaxWidth)] + \
-            [str(gpuMaxParallelism)] + \
-            [str(lnsFixPercentage)] + \
-            [str(randomSeed)]
+            ["-q"] + [str(queueMaxSize)] + \
+            ["-t"] + [str(timeout)] + \
+            ["--wc"] + [str(cpuMaxWidth)] + \
+            ["--pc"] + [str(cpuMaxParallelism)] + \
+            ["--wg"] + [str(gpuMaxWidth)] + \
+            ["--pg"] + [str(gpuMaxParallelism)] + \
+            ["--eq"] + [str(lnsEqPercentage)] + \
+            ["--neq"] + [str(lnsNeqPercentage)] + \
+            [grubHubInstance]
 
         print("Running " + str(cmd) + " -> ", end = "")
         sys.stdout.flush()

@@ -12,8 +12,8 @@ def parseMddCsv(mddCvsName, grubHubInstance, timeouts):
     with open(mddCvsName, "r") as mddCsv:
         csvReader = csv.reader(mddCsv)
         for row in csvReader:
-            if row[1].strip() == grubHubInstance:
-                results[row[3].strip()] = row[0].strip()
+            if row[19].strip() == grubHubInstance:
+                results[row[4].strip()] = row[0].strip()
     flatResults = []
     for timeout in timeouts:
         flatResults.append(int(results[str(timeout)]))

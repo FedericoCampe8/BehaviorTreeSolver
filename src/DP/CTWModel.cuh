@@ -12,9 +12,9 @@ namespace DP
     __host__ __device__ inline void calcAdmissibleValues(CTWState* state);
     __host__ __device__ inline DP::CostType calcCost(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value);
     __host__ __device__ inline OP::ValueType calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value);
+    __host__ __device__ inline bool closeInterruptedPair(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
     void makeRoot(OP::CTWProblem const * problem, CTWState* root);
-    __host__ __device__ inline bool pairClosed(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
-    __host__ __device__ inline bool pairInterrupted(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
+    __host__ __device__ inline bool interruptPair(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
     __host__ __device__ inline void makeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, DP::CostType cost, CTWState* nextState);
     __host__ __device__ inline void mergeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, CTWState* nextState);
     __host__ __device__ inline void updateBlockingByAtomics(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
@@ -32,7 +32,7 @@ void DP::calcAdmissibleValues(DP::CTWState* state)
     state->admissibleValuesMap.clear();
     for (OP::ValueType value = 0; value < state->blockingConstraintsCount.getCapacity(); value += 1)
     {
-        if(*state->blockingConstraintsCount[value] <= 0)
+        if((not state->selectedValuesMap.contains(value)) and *state->blockingConstraintsCount[value] <= 0)
         {
             state->admissibleValuesMap.insert(value);
         }
@@ -55,7 +55,9 @@ DP::CostType DP::calcCost(OP::CTWProblem const * problem, CTWState const * curre
         l = updatedL(problem,currentState,value);
         n = updatedN(problem,currentState,value);
     }
-    return (k * k * k * s) + (k * k * m) + (k * l) + n;
+
+    u32 const cost = (k * k * k * s) + (k * k * m) + (k * l) + n;
+    return cost;
 }
 
 void DP::makeRoot(OP::CTWProblem const * problem, CTWState* root)
@@ -73,20 +75,18 @@ void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState
 {
     *nextState = *currentState;
     nextState->cost = cost;
-    nextState->selectValue(value);
 
     nextState->s = updatedS(problem,nextState,value);
     nextState->m = updatedM(problem,nextState,value);
     nextState->l = updatedL(problem,nextState,value);
     nextState->n = updatedN(problem,nextState,value);
 
-    if(pairInterrupted(problem,nextState,value))
+    if(interruptPair(problem, nextState, value))
     {
         Pair<OP::ValueType> const openPair(*nextState->selectedValues.back(), static_cast<OP::ValueType>(nextState->selectedValues.getSize() - 1));
         nextState->openPairs.pushBack(&openPair);
     }
-
-    if(pairClosed(problem,nextState,value))
+    if(closeInterruptedPair(problem, nextState, value))
     {
         OP::ValueType const otherEnd = calcOtherEnd(problem,value);
         Pair<OP::ValueType> const * const openPairsEnd = thrust::remove_if(thrust::seq, nextState->openPairs.begin(), nextState->openPairs.end(), [=] __host__ __device__ (Pair<OP::ValueType> const & openPair) -> bool
@@ -99,6 +99,7 @@ void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState
     updateBlockingByAtomics(problem, nextState, value);
     updateBlockingByDisjunctive1(problem, nextState, value);
     updateBlockingByDisjunctive2(problem, nextState, value);
+    nextState->selectValue(value);
 
     calcAdmissibleValues(nextState);
 }
@@ -124,24 +125,39 @@ void DP::mergeState(OP::CTWProblem const * problem, CTWState const * currentStat
 __host__ __device__
 OP::ValueType DP::calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value)
 {
-    return value < problem->b ? value + problem->b : value - problem->b;
+    if(value != 0)
+    {
+        return value <= problem->b ? value + problem->b : value - problem->b;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
-
 __host__ __device__
-bool DP::pairClosed(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType const value)
-{
-    OP::ValueType const otherEnd = calcOtherEnd(problem, value);
-    return state->selectedValuesMap.contains(otherEnd);
-}
-
-__host__ __device__
-bool DP::pairInterrupted(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType const value)
+bool DP::closeInterruptedPair(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType const value)
 {
     if(not state->selectedValues.isEmpty())
     {
         OP::ValueType const otherEnd = calcOtherEnd(problem, value);
-        return * state->selectedValues.back() == otherEnd;
+        return *state->selectedValues.back() != otherEnd and state->selectedValuesMap.contains(otherEnd);
+    }
+    else
+    {
+        return false;
+    }
+}
+
+__host__ __device__
+bool DP::interruptPair(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType const value)
+{
+    if(not state->selectedValues.isEmpty())
+    {
+        OP::ValueType const lastSelectedValue = *state->selectedValues.back();
+        OP::ValueType const lastSelectedValueOtherEnd = calcOtherEnd(problem, lastSelectedValue);
+        OP::ValueType const otherEnd = calcOtherEnd(problem, value);
+        return lastSelectedValue != otherEnd and (not state->selectedValuesMap.contains(lastSelectedValueOtherEnd));
     }
     else
     {
@@ -228,7 +244,7 @@ __host__ __device__
 u8 DP::updatedS(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
 {
     u8 s = state->s;
-    if(pairInterrupted(problem, state, value))
+    if(interruptPair(problem, state, value))
     {
         s += 1;
     }
@@ -238,11 +254,7 @@ u8 DP::updatedS(OP::CTWProblem const* problem, DP::CTWState const* state, OP::Va
 __host__ __device__
 u8 DP::updatedM(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType value)
 {
-    u8 m = state->m;
-    if(pairInterrupted(problem, state, value))
-    {
-        m = static_cast<u8>(max(m, state->openPairs.getSize() + 1));
-    }
+    u8 m = static_cast<u8>(max(state->m, state->openPairs.getSize()));
     return m;
 }
 

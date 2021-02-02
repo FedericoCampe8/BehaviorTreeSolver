@@ -52,13 +52,14 @@ OP::VRProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTyp
     // Init variables
     Variable variable(0,0);
     problem->add(&variable);
-    ValueType const maxValue = static_cast<ValueType>(variablesCount - 1);
+    variable.minValue = 2;
+    variable.maxValue = static_cast<ValueType>(variablesCount - 1);
     for (u32 variableIdx = 1; variableIdx < variablesCount - 1; variableIdx += 1)
     {
-        new (&variable) Variable(2, maxValue);
-        problem->add(& variable);
+        problem->add(&variable);
     }
-    new (&variable) Variable(1,1);
+    variable.minValue = 1;
+    variable.maxValue = 1;
     problem->add(&variable);
 
     // Init distances

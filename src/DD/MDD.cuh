@@ -126,7 +126,7 @@ u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory() const
         sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) +  // currentStates
         sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) +  // nextStates
         sizeof(LightVector<AuxiliaryData>) + LightVector<AuxiliaryData>::sizeOfStorage(width * problem->maxBranchingFactor) + // auxiliaryData
-        Memory::DefaultAlignment * 7; // alignment padding
+        Memory::DefaultAlignmentPadding * 7; // alignment padding
 }
 
 template<typename ProblemType, typename StateType>
@@ -172,7 +172,7 @@ void DD::MDD<ProblemType, StateType>::calcNextStates(unsigned int variableIdx)
     for (u32 nextStateIdx = 0; nextStateIdx < nextStates->getSize(); nextStateIdx += 1)
 #endif
     {
-        AuxiliaryData ad = *auxiliaryData->at(nextStateIdx);
+        AuxiliaryData const ad = *auxiliaryData->at(nextStateIdx);
         u32 const currentStateIdx = ad.index / problem->maxBranchingFactor;
         OP::ValueType const value = ad.index % problem->maxBranchingFactor;
         makeState(problem, currentStates->at(currentStateIdx), value, auxiliaryData->at(nextStateIdx)->cost, nextStates->at(nextStateIdx));
