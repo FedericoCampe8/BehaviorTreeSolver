@@ -24,7 +24,7 @@ Array<T>::Array(unsigned int capacity, T* storage):
 template<typename T>
 __host__ __device__
 Array<T>::Array(unsigned int capacity, Memory::MallocType mallocType) :
-    LightArray<T>(capacity, reinterpret_cast<T*>(mallocStorage(capacity, mallocType)))
+    Array<T>(capacity, reinterpret_cast<T*>(mallocStorage(capacity, mallocType)))
 {}
 
 template<typename T>
@@ -39,7 +39,7 @@ __host__ __device__
 Array<T>& Array<T>::operator=(Array<T> const & other)
 {
     assert(this->capacity == other.capacity);
-    memcpy(this->storage, other.storage, Array<T>::sizeOfStorage(other.capacity));
+    thrust::copy(thrust::seq, other.begin(), other.end(), this->begin());
     return *this;
 }
 

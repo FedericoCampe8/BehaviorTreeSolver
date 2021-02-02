@@ -148,7 +148,7 @@ __host__ __device__
 void LightVector<T>::pushBack(T const* t)
 {
     resize(size + 1);
-    * back() = * t;
+    *back() = * t;
 }
 
 template<typename T>

@@ -24,7 +24,7 @@ Vector<T>::Vector(unsigned int capacity, T* storage) :
 template<typename T>
 __host__ __device__
 Vector<T>::Vector(unsigned int capacity, Memory::MallocType mallocType) :
-    LightVector<T>(capacity, mallocStorage(capacity, mallocType))
+    Vector<T>(capacity, mallocStorage(capacity, mallocType))
 {}
 
 template<typename T>
@@ -39,7 +39,7 @@ __host__ __device__
 Vector<T>& Vector<T>::operator=(Vector<T> const & other)
 {
     this->resize(other.size);
-    memcpy(this->storage, other.storage, Vector<T>::sizeOfStorage(other.size));
+    thrust::copy(thrust::seq, other.begin(), other.end(), this->begin());
     return *this;
 }
 

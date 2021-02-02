@@ -35,9 +35,11 @@ class BitSet
     __host__ __device__ inline static u32 sizeOfStorage(u32 maxValue);
     __host__ __device__ inline static void swap(BitSet& bs0, BitSet& bs1);
     private:
+    __host__ __device__ inline u32* begin() const;
     __host__ __device__ inline static u32 chunksCount(u32 maxValue);
     __host__ __device__ inline static u32 chunkIndex(u32 value);
     __host__ __device__ inline static u32 chunkOffset(u32 value);
+    __host__ __device__ inline u32* end() const;
     __host__ __device__ static u32* mallocStorage(u32 maxValue, Memory::MallocType mallocType);
 };
 
@@ -73,7 +75,7 @@ bool BitSet::contains(u32 value) const
 __host__ __device__
 void BitSet::clear()
 {
-    memset(storage, 0, sizeOfStorage(maxValue));
+    thrust::fill(thrust::seq, begin(), end(), 0);
 }
 
 __host__ __device__
@@ -140,7 +142,7 @@ __host__ __device__
 BitSet& BitSet::operator=(BitSet const & other)
 {
     assert(maxValue == other.maxValue);
-    memcpy(storage, other.storage, sizeOfStorage(other.maxValue));
+    thrust::copy(thrust::seq, other.begin(), other.end(), this->begin());
     return *this;
 }
 
@@ -179,6 +181,12 @@ void BitSet::swap(BitSet& bs0, BitSet& bs1)
 }
 
 __host__ __device__
+u32* BitSet::begin() const
+{
+    return storage;
+}
+
+__host__ __device__
 u32 BitSet::chunksCount(u32 maxValue)
 {
     return chunkIndex(maxValue) + 1;
@@ -194,6 +202,12 @@ __host__ __device__
 u32 BitSet::chunkOffset(u32 value)
 {
     return 31 - (value % 32);
+}
+
+__host__ __device__
+u32* BitSet::end() const
+{
+    return storage + BitSet::chunksCount(maxValue);
 }
 
 __host__ __device__

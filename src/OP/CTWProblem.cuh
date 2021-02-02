@@ -9,8 +9,6 @@
 #include "../DP/Context.h"
 #include "Problem.cuh"
 
-
-/*
 namespace OP
 {
     class CTWProblem : public Problem
@@ -23,10 +21,10 @@ namespace OP
         Vector<Triple<ValueType>> disjunctiveConstraints1;
         Vector<Triple<ValueType>> disjunctiveConstraints2;
         Vector<Pair<ValueType>> softAtomicConstraints;
-        Array<LightVector<unsigned int>> atomicConstraintsMap;
-        Array<LightVector<unsigned int>> disjunctiveConstraints1Map;
-        Array<LightVector<unsigned int>> disjunctiveConstraints2Map;
-        Array<LightVector<unsigned int>> softAtomicConstraintsMap;
+        Array<LightVector<u16>> atomicConstraintsMap;
+        Array<LightVector<u16>> disjunctiveConstraints1Map;
+        Array<LightVector<u16>> disjunctiveConstraints2Map;
+        Array<LightVector<u16>> softAtomicConstraintsMap;
 
         // Functions
         public:
@@ -50,31 +48,35 @@ OP::CTWProblem::CTWProblem(unsigned int variablesCount, Memory::MallocType mallo
     disjunctiveConstraints2Map(k, mallocType),
     softAtomicConstraintsMap(k, mallocType)
 {
-    unsigned int storagesSize = sizeof(unsigned int) * k * k;
-    unsigned int* storages = reinterpret_cast<unsigned int*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < k; index += 1)
+    u32 storagesSize = sizeof(u16) * k * atomicConstraints.getCapacity();
+    u16* storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
+    for (unsigned int index = 0; index < atomicConstraintsMap.getCapacity(); index += 1)
     {
-        new (atomicConstraintsMap[index]) LightVector<unsigned int>(k, &storages[k * index]);
+        new (atomicConstraintsMap[index]) LightVector<u16>(k, storages);
+        storages = reinterpret_cast<u16*>(atomicConstraintsMap[index]->endOfStorage());
     }
 
-    storagesSize = sizeof(unsigned int) * k * k * k;
-    storages = reinterpret_cast<unsigned int*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < k; index += 1)
+    storagesSize = sizeof(u16) * k * k * disjunctiveConstraints1.getCapacity();
+    storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
+    for (unsigned int index = 0; index < disjunctiveConstraints1Map.getCapacity(); index += 1)
     {
-        new (disjunctiveConstraints1Map[index]) LightVector<unsigned int>(k * k, &storages[k * k * index]);
+        new (disjunctiveConstraints1Map[index]) LightVector<u16>(k * k, storages);
+        storages = reinterpret_cast<u16*>(disjunctiveConstraints1Map[index]->endOfStorage());
     }
 
-    storages = reinterpret_cast<unsigned int*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < k; index += 1)
+    storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
+    for (unsigned int index = 0; index < disjunctiveConstraints2Map.getCapacity(); index += 1)
     {
-        new (disjunctiveConstraints2Map[index]) LightVector<unsigned int>(k * k, &storages[k * k * index]);
+        new (disjunctiveConstraints2Map[index]) LightVector<u16>(k * k, storages);
+        storages = reinterpret_cast<u16*>(disjunctiveConstraints2Map[index]->endOfStorage());
     }
 
-    storagesSize = sizeof(unsigned int) * k * k;
-    storages = reinterpret_cast<unsigned int*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (unsigned int index = 0; index < k; index += 1)
+    storagesSize = sizeof(u16) * k * softAtomicConstraints.getCapacity();
+    storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
+    for (unsigned int index = 0; index < softAtomicConstraints.getCapacity(); index += 1)
     {
-        new (softAtomicConstraintsMap[index]) LightVector<unsigned int>(k, &storages[k * index]);
+        new (softAtomicConstraintsMap[index]) LightVector<u16>(k, storages);
+        storages = reinterpret_cast<u16*>(softAtomicConstraintsMap[index]->endOfStorage());
     }
 }
 
@@ -90,10 +92,17 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
     OP::CTWProblem* const problem = reinterpret_cast<OP::CTWProblem*>(Memory::safeMalloc(problemSize, mallocType));
     unsigned int const variablesCount = problemJson["k"];
     new (problem) OP::CTWProblem(variablesCount, mallocType);
-    problem->maxBranchingFactor = variablesCount;
+
+    // Init variables
+    ValueType const maxValue = static_cast<ValueType>(variablesCount - 1);
+    Variable variable(0,maxValue);
+    for (u32 variableIdx = 1; variableIdx < variablesCount; variableIdx += 1)
+    {
+        problem->add(&variable);
+    }
 
     // Atomic constraints
-    for (unsigned int atomicConstraintIdx = 0; atomicConstraintIdx < problemJson["AtomicConstraints"].size(); atomicConstraintIdx += 1)
+    for (u16 atomicConstraintIdx = 0; atomicConstraintIdx < problemJson["AtomicConstraints"].size(); atomicConstraintIdx += 1)
     {
         auto& constraint = problemJson["AtomicConstraints"][atomicConstraintIdx];
         Pair<ValueType> atomicConstraint(constraint[0],constraint[1]);
@@ -104,9 +113,9 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
     }
 
     // Disjunctive constraints
-    unsigned int disjunctiveConstraint1Idx = 0;
-    unsigned int disjunctiveConstraint2Idx = 0;
-    for (unsigned int disjunctiveConstraintIdx = 0; disjunctiveConstraintIdx < problemJson["DisjunctiveConstraints"].size(); disjunctiveConstraintIdx += 1)
+    u16 disjunctiveConstraint1Idx = 0;
+    u16 disjunctiveConstraint2Idx = 0;
+    for (u16 disjunctiveConstraintIdx = 0; disjunctiveConstraintIdx < problemJson["DisjunctiveConstraints"].size(); disjunctiveConstraintIdx += 1)
     {
         auto& constraint = problemJson["DisjunctiveConstraints"][disjunctiveConstraintIdx];
         if(constraint[0] == constraint[2])
@@ -134,7 +143,7 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
     }
 
     // Soft atomic constraints
-    for (unsigned int softAtomicConstraintIdx = 0; softAtomicConstraintIdx < problemJson["SoftAtomicConstraints"].size(); softAtomicConstraintIdx += 1)
+    for (u16 softAtomicConstraintIdx = 0; softAtomicConstraintIdx < problemJson["SoftAtomicConstraints"].size(); softAtomicConstraintIdx += 1)
     {
         auto& constraint = problemJson["SoftAtomicConstraints"][softAtomicConstraintIdx];
         Pair<ValueType> softAtomicConstraint(constraint[0],constraint[1]);
@@ -146,4 +155,3 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
 
     return problem;
 }
- */

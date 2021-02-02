@@ -3,17 +3,16 @@
 #include "State.cuh"
 #include "../OP/CTWProblem.cuh"
 
-/*
+
 namespace DP
 {
     class CTWState : public State
     {
         // Members
         public:
-        unsigned int s,m,n;
-        int oldestOpenPairIdx;
-        unsigned int openPairsCount;
-        Array<unsigned int> blockingConstraintsCount;
+        u8 s,m,l,n;
+        Vector<Pair<OP::ValueType>> openPairs;
+        Array<i8> blockingConstraintsCount;
 
         // Functions
         public:
@@ -29,10 +28,9 @@ namespace DP
 __host__ __device__
 DP::CTWState::CTWState(OP::CTWProblem const * problem, std::byte* storage) :
     State(problem, storage),
-    s(0),m(0),n(0),
-    oldestOpenPairIdx(-1),
-    openPairsCount(0),
-    blockingConstraintsCount(problem->k, Memory::align<std::byte, unsigned int>(this->admissibleValues.endOfStorage()))
+    s(0), m(0), l(0), n(0),
+    openPairs(problem->b, Memory::align<Pair<OP::ValueType>>(this->State::endOfStorage())),
+    blockingConstraintsCount(problem->k, Memory::align<i8>(openPairs.endOfStorage()))
 {}
 
 __host__ __device__
@@ -52,9 +50,9 @@ DP::CTWState& DP::CTWState::operator=(DP::CTWState const & other)
     State::operator=(other);
     s = other.s;
     m = other.m;
+    l = other.l;
     n = other.n;
-    oldestOpenPairIdx = other.oldestOpenPairIdx;
-    openPairsCount = other.openPairsCount;
+    openPairs = other.openPairs;
     blockingConstraintsCount = other.blockingConstraintsCount;
     return *this;
 }
@@ -64,8 +62,8 @@ unsigned int DP::CTWState::sizeOfStorage(OP::CTWProblem const * problem)
 {
     return
         State::sizeOfStorage(problem) +
-        Vector<unsigned  int>::sizeOfStorage(problem->k) + // blockingConstraintsCount
-        Memory::AlignmentPadding; // alignment
+        Vector<Pair<OP::ValueType>>::sizeOfStorage(problem->b) + // openPairs
+        Array<i8>::sizeOfStorage(problem->k); // blockingConstraintsCount
 }
 
 __host__ __device__
@@ -74,9 +72,8 @@ void DP::CTWState::swap(DP::CTWState& ctws0, DP::CTWState& ctws1)
     State::swap(ctws0, ctws1);
     thrust::swap(ctws0.s, ctws1.s);
     thrust::swap(ctws0.m, ctws1.m);
+    thrust::swap(ctws0.l, ctws1.l);
     thrust::swap(ctws0.n, ctws1.n);
-    thrust::swap(ctws0.oldestOpenPairIdx, ctws1.oldestOpenPairIdx);
-    thrust::swap(ctws0.openPairsCount, ctws1.openPairsCount);
-    Array<unsigned int>::swap(ctws0.blockingConstraintsCount, ctws1.blockingConstraintsCount);
+    Vector<Pair<OP::ValueType>>::swap(ctws0.openPairs, ctws1.openPairs);
+    Array<i8>::swap(ctws0.blockingConstraintsCount, ctws1.blockingConstraintsCount);
 }
-*/

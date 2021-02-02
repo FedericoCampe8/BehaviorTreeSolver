@@ -21,12 +21,13 @@ namespace DP
         public:
         __host__ __device__ State(OP::Problem const * problem, std::byte* storage);
         __host__ __device__ State(OP::Problem const * problem, Memory::MallocType mallocType);
-        __host__ __device__ static std::byte* mallocStorages(OP::Problem const*  problem, unsigned int statesCount, Memory::MallocType mallocType);
+        __host__ __device__ inline std::byte* endOfStorage() const;
+        __host__ __device__ static std::byte* mallocStorages(OP::Problem const*  problem, u32 statesCount, Memory::MallocType mallocType);
         __host__ __device__ State& operator=(State const & other);
-        __host__ __device__ void makeInvalid();
+        __host__ __device__ inline void makeInvalid();
         __host__ __device__ void print(bool endLine = true) const;
-        __host__ __device__ void selectValue(OP::ValueType value);
-        __host__ __device__ static unsigned int sizeOfStorage(OP::Problem const* problem);
+        __host__ __device__ inline void selectValue(OP::ValueType value);
+        __host__ __device__ static u32 sizeOfStorage(OP::Problem const* problem);
         __host__ __device__ static void swap(State& s0, State& s1);
 
     };
@@ -46,7 +47,13 @@ DP::State::State(OP::Problem const* problem, Memory::MallocType mallocType) :
 {}
 
 __host__ __device__
-std::byte* DP::State::mallocStorages(const OP::Problem* problem, unsigned int statesCount, Memory::MallocType mallocType)
+std::byte* DP::State::endOfStorage() const
+{
+    return selectedValues.endOfStorage();
+}
+
+__host__ __device__
+std::byte* DP::State::mallocStorages(const OP::Problem* problem, u32 statesCount, Memory::MallocType mallocType)
 {
     return Memory::safeMalloc(sizeOfStorage(problem) * statesCount, mallocType);
 }
@@ -85,15 +92,13 @@ void DP::State::selectValue(OP::ValueType value)
     selectedValuesMap.insert(value);
 }
 
-
-
 __host__ __device__
-unsigned int DP::State::sizeOfStorage(OP::Problem const * problem)
+u32 DP::State::sizeOfStorage(OP::Problem const * problem)
 {
     return
         BitSet::sizeOfStorage(problem->maxValue) + // selectedValuesMap
         BitSet::sizeOfStorage(problem->maxValue) + // admissibleValuesMap
-        Vector<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity());  // selectedValues
+        Vector<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()); // selectedValues
 }
 
 __host__ __device__

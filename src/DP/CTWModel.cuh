@@ -6,52 +6,54 @@
 #include "../OP/CTWProblem.cuh"
 #include "CTWState.cuh"
 
-/*
+
 namespace DP
 {
+    __host__ __device__ inline void calcAdmissibleValues(CTWState* state);
     __host__ __device__ inline DP::CostType calcCost(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value);
-
-    void makeRoot(OP::CTWProblem const * problem, CTWState* root);
-    __host__ __device__ inline void makeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, DP::CostType cost, CTWState* nextState);
-    //__host__ __device__ inline void mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, VRPState* nextState);
     __host__ __device__ inline OP::ValueType calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value);
-    __host__ __device__ void closePair(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value);
-    __host__ __device__ bool pairClosed(OP::CTWProblem const * problem,CTWState const * currentState, OP::ValueType const value);
-    __host__ __device__ bool pairInterrupted(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value);
-    __host__ __device__ void updateByAtomics(OP::CTWProblem const * problem, CTWState const * nextState, OP::ValueType const value);
-    __host__ __device__ void updateByDisjunctive1(OP::CTWProblem const * problem, CTWState const * nextState, OP::ValueType const value);
+    void makeRoot(OP::CTWProblem const * problem, CTWState* root);
+    __host__ __device__ inline bool pairClosed(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
+    __host__ __device__ inline bool pairInterrupted(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
+    __host__ __device__ inline void makeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, DP::CostType cost, CTWState* nextState);
+    __host__ __device__ inline void mergeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, CTWState* nextState);
+    __host__ __device__ inline void updateBlockingByAtomics(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+    __host__ __device__ inline void updateBlockingByDisjunctive1(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+    __host__ __device__ inline void updateBlockingByDisjunctive2(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+    __host__ __device__ inline u8 updatedS(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+    __host__ __device__ inline u8 updatedM(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+    __host__ __device__ inline u8 updatedL(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+    __host__ __device__ inline u8 updatedN(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+}
+
+__host__ __device__
+void DP::calcAdmissibleValues(DP::CTWState* state)
+{
+    state->admissibleValuesMap.clear();
+    for (OP::ValueType value = 0; value < state->blockingConstraintsCount.getCapacity(); value += 1)
+    {
+        if(*state->blockingConstraintsCount[value] <= 0)
+        {
+            state->admissibleValuesMap.insert(value);
+        }
+    }
 }
 
 __host__ __device__
 DP::CostType DP::calcCost(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value)
 {
-    unsigned int s = currentState->s;
-    unsigned int m = currentState->m;
-    unsigned int l = 0;
-    unsigned int n = currentState->n;
-    unsigned int const k = problem->k;
+    u32 s = 0;
+    u32 m = 0;
+    u32 l = 0;
+    u32 n = 0;
+    u32 const k = problem->k;
 
     if(not currentState->selectedValues.isEmpty())
     {
-        if(pairInterrupted(problem, currentState, value))
-        {
-            s += 1;
-            m = max(m, currentState->openPairsCount + 1);
-        }
-
-        l = currentState->selectedValues.getSize() - currentState->oldestOpenPairIdx;
-        bool closeOldestOpenedPair = calcOtherEnd(problem, value) == *currentState->selectedValues[currentState->oldestOpenPairIdx];
-        l -= closeOldestOpenedPair ? 1 : 0;
-
-        LightVector<unsigned int> const * const softAtomicConstraintsMap = problem->softAtomicConstraintsMap[value];
-        for(unsigned int softAtomicConstraintIdx = 0; softAtomicConstraintIdx < softAtomicConstraintsMap->getSize(); softAtomicConstraintIdx += 1)
-        {
-            Pair<OP::ValueType> const * const softAtomicConstraint = problem->softAtomicConstraints[softAtomicConstraintIdx];
-            bool firstPresent = currentState->isSelected(softAtomicConstraint->first);
-            bool secondPresent = currentState->isSelected(softAtomicConstraint->second);
-            n += softAtomicConstraint->first == value and secondPresent ? 1 : 0;
-            n += softAtomicConstraint->second == value and firstPresent ? 0 : 1;
-        }
+        s = updatedS(problem,currentState,value);
+        m = updatedM(problem,currentState,value);
+        l = updatedL(problem,currentState,value);
+        n = updatedN(problem,currentState,value);
     }
     return (k * k * k * s) + (k * k * m) + (k * l) + n;
 }
@@ -59,60 +61,65 @@ DP::CostType DP::calcCost(OP::CTWProblem const * problem, CTWState const * curre
 void DP::makeRoot(OP::CTWProblem const * problem, CTWState* root)
 {
     thrust::fill(thrust::seq, root->blockingConstraintsCount.begin(), root->blockingConstraintsCount.end(), 0);
-    for(unsigned int atomicConstraintIdx = 0; atomicConstraintIdx < problem->atomicConstraints.getSize(); atomicConstraintIdx += 1)
+    for(Pair<OP::ValueType> const * atomicConstraint = problem->atomicConstraints.begin(); atomicConstraint != problem->atomicConstraints.end(); atomicConstraint += 1)
     {
-        *root->blockingConstraintsCount[problem->atomicConstraints[atomicConstraintIdx]->second] += 1;
+        *root->blockingConstraintsCount[atomicConstraint->second] += 1;
     }
-    for(OP::ValueType value = 0; value < root->blockingConstraintsCount.getMaxValue(); value += 1)
-    {
-        if(*root->blockingConstraintsCount[value] == 0)
-        {
-            root->admissibleValues.pushBack(&value);
-        }
-    }
+    calcAdmissibleValues(root);
 }
-
 
 __host__ __device__
 void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, DP::CostType cost, CTWState* nextState)
 {
     *nextState = *currentState;
     nextState->cost = cost;
-    nextState->selectedValues.pushBack(&value);
+    nextState->selectValue(value);
 
-    // Cost related
-    if(pairClosed(problem, currentState, value))
+    nextState->s = updatedS(problem,nextState,value);
+    nextState->m = updatedM(problem,nextState,value);
+    nextState->l = updatedL(problem,nextState,value);
+    nextState->n = updatedN(problem,nextState,value);
+
+    if(pairInterrupted(problem,nextState,value))
     {
-        closePair(problem, nextState,value);
+        Pair<OP::ValueType> const openPair(*nextState->selectedValues.back(), static_cast<OP::ValueType>(nextState->selectedValues.getSize() - 1));
+        nextState->openPairs.pushBack(&openPair);
     }
-    else
+
+    if(pairClosed(problem,nextState,value))
     {
-        if(pairInterrupted(problem, currentState, value))
+        OP::ValueType const otherEnd = calcOtherEnd(problem,value);
+        Pair<OP::ValueType> const * const openPairsEnd = thrust::remove_if(thrust::seq, nextState->openPairs.begin(), nextState->openPairs.end(), [=] __host__ __device__ (Pair<OP::ValueType> const & openPair) -> bool
         {
-            nextState->openPairsCount += 1;
-            nextState->s += 1;
-            nextState->m = max(nextState->m, currentState->openPairsCount);
-        }
+            return openPair.first == otherEnd;
+        });
+        nextState->openPairs.resize(openPairsEnd);
     }
-    updateByAtomics(problem,nextState,value);
 
+    updateBlockingByAtomics(problem, nextState, value);
+    updateBlockingByDisjunctive1(problem, nextState, value);
+    updateBlockingByDisjunctive2(problem, nextState, value);
 
-
+    calcAdmissibleValues(nextState);
 }
-
 
 __host__ __device__
-void DP::mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, VRPState* nextState)
+void DP::mergeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, CTWState* nextState)
 {
-    for (OP::ValueType const* admissibleValue = currentState->admissibleValues.begin(); admissibleValue != currentState->admissibleValues.end(); admissibleValue += 1)
+    for (OP::ValueType value = 0; value < nextState->blockingConstraintsCount.getCapacity(); value += 1)
     {
-        if (* admissibleValue != value and (not nextState->isAdmissible(* admissibleValue)))
-        {
-            nextState->admissibleValues.pushBack(admissibleValue);
-        }
+        i32 const blockingConstraintsCount0 = *currentState->blockingConstraintsCount[value];
+        i32 const blockingConstraintsCount1 = *nextState->blockingConstraintsCount[value];
+        *nextState->blockingConstraintsCount[value] = static_cast<i8>(min(blockingConstraintsCount0,blockingConstraintsCount1));
     }
-    ifPickupAddDelivery(problem, value, nextState);
+
+    updateBlockingByAtomics(problem, nextState, value);
+    updateBlockingByDisjunctive1(problem, nextState, value);
+    updateBlockingByDisjunctive2(problem, nextState, value);
+
+    calcAdmissibleValues(nextState);
 }
+
 
 __host__ __device__
 OP::ValueType DP::calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value)
@@ -120,78 +127,157 @@ OP::ValueType DP::calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType con
     return value < problem->b ? value + problem->b : value - problem->b;
 }
 
-__host__ __device__
-void DP::closePair(OP::CTWProblem const * problem, DP::CTWState const * currentState, OP::ValueType const value)
-{
-
-    OP::ValueType const otherEnd = calcOtherEnd(problem,value);
-    OP::ValueType const * const openedPairsEnd = thrust::remove_if(thrust::seq, currentState->openedPairs.begin(), currentState->openedPairs.end(), [=] __host__ __device__ (Pair<OP::ValueType> const & pair) -> bool
-    {
-        pair.first == otherEnd;
-    });
-    currentState->openedPairs.resize(openedPairsEnd);
-
-}
-
 
 __host__ __device__
-bool DP::pairClosed(OP::CTWProblem const * problem, DP::CTWState const * currentState, OP::ValueType const value)
+bool DP::pairClosed(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType const value)
 {
     OP::ValueType const otherEnd = calcOtherEnd(problem, value);
-    return thrust::freinterpret_castind(thrust::seq, currentState->selectedValues.begin(), currentState->selectedValues.end(), otherEnd) != currentState->selectedValues.end();
+    return state->selectedValuesMap.contains(otherEnd);
 }
 
 __host__ __device__
-bool DP::pairInterrupted(OP::CTWProblem const* problem, DP::CTWState const* currentState, OP::ValueType const value)
+bool DP::pairInterrupted(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType const value)
 {
-    OP::ValueType const otherEnd = calcOtherEnd(problem, value);
-    return *currentState->selectedValues.back() == otherEnd;
+    if(not state->selectedValues.isEmpty())
+    {
+        OP::ValueType const otherEnd = calcOtherEnd(problem, value);
+        return * state->selectedValues.back() == otherEnd;
+    }
+    else
+    {
+        return false;
+    }
 }
 
-__host__ __device__ void
-DP::updateByAtomics(OP::CTWProblem const* problem, DP::CTWState const* nextState, OP::ValueType const value)
+__host__ __device__
+void DP::updateBlockingByAtomics(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType value)
 {
-    LightVector<unsigned int> const * const atomicConstraintsMap = problem->atomicConstraintsMap[value];
-    for(unsigned int atomicConstraintIdx = 0; atomicConstraintIdx < atomicConstraintsMap->getSize(); atomicConstraintIdx += 1)
+    LightVector<u16> const * const atomicConstraintsMap = problem->atomicConstraintsMap[value];
+    for(u16 const * atomicConstraintIdx = atomicConstraintsMap->begin(); atomicConstraintIdx != atomicConstraintsMap->end(); atomicConstraintIdx += 1)
     {
-        Pair<OP::ValueType> const * const atomicConstraint = problem->atomicConstraints[atomicConstraintIdx];
-        if(value == atomicConstraint->first)
+        Pair<OP::ValueType> const * const atomicConstraint = problem->atomicConstraints.at(*atomicConstraintIdx);
+        OP::ValueType const & i = atomicConstraint->first;
+        OP::ValueType const & j = atomicConstraint->second;
+        if (value == i)
         {
-            *nextState->blockingConstraintsCount[atomicConstraint->second] -= 1;
+            *state->blockingConstraintsCount[j] -= 1;
         }
     }
 }
+
 __host__ __device__
-void DP::updateByDisjunctive1(OP::CTWProblem const* problem, DP::CTWState const* nextState, OP::ValueType const value)
+void DP::updateBlockingByDisjunctive1(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
 {
-    LightVector<unsigned int> const * const disjunctiveConstraints1Map = problem->disjunctiveConstraints1Map[value];
-    for(unsigned int disjunctiveConstraintIdx = 0; disjunctiveConstraintIdx < disjunctiveConstraints1Map->getSize(); disjunctiveConstraintIdx += 1)
+    LightVector<u16> const * const disjunctiveConstraints1Map = problem->disjunctiveConstraints1Map[value];
+    for(u16 const * disjunctiveConstraint1Idx = disjunctiveConstraints1Map->begin(); disjunctiveConstraint1Idx != disjunctiveConstraints1Map->end(); disjunctiveConstraint1Idx += 1)
     {
-        Triple<OP::ValueType> const * const disjunctiveConstraint = problem->disjunctiveConstraints1[disjunctiveConstraintIdx];
-        bool lSelected = nextState->isSelected(disjunctiveConstraint->first);
-        bool iSelected = nextState->isSelected(disjunctiveConstraint->second);
-        bool jSelected = nextState->isSelected(disjunctiveConstraint->third);
-        if(value == disjunctiveConstraint->first) // l
+        Triple<OP::ValueType> const * const disjunctiveConstraint1 = problem->disjunctiveConstraints1.at(*disjunctiveConstraint1Idx);
+        OP::ValueType const & l = disjunctiveConstraint1->first;
+        OP::ValueType const & i = disjunctiveConstraint1->second;
+        OP::ValueType const & j = disjunctiveConstraint1->third;
+        bool isPresentL = state->selectedValuesMap.contains(l);
+        bool isPresentI = state->selectedValuesMap.contains(i);
+        bool isPresentJ = state->selectedValuesMap.contains(j);
+        if (value == i and (not isPresentL) and (not isPresentJ))
         {
-            if(not iSelected)
-            {
-                nextState->blockingConstraintsCount[disjunctiveConstraint->second] -= 1;
-            }
-
-            if(not jSelected)
-            {
-                nextState->blockingConstraintsCount[disjunctiveConstraint->third] -= 1;
-            }
+            *state->blockingConstraintsCount[j] += 1;
         }
-
-        if(value == disjunctiveConstraint->second) // i
+        else if(value == j and (not isPresentL) and (not isPresentI))
         {
-            if(not nextState->isSelected(disjunctiveConstraint->first))
+            *state->blockingConstraintsCount[i] += 1;
+        }
+        else if (value == l)
+        {
+            if (isPresentI and (not isPresentJ))
             {
-                currentState->blockingConstraintsCount[disjunctiveConstraint->first] -= 1;
+                *state->blockingConstraintsCount[j] -= 1;
+            }
+            else if (not(isPresentI) and isPresentJ)
+            {
+                *state->blockingConstraintsCount[i] -= 1;
             }
         }
     }
-
 }
-*/
+
+__host__ __device__
+void DP::updateBlockingByDisjunctive2(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
+{
+    LightVector<u16> const * const disjunctiveConstraints2Map = problem->disjunctiveConstraints2Map[value];
+    for(u16 const * disjunctiveConstraint2Idx = disjunctiveConstraints2Map->begin(); disjunctiveConstraint2Idx != disjunctiveConstraints2Map->end(); disjunctiveConstraint2Idx += 1)
+    {
+        Triple<OP::ValueType> const * const disjunctiveConstraint2 = problem->disjunctiveConstraints2.at(*disjunctiveConstraint2Idx);
+        OP::ValueType const & l = disjunctiveConstraint2->first;
+        OP::ValueType const & i = disjunctiveConstraint2->second;
+        OP::ValueType const & j = disjunctiveConstraint2->third;
+        bool isPresentL = state->selectedValuesMap.contains(l);
+        bool isPresentI = state->selectedValuesMap.contains(i);
+        bool isPresentJ = state->selectedValuesMap.contains(j);
+        if (value == i and  (not isPresentL))
+        {
+            *state->blockingConstraintsCount[l] += isPresentJ ? -1 : 1;
+        }
+        else if (value == j and (not isPresentL))
+        {
+            *state->blockingConstraintsCount[l] += isPresentI ? -1 : 1;
+        }
+    }
+}
+
+__host__ __device__
+u8 DP::updatedS(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
+{
+    u8 s = state->s;
+    if(pairInterrupted(problem, state, value))
+    {
+        s += 1;
+    }
+    return s;
+}
+
+__host__ __device__
+u8 DP::updatedM(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType value)
+{
+    u8 m = state->m;
+    if(pairInterrupted(problem, state, value))
+    {
+        m = static_cast<u8>(max(m, state->openPairs.getSize() + 1));
+    }
+    return m;
+}
+
+__host__ __device__
+u8 DP::updatedL(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType value)
+{
+    if (not state->openPairs.isEmpty())
+    {
+        u32 oldestOpenPairAge = state->selectedValues.getSize() - 1 - state->openPairs.front()->second;
+        oldestOpenPairAge += calcOtherEnd(problem, value) == state->openPairs.front()->first ? 0 : 1; // closing oldest pair
+        return static_cast<u8>(max(oldestOpenPairAge, state->l));
+    }
+    else
+    {
+        return 0;
+    }
+}
+
+__host__ __device__
+u8 DP::updatedN(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
+{
+    u8 n = state->n;
+    LightVector<u16> const * const softAtomicConstraintsMap = problem->softAtomicConstraintsMap[value];
+    for(u16 const * softAtomicConstraintIdx = softAtomicConstraintsMap->begin(); softAtomicConstraintIdx != softAtomicConstraintsMap->end(); softAtomicConstraintIdx += 1)
+    {
+        Pair<OP::ValueType> const * const softAtomicConstraint = problem->softAtomicConstraints.at(*softAtomicConstraintIdx);
+        OP::ValueType const & i = softAtomicConstraint->first;
+        OP::ValueType const & j = softAtomicConstraint->second;
+        bool isPresentI = state->selectedValuesMap.contains(i);
+        bool isPresentJ = state->selectedValuesMap.contains(j);
+        if ((not isPresentI) and isPresentJ)
+        {
+            n += 1;
+        }
+    }
+    return n;
+}
+
