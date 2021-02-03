@@ -12,6 +12,7 @@ namespace DP
     __host__ __device__ inline void calcAdmissibleValues(CTWState* state);
     __host__ __device__ inline DP::CostType calcCost(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value);
     __host__ __device__ inline OP::ValueType calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value);
+    __host__ __device__ inline bool checkConsistency(OP::CTWProblem const * problem, CTWState const * state);
     __host__ __device__ inline bool closeInterruptedPair(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
     void makeRoot(OP::CTWProblem const * problem, CTWState* root);
     __host__ __device__ inline bool interruptPair(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
@@ -60,6 +61,63 @@ DP::CostType DP::calcCost(OP::CTWProblem const * problem, CTWState const * curre
     return cost;
 }
 
+__host__ __device__
+bool DP::checkConsistency(OP::CTWProblem const* problem, DP::CTWState const* state)
+{
+    for(Pair<OP::ValueType> const * atomicConstraint = problem->atomicConstraints.begin(); atomicConstraint != problem->atomicConstraints.end(); atomicConstraint += 1)
+    {
+        OP::ValueType const & i = atomicConstraint->first;
+        OP::ValueType const & j = atomicConstraint->second;
+        bool isPresentI = state->selectedValuesMap.contains(i);
+        bool isPresentJ = state->selectedValuesMap.contains(j);
+        if((not isPresentI) and isPresentJ)
+        {
+            return false;
+        }
+    }
+    for(Triple<OP::ValueType> const * disjunctiveConstraint1 = problem->disjunctiveConstraints1.begin(); disjunctiveConstraint1 != problem->disjunctiveConstraints1.end(); disjunctiveConstraint1 += 1)
+    {
+        OP::ValueType const & l = disjunctiveConstraint1->first;
+        OP::ValueType const & i = disjunctiveConstraint1->second;
+        OP::ValueType const & j = disjunctiveConstraint1->third;
+        bool isPresentL = state->selectedValuesMap.contains(l);
+        bool isPresentI = state->selectedValuesMap.contains(i);
+        bool isPresentJ = state->selectedValuesMap.contains(j);
+        if((not isPresentL) and isPresentI and isPresentJ)
+        {
+            return false;
+        }
+    }
+    for(Triple<OP::ValueType> const * disjunctiveConstraint2 = problem->disjunctiveConstraints2.begin(); disjunctiveConstraint2 != problem->disjunctiveConstraints2.end(); disjunctiveConstraint2 += 1)
+    {
+        OP::ValueType const & l = disjunctiveConstraint2->first;
+        OP::ValueType const & i = disjunctiveConstraint2->second;
+        OP::ValueType const & j = disjunctiveConstraint2->third;
+        bool isPresentL = state->selectedValuesMap.contains(l);
+        bool isPresentI = state->selectedValuesMap.contains(i);
+        bool isPresentJ = state->selectedValuesMap.contains(j);
+        if(isPresentL and isPresentI and (not isPresentJ))
+        {
+            u32 indexL = state->selectedValues.indexOf(thrust::find(thrust::seq, state->selectedValues.begin(), state->selectedValues.end(),l));
+            u32 indexI = state->selectedValues.indexOf(thrust::find(thrust::seq, state->selectedValues.begin(), state->selectedValues.end(),i));
+            if(indexL > indexI)
+            {
+                return false;
+            }
+        }
+        if(isPresentL and (not isPresentI) and isPresentJ)
+        {
+            u32 indexL = state->selectedValues.indexOf(thrust::find(thrust::seq, state->selectedValues.begin(), state->selectedValues.end(),l));
+            u32 indexJ = state->selectedValues.indexOf(thrust::find(thrust::seq, state->selectedValues.begin(), state->selectedValues.end(),j));
+            if(indexL > indexJ)
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 void DP::makeRoot(OP::CTWProblem const * problem, CTWState* root)
 {
     thrust::fill(thrust::seq, root->blockingConstraintsCount.begin(), root->blockingConstraintsCount.end(), 0);
@@ -102,6 +160,9 @@ void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState
     nextState->selectValue(value);
 
     calcAdmissibleValues(nextState);
+    //nextState->print();
+    //assert(checkConsistency(problem, nextState));
+    //assert(not nextState->admissibleValuesMap.isEmpty());
 }
 
 __host__ __device__
@@ -292,4 +353,5 @@ u8 DP::updatedN(OP::CTWProblem const* problem, DP::CTWState const* state, OP::Va
     }
     return n;
 }
+
 

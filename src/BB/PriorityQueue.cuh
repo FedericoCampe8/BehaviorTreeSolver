@@ -34,12 +34,11 @@ BB::PriorityQueue<StateType>::PriorityQueue(ProblemType const * problem, unsigne
     maxHeap(capacity, Memory::MallocType::Std)
 {
     // States
-    unsigned int const storageSize = StateType::sizeOfStorage(problem);
     std::byte* storages = StateType::mallocStorages(problem, capacity, Memory::MallocType::Std);
-    for (unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
+    for (u32 stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
     {
         new (statesBuffer[stateIdx]) StateType(problem, storages);
-        storages += storageSize;
+        storages = Memory::align(statesBuffer[stateIdx]->endOfStorage(), Memory::DefaultAlignment);
     }
 }
 
