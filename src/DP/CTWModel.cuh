@@ -208,7 +208,7 @@ void DP::updateBlockingByDisjunctive1(OP::CTWProblem const* problem, DP::CTWStat
             {
                 *state->blockingConstraintsCount[j] -= 1;
             }
-            else if (not(isPresentI) and isPresentJ)
+            else if ((not isPresentI) and isPresentJ)
             {
                 *state->blockingConstraintsCount[i] -= 1;
             }

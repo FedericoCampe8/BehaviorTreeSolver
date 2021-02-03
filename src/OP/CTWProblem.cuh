@@ -104,15 +104,6 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
         problem->add(&variable);
     }
 
-    /*
-    u32 optA031[19] = {0, 3, 12, 18, 17, 13, 4, 5, 14, 6, 8, 9, 7, 10, 1, 2, 11, 15, 16};
-    for(i32 i = 0; i < 19; i += 1)
-    {
-        problem->variables[i]->minValue = optA031[i];
-        problem->variables[i]->maxValue = optA031[i];
-    }
-     */
-
     // Atomic constraints
     for (u16 atomicConstraintIdx = 0; atomicConstraintIdx < problemJson["AtomicConstraints"].size(); atomicConstraintIdx += 1)
     {

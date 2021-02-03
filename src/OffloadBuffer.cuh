@@ -43,12 +43,11 @@ OffloadBuffer<ProblemType, StateType>::OffloadBuffer(ProblemType const * problem
     neighbourhoods(capacity, mallocType)
 {
     // States
-    unsigned int storageSize = StateType::sizeOfStorage(problem);
     std::byte* storages = StateType::mallocStorages(problem, capacity, mallocType);
-    for (unsigned int stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
+    for (u32 stateIdx = 0; stateIdx < statesBuffer.getCapacity(); stateIdx += 1)
     {
         new (statesBuffer[stateIdx]) StateType(problem, storages);
-        storages += storageSize;
+        storages = Memory::align(statesBuffer[stateIdx]->endOfStorage(), Memory::DefaultAlignment);
     }
 
     // MDDs
@@ -71,11 +70,12 @@ void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index, bool o
 
     if (not onlyRestricted)
     {
-        setTop(index);
-        barrier();
-        mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
-        barrier();
-        setLowerbound(index);
+        //setTop(index);
+        //barrier();
+        //mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
+        //barrier();
+        //setLowerbound(index);
+        augmentedStates[index]->lowerbound = 0;
     }
     setTop(index);
     barrier();
@@ -154,7 +154,7 @@ void OffloadBuffer<ProblemType, StateType>::setLowerbound(unsigned int index) co
     if (threadIdx.x == 0)
 #endif
     {
-        augmentedStates[index]->lowerbound = 0;// mdds[index]->bottom.cost;
+        augmentedStates[index]->lowerbound = mdds[index]->bottom.cost;
     }
 }
 

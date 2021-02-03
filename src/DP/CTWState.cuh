@@ -18,6 +18,7 @@ namespace DP
         public:
         __host__ __device__ CTWState(OP::CTWProblem const * problem, std::byte* storage);
         __host__ __device__ CTWState(OP::CTWProblem const * problem, Memory::MallocType mallocType);
+        __host__ __device__ inline std::byte* endOfStorage() const;
         __host__ __device__ static std::byte* mallocStorages(OP::CTWProblem const *  problem, unsigned int statesCount, Memory::MallocType mallocType);
         __host__ __device__ CTWState& operator=(CTWState const & other);
         __host__ __device__ void print(bool endLine = true) const;
@@ -38,6 +39,12 @@ __host__ __device__
 DP::CTWState::CTWState(OP::CTWProblem const* problem, Memory::MallocType mallocType) :
     CTWState(problem, mallocStorages(problem,1,mallocType))
 {}
+
+__host__ __device__
+std::byte* DP::CTWState::endOfStorage() const
+{
+    return blockingConstraintsCount.endOfStorage();
+}
 
 __host__ __device__
 std::byte* DP::CTWState::mallocStorages(OP::CTWProblem const* problem, unsigned int statesCount, Memory::MallocType mallocType)
@@ -79,7 +86,8 @@ unsigned int DP::CTWState::sizeOfStorage(OP::CTWProblem const * problem)
     return
         State::sizeOfStorage(problem) +
         Vector<Pair<OP::ValueType>>::sizeOfStorage(problem->b) + // openPairs
-        Array<i8>::sizeOfStorage(problem->variables.getCapacity()); // blockingConstraintsCount
+        Array<i8>::sizeOfStorage(problem->variables.getCapacity()) + // blockingConstraintsCount
+        Memory::DefaultAlignmentPadding;
 }
 
 __host__ __device__

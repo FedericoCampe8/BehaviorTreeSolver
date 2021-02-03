@@ -8,10 +8,12 @@
 namespace Memory
 {
     enum MallocType {Managed, Std};
+    u32 const DefaultAlignment = 8;
     u32 const DefaultAlignmentPadding = 8;
     template<typename T>
     __host__ __device__ inline T* align(std::byte const * ptr);
-    __host__ __device__ inline std::byte* align(std::byte const * ptr, u32 alignment = DefaultAlignmentPadding);
+    __host__ __device__ inline std::byte* align(std::byte const * ptr, u32 alignment);
+    __host__ __device__ inline uintptr_t align(uintptr_t address, u32 alignment);
     __host__ __device__ std::byte* safeMalloc(unsigned int size, MallocType type);
     __host__ __device__ std::byte* safeStdMalloc(unsigned int size);
     std::byte* safeManagedMalloc(unsigned int size);
@@ -21,17 +23,19 @@ template<typename T>
 __host__ __device__
 T* Memory::align(std::byte const * ptr)
 {
-    uintptr_t const address = reinterpret_cast<uintptr_t>(ptr);
-    uintptr_t const aligned = address + (address % sizeof(T));
-    return reinterpret_cast<T*>(aligned);
+    return reinterpret_cast<T*>(align(ptr, sizeof(T)));
 }
 
 __host__ __device__
 std::byte* Memory::align(std::byte const * ptr, u32 alignment)
 {
-    uintptr_t const address = reinterpret_cast<uintptr_t>(ptr);
-    uintptr_t const aligned = address + (address % alignment);
-    return reinterpret_cast<std::byte*>(aligned);
+    return reinterpret_cast<std::byte*>(align(reinterpret_cast<uintptr_t>(ptr), alignment));
+}
+
+__host__ __device__
+uintptr_t Memory::align(uintptr_t address, u32 alignment)
+{
+    return address + alignment - (address % alignment);
 }
 
 __host__ __device__

@@ -60,16 +60,16 @@ DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, unsigned int w
     problem(problem),
     top(problem, mallocType),
     bottom(problem, mallocType),
-    cutset(width * problem->maxValue, mallocType),
+    cutset(width * problem->maxBranchingFactor, mallocType),
     scratchpadMemory(Memory::safeMalloc(sizeOfScratchpadMemory(), Memory::MallocType::Std))
 {
     // Cutset states
-    u32 const storageSize = StateType::sizeOfStorage(problem);
     std::byte* storages = StateType::mallocStorages(problem, cutset.getCapacity(), mallocType);
     for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutset.getCapacity(); cutsetStateIdx += 1)
     {
-        new (cutset.LightArray<StateType>::at(cutsetStateIdx)) StateType(problem, storages);
-        storages += storageSize;
+        StateType* cutsetState = cutset.LightArray<StateType>::at(cutsetStateIdx);
+        new (cutsetState) StateType(problem, storages);
+        storages = Memory::align(cutsetState->endOfStorage(), Memory::DefaultAlignment);
     }
 }
 
@@ -97,6 +97,10 @@ void DD::MDD<ProblemType, StateType>::buildTopDown(DD::Type type, Neighbourhood 
         CUDA_THREADS_BARRIER
         if (nextStates->isEmpty())
         {
+            for(u32 i = 0; i < currentStates->getSize(); i +=1)
+            {
+                //currentStates->at(i)->print();
+            }
             setInvalid();
             return;
         }
@@ -195,34 +199,33 @@ void DD::MDD<ProblemType, StateType>::initScratchpadMemory()
         // Current states
         currentStates = reinterpret_cast<LightVector<StateType>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<StateType>);
-        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory, Memory::DefaultAlignment);
         new (currentStates) LightVector<StateType>(width, reinterpret_cast<StateType*>(freeScratchpadMemory));
-        freeScratchpadMemory = Memory::align(currentStates->endOfStorage());
-        u32 const storageSize = StateType::sizeOfStorage(problem);
-        for (u32 stateIdx = 0; stateIdx < currentStates->getCapacity(); stateIdx += 1)
+        freeScratchpadMemory = Memory::align(currentStates->endOfStorage(), Memory::DefaultAlignment);
+        for (u32 currentStateIdx = 0; currentStateIdx < currentStates->getCapacity(); currentStateIdx += 1)
         {
-            new (currentStates->LightArray<StateType>::at(stateIdx)) StateType(problem, freeScratchpadMemory);
-            freeScratchpadMemory += storageSize;
+            StateType* currentState = currentStates->LightArray<StateType>::at(currentStateIdx);
+            new (currentState) StateType(problem, freeScratchpadMemory);
+            freeScratchpadMemory = Memory::align(currentState->endOfStorage(), Memory::DefaultAlignment);
         }
-        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
 
         // Next states
         nextStates = reinterpret_cast<LightVector<StateType>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<StateType>);
-        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
-        new(nextStates) LightVector<StateType>(width, reinterpret_cast<StateType*>(freeScratchpadMemory));
-        freeScratchpadMemory = Memory::align(nextStates->endOfStorage());
-        for (u32 stateIdx = 0; stateIdx < nextStates->getCapacity(); stateIdx += 1)
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory, Memory::DefaultAlignment);
+        new (nextStates) LightVector<StateType>(width, reinterpret_cast<StateType*>(freeScratchpadMemory));
+        freeScratchpadMemory = Memory::align(nextStates->endOfStorage(), Memory::DefaultAlignment);
+        for (u32 nextStateIdx = 0; nextStateIdx < nextStates->getCapacity(); nextStateIdx += 1)
         {
-            new (nextStates->LightArray<StateType>::at(stateIdx)) StateType(problem, freeScratchpadMemory);
-            freeScratchpadMemory += storageSize;
+            StateType* nextState = nextStates->LightArray<StateType>::at(nextStateIdx);
+            new (nextState) StateType(problem, freeScratchpadMemory);
+            freeScratchpadMemory = Memory::align(nextState->endOfStorage(), Memory::DefaultAlignment);
         }
-        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
 
         // Auxiliary information
         auxiliaryData = reinterpret_cast<LightVector<AuxiliaryData>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<AuxiliaryData>);
-        freeScratchpadMemory = Memory::align(freeScratchpadMemory);
+        freeScratchpadMemory = Memory::align(freeScratchpadMemory, Memory::DefaultAlignment);
         new (auxiliaryData) LightVector<AuxiliaryData>(width * problem->maxBranchingFactor, reinterpret_cast<AuxiliaryData*>(freeScratchpadMemory));
     }
 }
