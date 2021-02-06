@@ -38,6 +38,7 @@ BB::AugmentedState<StateType>::AugmentedState(DP::CostType upperbound, DP::CostT
 template<typename StateType>
 bool BB::AugmentedState<StateType>::operator<(AugmentedState<StateType>& other) const
 {
+    /*
     u32 const l0 = state->selectedValues.getSize();
     u32 const l1 = other.state->selectedValues.getSize();
     if(l0 < l1)
@@ -52,6 +53,8 @@ bool BB::AugmentedState<StateType>::operator<(AugmentedState<StateType>& other) 
     {
         return false;
     }
+     */
+        return state->cost < other.state->cost;
 }
 
 template<typename StateType>

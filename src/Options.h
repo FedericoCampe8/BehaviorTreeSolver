@@ -10,6 +10,7 @@ class Options
 
     // Members
     public:
+    bool statistics;
     unsigned int queueSize;
     unsigned int timeout;
     unsigned int widthCpu;
@@ -32,6 +33,7 @@ class Options
 };
 
 Options::Options() :
+    statistics(false),
     inputFilename(nullptr),
     queueSize(50000),
     timeout(60),
@@ -45,7 +47,8 @@ Options::Options() :
     // Help
     anyOption->addUsage("Usage: ");
     anyOption->addUsage("");
-    anyOption->addUsage(" -h --help         	Print this help");
+    anyOption->addUsage(" -h --help             Print this help");
+    anyOption->addUsage(" -s                    Print search statistics");
     anyOption->addUsage(" -q <size>             Size of branch and bound queue");
     anyOption->addUsage(" -t <seconds>          Timeout");
     anyOption->addUsage(" --wc <size>           Width of MDDs explored on CPU");
@@ -58,6 +61,7 @@ Options::Options() :
     anyOption->addUsage("");
 
     anyOption->setFlag("help",'h');
+    anyOption->setOption('s');
     anyOption->setOption('q');
     anyOption->setOption('t');
     anyOption->setOption("wc");
@@ -89,6 +93,11 @@ bool Options::parseOptions(int argc, char* argv[])
     {
         anyOption->printUsage();
         return false;
+    }
+
+    if (anyOption->getFlag('s'))
+    {
+        statistics = true;
     }
 
     if (anyOption->getValue('q') != nullptr)

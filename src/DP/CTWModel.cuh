@@ -89,29 +89,16 @@ void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState
 {
     *nextState = *currentState;
     nextState->cost = cost;
-    nextState->selectValue(value);
 
     nextState->s = updatedS(problem, currentState, value);
     nextState->m = updatedM(problem, currentState, value);
     nextState->l = updatedL(problem, currentState, value);
     nextState->n = updatedN(problem, currentState, value);
+
     updateInterruptedPairs(problem, nextState, value);
-
     updatePrecedencesCount(problem, nextState, value);
+    nextState->selectValue(value);
     calcAdmissibleValues(problem, nextState);
-
-    u32 tmp [] = {0,4,12,8,16,13,10,2,3,7,15,6,14,5,11,1,9};
-    bool eq = true;
-    u32 i = 0;
-    for (OP::ValueType const* value = nextState->selectedValues.begin(); value != nextState->selectedValues.end(); value += 1)
-    {
-        eq = eq and (*value == tmp[i]);
-        i +=1;
-    }
-    if(eq)
-    {
-        nextState->print();
-    }
 }
 
 __host__ __device__

@@ -29,6 +29,7 @@ class BitSet
     __host__ __device__ inline u32 getMaxValue() const;
     __host__ __device__ u32 getSize() const;
     __host__ __device__ inline void insert(u32 value);
+    __host__ __device__ bool intersect(BitSet const & other);
     __host__ __device__ bool isEmpty() const;
     __host__ __device__ bool isFull() const;
     __host__ __device__ void merge(BitSet const & other);
@@ -127,6 +128,21 @@ void BitSet::insert(u32 value)
     u32 const chunkOffset = BitSet::chunkOffset(value);
     u32 const mask = 1u << chunkOffset;
     storage[chunkIndex] |= mask;
+}
+
+__host__ __device__
+bool BitSet::intersect(BitSet const& other)
+{
+    assert(maxValue == other.maxValue);
+    u32 const chunksCount = BitSet::chunksCount(maxValue);
+    for(u32 chunkIndex = 0; chunkIndex < chunksCount; chunkIndex += 1)
+    {
+        if((storage[chunkIndex] & other.storage[chunkIndex]) != 0)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 __host__ __device__

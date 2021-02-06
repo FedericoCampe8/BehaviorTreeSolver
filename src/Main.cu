@@ -131,8 +131,11 @@ int main(int argc, char* argv[])
     // Begin search
     // ************
     clearLine();
-    printf("[INFO] Start branch and bound search\n");
     uint64_t searchStartTime = now();
+    printf("[INFO] Start branch and bound search");
+    printf(" | Time: ");
+    printElapsedTime(now() - searchStartTime);
+    printf("\n");
     do
     {
         switch(searchStatus)
@@ -143,7 +146,10 @@ int main(int argc, char* argv[])
                 {
                     searchStatus = SearchStatus::LNS;
                     clearLine();
-                    printf("[INFO] Switching to large neighborhood search\n");
+                    printf("[INFO] Switching to large neighborhood search");
+                    printf(" | Time: ");
+                    printElapsedTime(now() - searchStartTime);
+                    printf("\n");
                 }
 
                 prepareOffload(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
@@ -176,9 +182,6 @@ int main(int argc, char* argv[])
                 checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadBuffer) or
                 checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadBuffer);
 
-        if(foundBetterSolution)
-            bestSolution->print();
-
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, gpuOffloadBuffer);
 
@@ -195,27 +198,30 @@ int main(int argc, char* argv[])
         }
         else
         {
-            unsigned long int cpuSpeed = 0;
-            if (cpuOffloadBuffer->getSize() > 0)
+            if(options.statistics)
             {
-                uint64_t cpuOffloadElapsedTime = max(1ul, cpuOffloadEndTime - cpuOffloadStartTime);
-                cpuSpeed = cpuOffloadBuffer->getSize() * 1000 / cpuOffloadElapsedTime;
-            }
+                unsigned long int cpuSpeed = 0;
+                if (cpuOffloadBuffer->getSize() > 0)
+                {
+                    uint64_t cpuOffloadElapsedTime = max(1ul, cpuOffloadEndTime - cpuOffloadStartTime);
+                    cpuSpeed = cpuOffloadBuffer->getSize() * 1000 / cpuOffloadElapsedTime;
+                }
 
-            unsigned long int gpuSpeed = 0;
-            if (gpuOffloadBuffer->getSize() > 0)
-            {
-                uint64_t gpuOffloadElapsedTime = max(1ul, gpuOffloadEndTime - gpuOffloadStartTime);
-                gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
+                unsigned long int gpuSpeed = 0;
+                if (gpuOffloadBuffer->getSize() > 0)
+                {
+                    uint64_t gpuOffloadElapsedTime = max(1ul, gpuOffloadEndTime - gpuOffloadStartTime);
+                    gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
+                }
+                printf("[INFO] Solution: ");
+                currentSolution->selectedValues.print(false);
+                printf(" | Value: %u", currentSolution->cost);
+                printf(" | Time: ");
+                printElapsedTime(now() - searchStartTime);
+                printf(" | Iteration: %u", iterationsCount);
+                printf(" | States: %u - %u - %u", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
+                printf(" | Speed: %lu - %lu\r", cpuSpeed, gpuSpeed);
             }
-            printf("[INFO] Solution: ");
-            currentSolution->selectedValues.print(false);
-            printf(" | Value: %u", currentSolution->cost);
-            printf(" | Time: ");
-            printElapsedTime(now() - searchStartTime);
-            printf(" | Iteration: %u", iterationsCount);
-            printf(" | States: %u - %u - %u", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
-            printf(" | Speed: %lu - %lu\r", cpuSpeed, gpuSpeed);
         }
         fflush(stdout);
         iterationsCount += 1;

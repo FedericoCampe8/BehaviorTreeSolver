@@ -90,7 +90,7 @@ unsigned int DP::CTWState::sizeOfStorage(OP::CTWProblem const * problem)
     return
         State::sizeOfStorage(problem) +
         Vector<Pair<OP::ValueType>>::sizeOfStorage(problem->b) + // interruptedPairs
-        Array<i8>::sizeOfStorage(problem->variables.getCapacity()) + // precedencesCount
+        Array<u8>::sizeOfStorage(problem->variables.getCapacity()) + // precedencesCount
         Memory::DefaultAlignmentPadding;
 }
 
