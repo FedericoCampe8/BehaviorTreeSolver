@@ -176,6 +176,9 @@ int main(int argc, char* argv[])
                 checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadBuffer) or
                 checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadBuffer);
 
+        if(foundBetterSolution)
+            bestSolution->print();
+
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, gpuOffloadBuffer);
 

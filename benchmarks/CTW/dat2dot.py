@@ -82,33 +82,32 @@ def write_file(filepath: str,
                b: int):
     file = open(filepath, "w")
  
+    file.write("digraph G\n")
     file.write("{\n")
-    file.write("\t\"k\": " + str(k) + ",\n")
-    file.write("\t\"b\": " + str(b) + ",\n")
-
-    atomicsFirst = ",\n\t\t".join([(x[0] + "," + x[1]) for x in atomics])    
-    if len(atomics) > 0:
-        file.write("\t\"AtomicConstraints\": [\n\t\t" + atomicsFirst + "\n\t],\n");
-    else:
-        file.write("\t\"AtomicConstraints\": [],\n");
     
-    disA1 = ",\n\t\t".join([(x[0] + "," + x[1] + "," + x[2] + "," + x[3]) for x in disjuncts])    
-    if len(disjuncts) > 0:
-        file.write("\t\"DisjunctiveConstraints\": [\n\t\t" + disA1 + "\n\t],\n");
-    else:
-        file.write("\t\DisjunctiveConstraints\": [],\n");
+    file.write("\n\t")
+    for i in range(1,k+1):
+        file.write(str(i) + ";")
+    file.write("\n\n")
     
-    satomicsFirst = ",\n\t\t".join([(x[0] + "," + x[1]) for x in softAtomics])
-    if len(softAtomics) > 0:
-        file.write("\t\"SoftAtomicConstraints\": [\n\t\t" + satomicsFirst + "\n\t],\n");
-    else:
-        file.write("\t\"SoftAtomicConstraints\": [],\n");    
-
-    ds = ",\n\t\t".join([x for x in directSucc])    
-    if len(ds) > 0:
-        file.write("\t\"DirectSuccessors\": [\n\t\t" + ds + "\n\t]\n");
-    else:
-        file.write("\t\"DirectSuccessors\": []\n");
+    file.write("\t{\n")        
+    file.write("\t\tedge [color=green;weight=100000];\n")
+    for x in atomics:
+        file.write("\t\t" + x[0][1:] + " -> " + x[1][:-1] + ";\n")
+    file.write("\t}\n\n")  
+    
+    file.write("\t{\n")        
+    file.write("\t\tedge [weight=0];\n")
+    color = 1
+    for x in disjuncts:
+        if x[0][1:] == x[3][:-1]:
+            color = 1
+        else:
+            color = 2
+        file.write("\t\t" + x[0][1:] + " -> " + x[1] + "[colorscheme=\"dark28\";color=" + str(1 + color) + ";];\n")
+        file.write("\t\t" + x[2] + " -> " + x[3][:-1] + "[colorscheme=\"dark28\";color=" + str(1 + color) +  ";];\n")
+    file.write("\t}\n")  
+    
     file.write("}")
     file.close()
     

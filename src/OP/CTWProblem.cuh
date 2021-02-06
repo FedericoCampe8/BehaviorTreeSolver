@@ -18,13 +18,12 @@ namespace OP
         ValueType const b;
         ValueType const k;
         Vector<Pair<ValueType>> atomicConstraints;
-        Vector<Triple<ValueType>> disjunctiveConstraints1;
-        Vector<Triple<ValueType>> disjunctiveConstraints2;
+        Vector<Triple<ValueType>> disjunctiveConstraints;
         Vector<Pair<ValueType>> softAtomicConstraints;
-        Array<LightVector<u16>> atomicConstraintsMap;
-        Array<LightVector<u16>> disjunctiveConstraints1Map;
-        Array<LightVector<u16>> disjunctiveConstraints2Map;
-        Array<LightVector<u16>> softAtomicConstraintsMap;
+        Array<LightVector<u16>> atomicToCheck;
+        Array<LightVector<u16>> disjunctive1ToCheck;
+        Array<LightVector<u16>> disjunctive2ToCheck;
+        Array<LightVector<u16>> softAtomicToCheck;
 
         // Functions
         public:
@@ -40,43 +39,43 @@ OP::CTWProblem::CTWProblem(u32 b, u32 k, Memory::MallocType mallocType) :
     b(b),
     k(k),
     atomicConstraints(k * k, mallocType),
-    disjunctiveConstraints1(k * k * k, mallocType),
-    disjunctiveConstraints2(k * k * k, mallocType),
+    disjunctiveConstraints(k * k * k, mallocType),
     softAtomicConstraints(k * k, mallocType),
-    atomicConstraintsMap((k + 1) , mallocType),
-    disjunctiveConstraints1Map((k + 1), mallocType),
-    disjunctiveConstraints2Map((k + 1), mallocType),
-    softAtomicConstraintsMap((k + 1), mallocType)
+    atomicToCheck((k + 1) , mallocType),
+    disjunctive1ToCheck((k + 1), mallocType),
+    disjunctive2ToCheck((k + 1), mallocType),
+    softAtomicToCheck((k + 1), mallocType)
 {
-    u32 storagesSize = sizeof(u16) * k * atomicConstraintsMap.getCapacity();
+    u32 storagesSize = sizeof(u16) * k * atomicToCheck.getCapacity();
     u16* storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (u32 index = 0; index < atomicConstraintsMap.getCapacity(); index += 1)
+    for (u32 index = 0; index < atomicToCheck.getCapacity(); index += 1)
     {
-        new (atomicConstraintsMap[index]) LightVector<u16>(k, storages);
-        storages = reinterpret_cast<u16*>(atomicConstraintsMap[index]->endOfStorage());
+        new (atomicToCheck[index]) LightVector<u16>(k, storages);
+        storages = reinterpret_cast<u16*>(atomicToCheck[index]->endOfStorage());
     }
 
-    storagesSize = sizeof(u16) * k * k * disjunctiveConstraints1Map.getCapacity();
+    storagesSize = sizeof(u16) * k * k * disjunctive1ToCheck.getCapacity();
     storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (u32 index = 0; index < disjunctiveConstraints1Map.getCapacity(); index += 1)
+    for (u32 index = 0; index < disjunctive1ToCheck.getCapacity(); index += 1)
     {
-        new (disjunctiveConstraints1Map[index]) LightVector<u16>(k * k, storages);
-        storages = reinterpret_cast<u16*>(disjunctiveConstraints1Map[index]->endOfStorage());
+        new (disjunctive1ToCheck[index]) LightVector<u16>(k * k, storages);
+        storages = reinterpret_cast<u16*>(disjunctive1ToCheck[index]->endOfStorage());
     }
 
+    storagesSize = sizeof(u16) * k * k * disjunctive2ToCheck.getCapacity();
     storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (u32 index = 0; index < disjunctiveConstraints2Map.getCapacity(); index += 1)
+    for (u32 index = 0; index < disjunctive2ToCheck.getCapacity(); index += 1)
     {
-        new (disjunctiveConstraints2Map[index]) LightVector<u16>(k * k, storages);
-        storages = reinterpret_cast<u16*>(disjunctiveConstraints2Map[index]->endOfStorage());
+        new (disjunctive2ToCheck[index]) LightVector<u16>(k * k, storages);
+        storages = reinterpret_cast<u16*>(disjunctive2ToCheck[index]->endOfStorage());
     }
 
-    storagesSize = sizeof(u16) * k * softAtomicConstraintsMap.getCapacity();
+    storagesSize = sizeof(u16) * k * softAtomicToCheck.getCapacity();
     storages = reinterpret_cast<u16*>(Memory::safeMalloc(storagesSize, mallocType));
-    for (u32 index = 0; index < softAtomicConstraintsMap.getCapacity(); index += 1)
+    for (u32 index = 0; index < softAtomicToCheck.getCapacity(); index += 1)
     {
-        new (softAtomicConstraintsMap[index]) LightVector<u16>(k, storages);
-        storages = reinterpret_cast<u16*>(softAtomicConstraintsMap[index]->endOfStorage());
+        new (softAtomicToCheck[index]) LightVector<u16>(k, storages);
+        storages = reinterpret_cast<u16*>(softAtomicToCheck[index]->endOfStorage());
     }
 }
 
@@ -110,38 +109,24 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
         auto& constraint = problemJson["AtomicConstraints"][atomicConstraintIdx];
         Pair<ValueType> atomicConstraint(constraint[0],constraint[1]);
         problem->atomicConstraints.pushBack(&atomicConstraint);
-
-        problem->atomicConstraintsMap[atomicConstraint.first]->pushBack(&atomicConstraintIdx);
-        problem->atomicConstraintsMap[atomicConstraint.second]->pushBack(&atomicConstraintIdx);
+        problem->atomicToCheck[atomicConstraint.second]->pushBack(&atomicConstraintIdx);
     }
 
     // Disjunctive constraints
-    u16 disjunctiveConstraint1Idx = 0;
-    u16 disjunctiveConstraint2Idx = 0;
     for (u16 disjunctiveConstraintIdx = 0; disjunctiveConstraintIdx < problemJson["DisjunctiveConstraints"].size(); disjunctiveConstraintIdx += 1)
     {
         auto& constraint = problemJson["DisjunctiveConstraints"][disjunctiveConstraintIdx];
         if(constraint[0] == constraint[2])
         {
             Triple<ValueType> disjunctiveConstraint(constraint[0],constraint[1],constraint[3]);
-            problem->disjunctiveConstraints1.pushBack(&disjunctiveConstraint);
-
-            problem->disjunctiveConstraints1Map[disjunctiveConstraint.first]->pushBack(&disjunctiveConstraint1Idx);
-            problem->disjunctiveConstraints1Map[disjunctiveConstraint.second]->pushBack(&disjunctiveConstraint1Idx);
-            problem->disjunctiveConstraints1Map[disjunctiveConstraint.third]->pushBack(&disjunctiveConstraint1Idx);
-
-            disjunctiveConstraint1Idx += 1;
+            problem->disjunctiveConstraints.pushBack(&disjunctiveConstraint);
+            problem->disjunctive1ToCheck[disjunctiveConstraint.first]->pushBack(&disjunctiveConstraintIdx);
         }
         else
         {
             Triple<ValueType> disjunctiveConstraint(constraint[0],constraint[1],constraint[2]);
-            problem->disjunctiveConstraints2.pushBack(&disjunctiveConstraint);
-
-            problem->disjunctiveConstraints2Map[disjunctiveConstraint.first]->pushBack(&disjunctiveConstraint2Idx);
-            problem->disjunctiveConstraints2Map[disjunctiveConstraint.second]->pushBack(&disjunctiveConstraint2Idx);
-            problem->disjunctiveConstraints2Map[disjunctiveConstraint.third]->pushBack(&disjunctiveConstraint2Idx);
-
-            disjunctiveConstraint2Idx += 1;
+            problem->disjunctiveConstraints.pushBack(&disjunctiveConstraint);
+            problem->disjunctive2ToCheck[disjunctiveConstraint.first]->pushBack(&disjunctiveConstraintIdx);
         }
     }
 
@@ -151,9 +136,7 @@ OP::CTWProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTy
         auto& constraint = problemJson["SoftAtomicConstraints"][softAtomicConstraintIdx];
         Pair<ValueType> softAtomicConstraint(constraint[0],constraint[1]);
         problem->softAtomicConstraints.pushBack(&softAtomicConstraint);
-
-        problem->softAtomicConstraintsMap[softAtomicConstraint.first]->pushBack(&softAtomicConstraintIdx);
-        problem->softAtomicConstraintsMap[softAtomicConstraint.second]->pushBack(&softAtomicConstraintIdx);
+        problem->softAtomicToCheck[softAtomicConstraint.first]->pushBack(&softAtomicConstraintIdx);
     }
 
     return problem;

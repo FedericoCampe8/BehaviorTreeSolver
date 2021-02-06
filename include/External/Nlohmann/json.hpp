@@ -5098,7 +5098,7 @@ class wide_string_input_adapter
 
     typename std::char_traits<char>::int_type get_character() noexcept
     {
-        // check if buffer needs to be filled
+        // checkPrecedence if buffer needs to be filled
         if (utf8_bytes_index == utf8_bytes_filled)
         {
             fill_buffer<sizeof(WideCharType)>();
@@ -5655,14 +5655,14 @@ class json_sax_dom_callback_parser
 
     bool start_object(std::size_t len)
     {
-        // check callback for object start
+        // checkPrecedence callback for object start
         const bool keep = callback(static_cast<int>(ref_stack.size()), parse_event_t::object_start, discarded);
         keep_stack.push_back(keep);
 
         auto val = handle_value(BasicJsonType::value_t::object, true);
         ref_stack.push_back(val.second);
 
-        // check object limit
+        // checkPrecedence object limit
         if (ref_stack.back() && JSON_HEDLEY_UNLIKELY(len != std::size_t(-1) && len > ref_stack.back()->max_size()))
         {
             JSON_THROW(out_of_range::create(408, "excessive object size: " + std::to_string(len)));
@@ -5675,7 +5675,7 @@ class json_sax_dom_callback_parser
     {
         BasicJsonType k = BasicJsonType(val);
 
-        // check callback for key
+        // checkPrecedence callback for key
         const bool keep = callback(static_cast<int>(ref_stack.size()), parse_event_t::key, k);
         key_keep_stack.push_back(keep);
 
@@ -5725,7 +5725,7 @@ class json_sax_dom_callback_parser
         auto val = handle_value(BasicJsonType::value_t::array, true);
         ref_stack.push_back(val.second);
 
-        // check array limit
+        // checkPrecedence array limit
         if (ref_stack.back() && JSON_HEDLEY_UNLIKELY(len != std::size_t(-1) && len > ref_stack.back()->max_size()))
         {
             JSON_THROW(out_of_range::create(408, "excessive array size: " + std::to_string(len)));
@@ -5811,7 +5811,7 @@ class json_sax_dom_callback_parser
         // create value
         auto value = BasicJsonType(std::forward<Value>(v));
 
-        // check callback
+        // checkPrecedence callback
         const bool keep = skip_callback || callback(static_cast<int>(ref_stack.size()), parse_event_t::value, value);
 
         // do not handle this value if we just learnt it shall be discarded
@@ -5845,7 +5845,7 @@ class json_sax_dom_callback_parser
 
         // object
         JSON_ASSERT(ref_stack.back()->is_object());
-        // check if we should store an element for the current key
+        // checkPrecedence if we should store an element for the current key
         JSON_ASSERT(!key_keep_stack.empty());
         const bool store_element = key_keep_stack.back();
         key_keep_stack.pop_back();
@@ -6157,7 +6157,7 @@ class lexer : public lexer_base<BasicJsonType>
     }
 
     /*!
-    @brief check if the next byte(s) are inside a given range
+    @brief checkPrecedence if the next byte(s) are inside a given range
 
     Adds the current byte and, for each passed range, reads a new byte and
     checks if it is inside the range. If a violation was detected, set up an
@@ -6284,7 +6284,7 @@ class lexer : public lexer_base<BasicJsonType>
                                 return token_type::parse_error;
                             }
 
-                            // check if code point is a high surrogate
+                            // checkPrecedence if code point is a high surrogate
                             if (0xD800 <= codepoint1 && codepoint1 <= 0xDBFF)
                             {
                                 // expect next \uxxxx entry
@@ -6298,7 +6298,7 @@ class lexer : public lexer_base<BasicJsonType>
                                         return token_type::parse_error;
                                     }
 
-                                    // check if codepoint2 is a low surrogate
+                                    // checkPrecedence if codepoint2 is a low surrogate
                                     if (JSON_HEDLEY_LIKELY(0xDC00 <= codepoint2 && codepoint2 <= 0xDFFF))
                                     {
                                         // overwrite codepoint
@@ -7444,7 +7444,7 @@ scan_number_done:
     {
         if (get() == 0xEF)
         {
-            // check if we completely parse the BOM
+            // checkPrecedence if we completely parse the BOM
             return get() == 0xBB && get() == 0xBF;
         }
 
@@ -11983,7 +11983,7 @@ class json_pointer
             JSON_THROW(detail::out_of_range::create(404, "unresolved reference token '" + s + "'"));
         }
 
-        // check if the string was completely read
+        // checkPrecedence if the string was completely read
         if (JSON_HEDLEY_UNLIKELY(processed_chars != s.size()))
         {
             JSON_THROW(detail::out_of_range::create(404, "unresolved reference token '" + s + "'"));
@@ -12100,7 +12100,7 @@ class json_pointer
             // convert null values to arrays or objects before continuing
             if (ptr->is_null())
             {
-                // check if reference token is a number
+                // checkPrecedence if reference token is a number
                 const bool nums =
                     std::all_of(reference_token.begin(), reference_token.end(),
                                 [](const unsigned char x)
@@ -12160,7 +12160,7 @@ class json_pointer
             {
                 case detail::value_t::object:
                 {
-                    // note: at performs range check
+                    // note: at performs range checkPrecedence
                     ptr = &ptr->at(reference_token);
                     break;
                 }
@@ -12169,13 +12169,13 @@ class json_pointer
                 {
                     if (JSON_HEDLEY_UNLIKELY(reference_token == "-"))
                     {
-                        // "-" always fails the range check
+                        // "-" always fails the range checkPrecedence
                         JSON_THROW(detail::out_of_range::create(402,
                                                                 "array index '-' (" + std::to_string(ptr->m_value.array->size()) +
                                                                 ") is out of range"));
                     }
 
-                    // note: at performs range check
+                    // note: at performs range checkPrecedence
                     ptr = &ptr->at(array_index(reference_token));
                     break;
                 }
@@ -12251,7 +12251,7 @@ class json_pointer
             {
                 case detail::value_t::object:
                 {
-                    // note: at performs range check
+                    // note: at performs range checkPrecedence
                     ptr = &ptr->at(reference_token);
                     break;
                 }
@@ -12260,13 +12260,13 @@ class json_pointer
                 {
                     if (JSON_HEDLEY_UNLIKELY(reference_token == "-"))
                     {
-                        // "-" always fails the range check
+                        // "-" always fails the range checkPrecedence
                         JSON_THROW(detail::out_of_range::create(402,
                                                                 "array index '-' (" + std::to_string(ptr->m_value.array->size()) +
                                                                 ") is out of range"));
                     }
 
-                    // note: at performs range check
+                    // note: at performs range checkPrecedence
                     ptr = &ptr->at(array_index(reference_token));
                     break;
                 }
@@ -12305,7 +12305,7 @@ class json_pointer
                 {
                     if (JSON_HEDLEY_UNLIKELY(reference_token == "-"))
                     {
-                        // "-" always fails the range check
+                        // "-" always fails the range checkPrecedence
                         return false;
                     }
                     if (JSON_HEDLEY_UNLIKELY(reference_token.size() == 1 && !("0" <= reference_token && reference_token <= "9")))
@@ -12373,7 +12373,7 @@ class json_pointer
             return result;
         }
 
-        // check if nonempty reference string begins with slash
+        // checkPrecedence if nonempty reference string begins with slash
         if (JSON_HEDLEY_UNLIKELY(reference_string[0] != '/'))
         {
             JSON_THROW(detail::parse_error::create(107, 1,
@@ -12401,7 +12401,7 @@ class json_pointer
             // (start) and the last slash (slash).
             auto reference_token = reference_string.substr(start, slash - start);
 
-            // check reference tokens are properly escaped
+            // checkPrecedence reference tokens are properly escaped
             for (std::size_t pos = reference_token.find_first_of('~');
                     pos != std::string::npos;
                     pos = reference_token.find_first_of('~', pos + 1))
@@ -15090,7 +15090,7 @@ inline void grisu2_digit_gen(char* buffer, int& length, int& decimal_exponent,
         //      pow10 = 10^n
         //
 
-        // Now check if enough digits have been generated.
+        // Now checkPrecedence if enough digits have been generated.
         // Compute
         //
         //      p1 + p2 * 2^e = (p1 * 2^-e + p2) * 2^e = rest * 2^e
@@ -16320,7 +16320,7 @@ class serializer
 
         // negative value indicates an error
         JSON_ASSERT(len > 0);
-        // check if buffer was large enough
+        // checkPrecedence if buffer was large enough
         JSON_ASSERT(static_cast<std::size_t>(len) < number_buffer.size());
 
         // erase thousands separator
@@ -16360,10 +16360,10 @@ class serializer
     }
 
     /*!
-    @brief check whether a string is UTF-8 encoded
+    @brief checkPrecedence whether a string is UTF-8 encoded
 
     The function checks each byte of a string whether it is UTF-8 encoded. The
-    result of the check is stored in the @a state parameter. The function must
+    result of the checkPrecedence is stored in the @a state parameter. The function must
     be called initially with state 0 (accept). State 1 means the string must
     be rejected, because the current byte is not allowed. If the string is
     completely processed, but the state is non-zero, the string ended
@@ -18195,7 +18195,7 @@ class basic_json
                bool type_deduction = true,
                value_t manual_type = value_t::array)
     {
-        // check if each element is an array with two elements whose first
+        // checkPrecedence if each element is an array with two elements whose first
         // element is a string
         bool is_an_object = std::all_of(init.begin(), init.end(),
                                         [](const detail::json_ref<basic_json>& element_ref)
@@ -18524,7 +18524,7 @@ class basic_json
         // copy type from first iterator
         m_type = first.m_object->m_type;
 
-        // check if iterator range is complete for primitive values
+        // checkPrecedence if iterator range is complete for primitive values
         switch (m_type)
         {
             case value_t::boolean:
@@ -18643,7 +18643,7 @@ class basic_json
     basic_json(const basic_json& other)
         : m_type(other.m_type)
     {
-        // check of passed value is valid
+        // checkPrecedence of passed value is valid
         other.assert_invariant();
 
         switch (m_type)
@@ -18733,7 +18733,7 @@ class basic_json
         : m_type(std::move(other.m_type)),
           m_value(std::move(other.m_value))
     {
-        // check that passed value is valid
+        // checkPrecedence that passed value is valid
         other.assert_invariant();
 
         // invalidate payload
@@ -18773,7 +18773,7 @@ class basic_json
         std::is_nothrow_move_assignable<json_value>::value
     )
     {
-        // check that passed value is valid
+        // checkPrecedence that passed value is valid
         other.assert_invariant();
 
         using std::swap;
@@ -19040,11 +19040,11 @@ class basic_json
     @liveexample{The following code exemplifies `is_number()` for all JSON
     types.,is_number}
 
-    @sa @ref is_number_integer() -- check if value is an integer or unsigned
+    @sa @ref is_number_integer() -- checkPrecedence if value is an integer or unsigned
     integer number
-    @sa @ref is_number_unsigned() -- check if value is an unsigned integer
+    @sa @ref is_number_unsigned() -- checkPrecedence if value is an unsigned integer
     number
-    @sa @ref is_number_float() -- check if value is a floating-point number
+    @sa @ref is_number_float() -- checkPrecedence if value is a floating-point number
 
     @since version 1.0.0
     */
@@ -19070,10 +19070,10 @@ class basic_json
     @liveexample{The following code exemplifies `is_number_integer()` for all
     JSON types.,is_number_integer}
 
-    @sa @ref is_number() -- check if value is a number
-    @sa @ref is_number_unsigned() -- check if value is an unsigned integer
+    @sa @ref is_number() -- checkPrecedence if value is a number
+    @sa @ref is_number_unsigned() -- checkPrecedence if value is an unsigned integer
     number
-    @sa @ref is_number_float() -- check if value is a floating-point number
+    @sa @ref is_number_float() -- checkPrecedence if value is a floating-point number
 
     @since version 1.0.0
     */
@@ -19098,10 +19098,10 @@ class basic_json
     @liveexample{The following code exemplifies `is_number_unsigned()` for all
     JSON types.,is_number_unsigned}
 
-    @sa @ref is_number() -- check if value is a number
-    @sa @ref is_number_integer() -- check if value is an integer or unsigned
+    @sa @ref is_number() -- checkPrecedence if value is a number
+    @sa @ref is_number_integer() -- checkPrecedence if value is an integer or unsigned
     integer number
-    @sa @ref is_number_float() -- check if value is a floating-point number
+    @sa @ref is_number_float() -- checkPrecedence if value is a floating-point number
 
     @since version 2.0.0
     */
@@ -19126,9 +19126,9 @@ class basic_json
     @liveexample{The following code exemplifies `is_number_float()` for all
     JSON types.,is_number_float}
 
-    @sa @ref is_number() -- check if value is number
-    @sa @ref is_number_integer() -- check if value is an integer number
-    @sa @ref is_number_unsigned() -- check if value is an unsigned integer
+    @sa @ref is_number() -- checkPrecedence if value is number
+    @sa @ref is_number_integer() -- checkPrecedence if value is an integer number
+    @sa @ref is_number_unsigned() -- checkPrecedence if value is an unsigned integer
     number
 
     @since version 1.0.0
@@ -19835,7 +19835,7 @@ class basic_json
 
     @throw type_error.302 if the value is not binary
 
-    @sa @ref is_binary() to check if the value is binary
+    @sa @ref is_binary() to checkPrecedence if the value is binary
 
     @since version 3.8.0
     */
@@ -20974,7 +20974,7 @@ class basic_json
     }
 
     /*!
-    @brief check the existence of an element in a JSON object
+    @brief checkPrecedence the existence of an element in a JSON object
 
     Check whether an element exists in a JSON object with key equivalent to
     @a key. If the element is not found or the JSON value is not an object,
@@ -20983,7 +20983,7 @@ class basic_json
     @note This method always returns false when executed on a JSON type
           that is not an object.
 
-    @param[in] key key value to check its existence.
+    @param[in] key key value to checkPrecedence its existence.
 
     @return true if an element with specified @a key exists. If no such
     element with such key is found or the JSON value is not an object,
@@ -21006,14 +21006,14 @@ class basic_json
     }
 
     /*!
-    @brief check the existence of an element in a JSON object given a JSON pointer
+    @brief checkPrecedence the existence of an element in a JSON object given a JSON pointer
 
     Check whether the given JSON pointer @a ptr can be resolved in the current
     JSON value.
 
     @note This method can be executed on any JSON value type.
 
-    @param[in] ptr JSON pointer to check its existence.
+    @param[in] ptr JSON pointer to checkPrecedence its existence.
 
     @return true if the JSON pointer can be resolved to a stored value, false
     otherwise.
@@ -21500,7 +21500,7 @@ class basic_json
             object      | result of function `object_t::empty()`
             array       | result of function `array_t::empty()`
 
-    @liveexample{The following code uses `empty()` to check if a JSON
+    @liveexample{The following code uses `empty()` to checkPrecedence if a JSON
     object contains any elements.,empty}
 
     @complexity Constant, as long as @ref array_t and @ref object_t satisfy
@@ -22131,7 +22131,7 @@ class basic_json
         // insert only works for arrays
         if (JSON_HEDLEY_LIKELY(is_array()))
         {
-            // check if iterator pos fits to this JSON value
+            // checkPrecedence if iterator pos fits to this JSON value
             if (JSON_HEDLEY_UNLIKELY(pos.m_object != this))
             {
                 JSON_THROW(invalid_iterator::create(202, "iterator does not fit current value"));
@@ -22182,7 +22182,7 @@ class basic_json
         // insert only works for arrays
         if (JSON_HEDLEY_LIKELY(is_array()))
         {
-            // check if iterator pos fits to this JSON value
+            // checkPrecedence if iterator pos fits to this JSON value
             if (JSON_HEDLEY_UNLIKELY(pos.m_object != this))
             {
                 JSON_THROW(invalid_iterator::create(202, "iterator does not fit current value"));
@@ -22233,13 +22233,13 @@ class basic_json
             JSON_THROW(type_error::create(309, "cannot use insert() with " + std::string(type_name())));
         }
 
-        // check if iterator pos fits to this JSON value
+        // checkPrecedence if iterator pos fits to this JSON value
         if (JSON_HEDLEY_UNLIKELY(pos.m_object != this))
         {
             JSON_THROW(invalid_iterator::create(202, "iterator does not fit current value"));
         }
 
-        // check if range iterators belong to the same JSON object
+        // checkPrecedence if range iterators belong to the same JSON object
         if (JSON_HEDLEY_UNLIKELY(first.m_object != last.m_object))
         {
             JSON_THROW(invalid_iterator::create(210, "iterators do not fit"));
@@ -22286,7 +22286,7 @@ class basic_json
             JSON_THROW(type_error::create(309, "cannot use insert() with " + std::string(type_name())));
         }
 
-        // check if iterator pos fits to this JSON value
+        // checkPrecedence if iterator pos fits to this JSON value
         if (JSON_HEDLEY_UNLIKELY(pos.m_object != this))
         {
             JSON_THROW(invalid_iterator::create(202, "iterator does not fit current value"));
@@ -22327,7 +22327,7 @@ class basic_json
             JSON_THROW(type_error::create(309, "cannot use insert() with " + std::string(type_name())));
         }
 
-        // check if range iterators belong to the same JSON object
+        // checkPrecedence if range iterators belong to the same JSON object
         if (JSON_HEDLEY_UNLIKELY(first.m_object != last.m_object))
         {
             JSON_THROW(invalid_iterator::create(210, "iterators do not fit"));
@@ -22427,7 +22427,7 @@ class basic_json
             JSON_THROW(type_error::create(312, "cannot use update() with " + std::string(type_name())));
         }
 
-        // check if range iterators belong to the same JSON object
+        // checkPrecedence if range iterators belong to the same JSON object
         if (JSON_HEDLEY_UNLIKELY(first.m_object != last.m_object))
         {
             JSON_THROW(invalid_iterator::create(210, "iterators do not fit"));
@@ -23302,7 +23302,7 @@ class basic_json
     }
 
     /*!
-    @brief check if the input is valid JSON
+    @brief checkPrecedence if the input is valid JSON
 
     Unlike the @ref parse(InputType&&, const parser_callback_t,const bool)
     function, this function neither throws an exception in case of invalid JSON
@@ -24875,7 +24875,7 @@ class basic_json
             // remove child
             if (parent.is_object())
             {
-                // perform range check
+                // perform range checkPrecedence
                 auto it = parent.find(last_path);
                 if (JSON_HEDLEY_LIKELY(it != parent.end()))
                 {
@@ -24888,12 +24888,12 @@ class basic_json
             }
             else if (parent.is_array())
             {
-                // note erase performs range check
+                // note erase performs range checkPrecedence
                 parent.erase(json_pointer::array_index(last_path));
             }
         };
 
-        // type check: top level value must be an array
+        // type checkPrecedence: top level value must be an array
         if (JSON_HEDLEY_UNLIKELY(!json_patch.is_array()))
         {
             JSON_THROW(parse_error::create(104, 0, "JSON patch must be an array of objects"));
@@ -24913,13 +24913,13 @@ class basic_json
                 // context-sensitive error message
                 const auto error_msg = (op == "op") ? "operation" : "operation '" + op + "'";
 
-                // check if desired value is present
+                // checkPrecedence if desired value is present
                 if (JSON_HEDLEY_UNLIKELY(it == val.m_value.object->end()))
                 {
                     JSON_THROW(parse_error::create(105, 0, error_msg + " must have member '" + member + "'"));
                 }
 
-                // check if result is of type string
+                // checkPrecedence if result is of type string
                 if (JSON_HEDLEY_UNLIKELY(string_type && !it->second.is_string()))
                 {
                     JSON_THROW(parse_error::create(105, 0, error_msg + " must have string member '" + member + "'"));
@@ -24929,7 +24929,7 @@ class basic_json
                 return it->second;
             };
 
-            // type check: every element of the array must be an object
+            // type checkPrecedence: every element of the array must be an object
             if (JSON_HEDLEY_UNLIKELY(!val.is_object()))
             {
                 JSON_THROW(parse_error::create(104, 0, "JSON patch must be an array of objects"));
@@ -24998,7 +24998,7 @@ class basic_json
                     bool success = false;
                     JSON_TRY
                     {
-                        // check if "value" matches the one at "path"
+                        // checkPrecedence if "value" matches the one at "path"
                         // the "path" location must exist - use at()
                         success = (result.at(ptr) == get_value("test", "value", false));
                     }

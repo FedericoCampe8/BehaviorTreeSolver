@@ -99,7 +99,7 @@ void DD::MDD<ProblemType, StateType>::buildTopDown(DD::Type type, Neighbourhood 
         {
             for(u32 i = 0; i < currentStates->getSize(); i +=1)
             {
-                //currentStates->at(i)->print();
+               currentStates->at(i)->print();
             }
             setInvalid();
             return;
