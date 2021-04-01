@@ -49,7 +49,14 @@ set(SOURCES
     src/BB/AugmentedState.cuh
     src/BB/PriorityQueue.cuh
     src/DD/Context.h
-    include/Utils/Algorithms.cuh include/Containers/Pair.cuh src/Options.h src/DP/CTWState.cuh)
+    include/Utils/Algorithms.cuh
+    include/Containers/Pair.cuh
+    src/Options.h
+    src/DP/CTWState.cuh
+    src/OP/MOSProblem.cuh
+    src/DP/MOSPState.cuh
+    src/DP/MOSPModel.cuh)
+
 
 # Add include path
 include_directories(include)

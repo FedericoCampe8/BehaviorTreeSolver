@@ -8,7 +8,7 @@ namespace DP
 {
     __host__ __device__ inline DP::CostType calcCost(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType const value);
     __host__ __device__ inline void ifPickupAddDelivery(OP::ValueType value, VRPState* state);
-    void makeRoot(OP::VRProblem const * problem, VRPState* root);    void makeRoot(OP::VRProblem const * problem, VRPState* root);
+    void makeRoot(OP::VRProblem const * problem, VRPState* root);
     __host__ __device__ inline void makeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, DP::CostType cost, VRPState* nextState);
     __host__ __device__ inline void mergeState(OP::VRProblem const * problem, VRPState const * currentState, OP::ValueType value, VRPState* nextState);
 }
