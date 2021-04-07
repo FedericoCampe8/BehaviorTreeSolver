@@ -4,6 +4,7 @@
 #include <Utils/Chrono.cuh>
 #include "DP/VRPModel.cuh"
 #include "DP/CTWModel.cuh"
+#include "DP/MOSPModel.cuh"
 #include "OffloadBuffer.cuh"
 #include "BB/PriorityQueue.cuh"
 #include "Options.h"
@@ -15,8 +16,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = CTWProblem;
-using StateType = CTWState;
+using ProblemType = MOSProblem;
+using StateType = MOSPState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);

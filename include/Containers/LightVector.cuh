@@ -163,8 +163,11 @@ template<typename T>
 __host__ __device__
 void LightVector<T>::resize(T const * end)
 {
-    unsigned int const size = this->indexOf(end);
-    resize(size);
+    if(end < this->end())
+    {
+        unsigned int const size = this->indexOf(end);
+        resize(size);
+    }
 }
 
 template<typename T>

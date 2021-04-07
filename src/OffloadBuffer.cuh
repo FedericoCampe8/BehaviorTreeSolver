@@ -70,12 +70,12 @@ void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index, bool o
 
     if (not onlyRestricted)
     {
-        //setTop(index);
-        //barrier();
-        //mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
-        //barrier();
-        //setLowerbound(index);
-        augmentedStates[index]->lowerbound = 0;
+        setTop(index);
+        barrier();
+        mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
+        barrier();
+        setLowerbound(index);
+        //augmentedStates[index]->lowerbound = 0;
     }
     setTop(index);
     barrier();

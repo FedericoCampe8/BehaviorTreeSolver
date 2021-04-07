@@ -12,6 +12,7 @@ namespace DP
         public:
         u16 clientsToClose;
         u16 openStacksCount;
+        u16 maxOpenStacksCount;
         Array<u16> productsToDo;
 
 
@@ -33,6 +34,7 @@ DP::MOSPState::MOSPState(OP::MOSProblem const * problem, std::byte* storage) :
     State(problem, storage),
     clientsToClose(0),
     openStacksCount(0),
+    maxOpenStacksCount(0),
     productsToDo(problem->clients, Memory::align<u16>(this->State::endOfStorage()))
 {}
 
@@ -59,6 +61,7 @@ DP::MOSPState& DP::MOSPState::operator=(DP::MOSPState const & other)
     State::operator=(other);
     clientsToClose = other.clientsToClose;
     openStacksCount = other.openStacksCount;
+    maxOpenStacksCount = other.maxOpenStacksCount;
     productsToDo = other.productsToDo;
     return *this;
 }
@@ -88,5 +91,6 @@ void DP::MOSPState::swap(DP::MOSPState& mosps0, DP::MOSPState& mosps1)
     State::swap(mosps0, mosps1);
     thrust::swap(mosps0.clientsToClose, mosps1.clientsToClose);
     thrust::swap(mosps0.openStacksCount, mosps1.openStacksCount);
+    thrust::swap(mosps0.maxOpenStacksCount, mosps1.maxOpenStacksCount);
     Array<u16>::swap(mosps0.productsToDo, mosps1.productsToDo);
 }

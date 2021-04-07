@@ -3,10 +3,50 @@
 namespace Algorithms
 {
     template<typename T>
+    __host__ __device__ T& min(T& a, T& b);
+
+    template<typename T>
+    __host__ __device__ T& min(T const & a, T const & b);
+
+    template<typename T>
+    __host__ __device__ T& max(T& a, T& b);
+
+    template<typename T>
+    __host__ __device__ T& max(T const & a, T const& b);
+
+    template<typename T>
     __device__ inline void oddEvenSort(T* array, unsigned int size);
 
     template<typename T>
     __host__ __device__ void orderedInsertion(T* array, unsigned int size, T const * value);
+}
+
+template<typename T>
+__host__ __device__
+T& Algorithms::min(T const & a, T const & b)
+{
+    return min(const_cast<T&>(a), const_cast<T&>(b));
+}
+
+template<typename T>
+__host__ __device__
+T& Algorithms::min(T& a, T& b)
+{
+    return a < b ? a : b;
+}
+
+template<typename T>
+__host__ __device__
+T& Algorithms::max(T const & a, T const & b)
+{
+    return max(const_cast<T&>(a), const_cast<T&>(b));
+}
+
+template<typename T>
+__host__ __device__
+T& Algorithms::max(T& a, T& b)
+{
+    return a > b ? a : b;
 }
 
 template<typename T>

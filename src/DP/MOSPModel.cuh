@@ -15,7 +15,20 @@ namespace DP
 __host__ __device__
 DP::CostType DP::calcCost(OP::MOSProblem const * problem, MOSPState const * currentState, OP::ValueType const value)
 {
-    //TODO
+    u16 openStacksCount = 0;
+    OP::ValueType const product = value;
+    for (OP::ValueType client = 0; client < problem->clients; client += 1)
+    {
+        if(problem->getOrder(client, product) > 0)
+        {
+            if (*currentState->productsToDo[client] == 0)
+            {
+                    openStacksCount += 1;
+            }
+        }
+    }
+    DP::CostType cost = currentState->openStacksCount + openStacksCount - currentState->clientsToClose;
+    return Algorithms::max(currentState->cost, cost);
 }
 
 
@@ -67,16 +80,18 @@ void DP::makeState(OP::MOSProblem const * problem, MOSPState const * currentStat
             }
         }
     }
+    //nextState->print(true);
 }
 
 __host__ __device__
 void DP::mergeState(OP::MOSProblem const * problem, MOSPState const * currentState, OP::ValueType value, MOSPState* nextState)
 {
     nextState->admissibleValuesMap.merge(currentState->admissibleValuesMap);
-    nextState->openStacksCount = min(nextState->openStacksCount, currentState->openStacksCount);
-    nextState->clientsToClose = min(nextState->clientsToClose, currentState->clientsToClose);
+    nextState->openStacksCount = Algorithms::min(nextState->openStacksCount, currentState->openStacksCount);
+    nextState->maxOpenStacksCount = Algorithms::min(nextState->maxOpenStacksCount, currentState->maxOpenStacksCount);
+    nextState->clientsToClose = Algorithms::min(nextState->clientsToClose, currentState->clientsToClose);
     for (OP::ValueType client = 0; client < problem->clients; client += 1)
     {
-       *nextState->productsToDo[client] = min(*nextState->productsToDo[client], *currentState->productsToDo[client])
+       *nextState->productsToDo[client] = Algorithms::min(*nextState->productsToDo[client], *currentState->productsToDo[client]);
     }
 }

@@ -61,7 +61,7 @@ Options::Options() :
     anyOption->addUsage("");
 
     anyOption->setFlag("help",'h');
-    anyOption->setOption('s');
+    anyOption->setFlag('s');
     anyOption->setOption('q');
     anyOption->setOption('t');
     anyOption->setOption("wc");
