@@ -5,6 +5,7 @@
 #include "DP/VRPModel.cuh"
 #include "DP/CTWModel.cuh"
 #include "DP/MOSPModel.cuh"
+#include "DP/JSPModel.cuh"
 #include "OffloadBuffer.cuh"
 #include "BB/PriorityQueue.cuh"
 #include "Options.h"

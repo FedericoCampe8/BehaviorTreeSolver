@@ -55,7 +55,10 @@ set(SOURCES
     src/DP/CTWState.cuh
     src/OP/MOSProblem.cuh
     src/DP/MOSPState.cuh
-    src/DP/MOSPModel.cuh)
+    src/DP/MOSPModel.cuh
+    src/OP/JSProblem.cuh
+    src/DP/JSPState.cuh
+    src/DP/JSPModel.cuh)
 
 
 # Add include path
