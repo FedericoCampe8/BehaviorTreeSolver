@@ -22,7 +22,7 @@ OP::Variable::Variable(ValueType minValue, ValueType maxValue) :
     minValue(minValue),
     maxValue(maxValue)
 {
-    assert(maxValue < MaxValue);
+    assert(maxValue < OP::MaxValue);
 }
 
 __host__ __device__

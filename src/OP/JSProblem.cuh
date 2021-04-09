@@ -63,8 +63,8 @@ OP::JSProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTyp
         for (OP::ValueType machine = 0; machine < machines; machine += 1)
         {
             u16 const taskIdx = (job * machines) + machine;
-            problem->tasks[taskIdx]->first = problemJson["tasks"][taskIdx][0];
-            problem->tasks[taskIdx]->second = problemJson["tasks"][taskIdx][1];
+            problem->tasks[taskIdx]->first = problemJson["tasks"][taskIdx][0]; // Machine
+            problem->tasks[taskIdx]->second = problemJson["tasks"][taskIdx][1]; // Duration
         }
     }
     return problem;

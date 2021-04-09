@@ -22,8 +22,9 @@ class TxtVisitor(NodeVisitor):
     def visit_txt(self, node, visited_children):
         j = visited_children[1]
         m = visited_children[3]
-        t = visited_children[5]
-        t = [t[i:i+2] for i in range(0, len(t), 2)] 
+        t = np.array(visited_children[5])
+        t = np.reshape(t,(j * m,-1)) 
+        t = t.tolist()
         output = {}
         output.update({"jobs": j})
         output.update({"machines": m})

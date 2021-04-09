@@ -17,8 +17,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = MOSProblem;
-using StateType = MOSPState;
+using ProblemType = JSProblem;
+using StateType = JSPState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);
@@ -191,7 +191,8 @@ int main(int argc, char* argv[])
         {
             clearLine();
             printf("[INFO] Better solution found: ");
-            bestSolution->selectedValues.print(false);
+            //bestSolution->selectedValues.print(false);
+            bestSolution->print(false);
             printf(" | Value: %u", bestSolution->cost);
             printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
@@ -216,7 +217,8 @@ int main(int argc, char* argv[])
                     gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
                 }
                 printf("[INFO] Solution: ");
-                currentSolution->selectedValues.print(false);
+                //currentSolution->selectedValues.print(false);
+                currentSolution->print(false);
                 printf(" | Value: %u", currentSolution->cost);
                 printf(" | Time: ");
                 printElapsedTime(now() - searchStartTime);
@@ -232,7 +234,8 @@ int main(int argc, char* argv[])
 
     clearLine();
     printf("[RESULT] Solution: ");
-    bestSolution->selectedValues.print(false);
+    //bestSolution->selectedValues.print(false);
+    bestSolution->print(false);
     printf(" | Value: %u", bestSolution->cost);
     printf(" | Time: ");
     printElapsedTime(now() - searchStartTime);

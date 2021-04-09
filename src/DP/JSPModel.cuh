@@ -17,7 +17,7 @@ __host__ __device__
 DP::CostType DP::calcCost(OP::JSProblem const * problem, JSPState const * currentState, OP::ValueType const value)
 {
     OP::ValueType const task = value;
-    OP::ValueType const job = value / problem->machines;
+    OP::ValueType const job = task / problem->machines;
     u16 const machine = problem->tasks[task]->first;
     u16 const duration = problem->tasks[task]->second;
     DP::CostType const makespan = Algorithms::max(*currentState->machines_makespan[machine], *currentState->jobs_makespan[job]) + duration;
@@ -38,6 +38,10 @@ void DP::makeRoot(OP::JSProblem const* problem, JSPState* root)
     {
         *root->machines_makespan[machine] = 0;
     }
+    for(OP::ValueType task = 0; task < root->tasks_start.getCapacity(); task +=1 )
+    {
+        *root->tasks_start[task] = 0;
+    }
 }
 
 __host__ __device__
@@ -55,20 +59,31 @@ void DP::makeState(OP::JSProblem const * problem, JSPState const * currentState,
     u16 const machine = problem->tasks[task]->first;
     u16 const duration = problem->tasks[task]->second;
 
+    u16 const task_start = Algorithms::max(*nextState->machines_makespan[machine], *nextState->jobs_makespan[job]);
+    *nextState->tasks_start[task] = task_start;
+
     *nextState->jobs_progress[job] += 1;
     if (*nextState->jobs_progress[job] < problem->machines)
     {
         nextState->admissibleValuesMap.insert(task + 1);
     }
 
-    u16 const makespan = Algorithms::max(*nextState->machines_makespan[machine], *nextState->jobs_makespan[job]) + duration;
+    u16 makespan = task_start + duration;
     *nextState->machines_makespan[machine] = makespan;
-    *nextState->jobs_makespan[machine] = makespan;
+    *nextState->jobs_makespan[job] = makespan;
     //nextState->print(true);
 }
 
 __host__ __device__
 void DP::mergeState(OP::JSProblem const * problem, JSPState const * currentState, OP::ValueType value, JSPState* nextState)
 {
-   // Not implemented
+    nextState->cost = Algorithms::min(currentState->cost, nextState->cost);
+    for (OP::ValueType job = 0; job < problem->jobs; job += 1)
+    {
+        *nextState->jobs_makespan[job] = Algorithms::min(*currentState->jobs_makespan[job], *nextState->jobs_makespan[job]);
+    }
+    for (OP::ValueType machine = 0; machine < problem->machines; machine += 1)
+    {
+        *nextState->machines_makespan[machine] = Algorithms::min(* currentState->machines_makespan[machine], *nextState->machines_makespan[machine]);
+    }
 }
