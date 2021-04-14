@@ -14,7 +14,7 @@ json_file.close()
 j = json_content["jobs"]
 m = json_content["machines"]
 t = np.array(json_content["tasks"])
-t = np.reshape(t, (m, -1))
+t = np.reshape(t, (j, -1))
 t = t.tolist()
 t = [str(job) for job in t]
 t = "\n       | ".join(t)
