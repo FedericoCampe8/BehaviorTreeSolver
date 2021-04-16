@@ -2,5 +2,7 @@
 .idea/
 
 # Build
-build*/
 cmake-build*/
+
+# Solver
+benchmarks/Solvers/
