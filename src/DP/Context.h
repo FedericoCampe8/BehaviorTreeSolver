@@ -4,6 +4,6 @@
 
 namespace DP
 {
-    using CostType = uint32_t;
-    CostType const MaxCost = UINT32_MAX;
+    using CostType = int32_t;
+    CostType const MaxCost = INT32_MAX;
 }

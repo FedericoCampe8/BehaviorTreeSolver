@@ -1,24 +1,24 @@
 #pragma once
 
+#include <Utils/CUDA.cuh>
+#include <Utils/TypeAlias.h>
+
 namespace Algorithms
 {
     template<typename T>
-    __host__ __device__ T& min(T& a, T& b);
+    __host__ __device__ inline T& min(T& a, T& b);
 
     template<typename T>
-    __host__ __device__ T& min(T const & a, T const & b);
+    __host__ __device__ inline T& min(T const & a, T const & b);
 
     template<typename T>
-    __host__ __device__ T& max(T& a, T& b);
+    __host__ __device__ inline T& max(T& a, T& b);
 
     template<typename T>
-    __host__ __device__ T& max(T const & a, T const& b);
+    __host__ __device__ inline T& max(T const & a, T const& b);
 
     template<typename T>
     __device__ inline void oddEvenSort(T* array, unsigned int size);
-
-    template<typename T>
-    __host__ __device__ void orderedInsertion(T* array, unsigned int size, T const * value);
 }
 
 template<typename T>
@@ -53,47 +53,32 @@ template<typename T>
 __device__
 void Algorithms::oddEvenSort(T* array, unsigned int size)
 {
-    for (unsigned int iterationIdx = 0; iterationIdx < (size / 2) + 1; iterationIdx += 1)
-    {
-        __syncthreads();
-        unsigned int const i = threadIdx.x;
-        if (i < size / 2)
-        {
-            unsigned int const idx0 = 2 * i;
-            unsigned int const idx1 = (2 * i) + 1;
-            if (not(array[idx0] < array[idx1]))
-            {
-                T::swap(array[idx0], array[idx1]);
-            }
-        }
-        __syncthreads();
-        if (i >= size / 2 and i <= size - 2)
-        {
-            unsigned int const j = i - (size / 2);
-            unsigned int const idx0 = 1 + (2 * j);
-            unsigned int const idx1 = 1 + (2 * j) + 1;
-            if (not(array[idx0] < array[idx1]))
-            {
-                T::swap(array[idx0], array[idx1]);
-            }
-        }
-    }
-}
+    u32 const threads = blockDim.x;
+    u32 const pairs = size / 2 + (size % 2 != 0);
+    u32 const pairsPerThread = CUDA::getElementsPerThread(threads, pairs);
+    u32 const elementsPerThread = 2 * pairsPerThread;
 
-template<typename T>
-__host__ __device__
-void Algorithms::orderedInsertion(T* array, unsigned int size, T const * value)
-{
-    for (int index = size - 1; index >= 0; index -= 1)
+    for (unsigned int iterationIdx = 0; iterationIdx < pairs + 1; iterationIdx += 1)
     {
-        if (not (array[index] < *value))
+        __syncthreads();
+        u32 beginIdx = threadIdx.x * elementsPerThread;
+        u32 endIdx = Algorithms::min(beginIdx + elementsPerThread, size - 1);
+        for(u32 i = beginIdx; i < endIdx; i += 2)
         {
-            T::swap(array[index], array[index+1]);
+            if (not(array[i] < array[i+1]))
+            {
+                T::swap(array[i], array[i+1]);
+            }
         }
-        else
+        __syncthreads();
+        beginIdx = threadIdx.x * elementsPerThread + 1;
+        endIdx = Algorithms::min(beginIdx + elementsPerThread + 1, size - 1);
+        for(u32 i = beginIdx; i < endIdx; i += 2)
         {
-            array[index] = *value;
-            break;
+            if (not(array[i] < array[i+1]))
+            {
+                T::swap(array[i], array[i+1]);
+            }
         }
     }
 }

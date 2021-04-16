@@ -4,6 +4,6 @@
 
 namespace OP
 {
-    using ValueType = uint8_t;
-    ValueType const MaxValue = UINT8_MAX;
+    using ValueType = int16_t;
+    ValueType const MaxValue = INT16_MAX;
 }

@@ -126,11 +126,14 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory() const
 {
-    return
+    u32 const size =
         sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) +  // currentStates
         sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) +  // nextStates
         sizeof(LightVector<AuxiliaryData>) + LightVector<AuxiliaryData>::sizeOfStorage(width * problem->maxBranchingFactor) + // auxiliaryData
         Memory::DefaultAlignmentPadding * 7; // alignment padding
+    assert(size <= 64ul * 1024ul * 1024ul);
+    return size;
+
 }
 
 template<typename ProblemType, typename StateType>
@@ -138,19 +141,22 @@ __host__ __device__
 void DD::MDD<ProblemType, StateType>::calcAuxiliaryData(u32 variableIdx, Neighbourhood const * neighbourhood)
 {
 #ifdef __CUDA_ARCH__
-    u32 const currentStateIdx = threadIdx.x / problem->maxBranchingFactor;
-    if (currentStateIdx < currentStates->getSize())
+    u32 const threads = blockDim.x;
+    u32 const elements = currentStates->getSize() * problem->maxBranchingFactor;
+    u32 const elementsPerThread = CUDA::getElementsPerThread(threads, elements);
+    u32 const startIdx = threadIdx.x * elementsPerThread;
+    u32 const endIdx = Algorithms::min(startIdx + elementsPerThread, elements);
+    for (u32 index = startIdx; index < endIdx; index += 1)
+    {
+        u32 const currentStateIdx = index / problem->maxBranchingFactor;
+        OP::ValueType value = index %  problem->maxBranchingFactor;
 #else
     for (u32 currentStateIdx = 0; currentStateIdx < currentStates->getSize(); currentStateIdx += 1)
-#endif
     {
-        StateType const * const currentState = currentStates->at(currentStateIdx);
-#ifdef __CUDA_ARCH__
-        OP::ValueType const value = threadIdx.x % problem->maxBranchingFactor;
-#else
         for (OP::ValueType value = 0; value < problem->maxBranchingFactor; value += 1)
 #endif
         {
+            StateType const * const currentState = currentStates->at(currentStateIdx);
             if(currentState->admissibleValuesMap.contains(value))
             {
                 bool const boundsChk = problem->variables[variableIdx]->boundsCheck(value);
@@ -170,8 +176,12 @@ __host__ __device__
 void DD::MDD<ProblemType, StateType>::calcNextStates(unsigned int variableIdx)
 {
 #ifdef __CUDA_ARCH__
-    u32 const nextStateIdx = threadIdx.x;
-    if (nextStateIdx < nextStates->getSize())
+    u32 const threads = blockDim.x;
+    u32 const elements = nextStates->getSize();
+    u32 const elementsPerThread = CUDA::getElementsPerThread(threads, elements);
+    u32 const startIdx = threadIdx.x * elementsPerThread;
+    u32 const endIdx = Algorithms::min(startIdx + elementsPerThread, elements);
+    for (u32 nextStateIdx = startIdx; nextStateIdx < endIdx; nextStateIdx += 1)
 #else
     for (u32 nextStateIdx = 0; nextStateIdx < nextStates->getSize(); nextStateIdx += 1)
 #endif
@@ -262,8 +272,12 @@ __host__ __device__
 void DD::MDD<ProblemType, StateType>::resetAuxiliaryData()
 {
 #ifdef __CUDA_ARCH__
-    u32 const auxiliaryDataIdx = threadIdx.x;
-    if (auxiliaryDataIdx < auxiliaryData->getSize())
+    u32 const threads = blockDim.x;
+    u32 const elements = auxiliaryData->getSize();
+    u32 const elementsPerThread = CUDA::getElementsPerThread(threads, elements);
+    u32 const startIdx = threadIdx.x * elementsPerThread;
+    u32 const endIdx = Algorithms::min(startIdx + elementsPerThread, elements);
+    for (u32 auxiliaryDataIdx = startIdx; auxiliaryDataIdx < endIdx; auxiliaryDataIdx += 1)
 #else
     for (u32 auxiliaryDataIdx = 0; auxiliaryDataIdx < auxiliaryData->getSize(); auxiliaryDataIdx += 1)
 #endif
@@ -309,8 +323,12 @@ __host__ __device__
 void DD::MDD<ProblemType, StateType>::saveCutset()
 {
 #ifdef __CUDA_ARCH__
-    u32 const cutsetStateIdx = threadIdx.x;
-    if (cutsetStateIdx < cutset.getSize())
+    u32 const threads = blockDim.x;
+    u32 const elements = cutset.getSize();
+    u32 const elementsPerThread = CUDA::getElementsPerThread(threads, elements);
+    u32 const startIdx = threadIdx.x * elementsPerThread;
+    u32 const endIdx = Algorithms::min(startIdx + elementsPerThread, elements);
+    for (u32 cutsetStateIdx = startIdx; cutsetStateIdx < endIdx; cutsetStateIdx += 1)
 #else
     for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutset.getSize(); cutsetStateIdx += 1)
 #endif

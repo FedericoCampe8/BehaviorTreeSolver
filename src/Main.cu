@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <thread>
 #include <External/AnyOption/anyoption.h>
+#include <Utils/Algorithms.cuh>
 #include <Utils/Chrono.cuh>
 #include "DP/VRPModel.cuh"
 #include "DP/CTWModel.cuh"
@@ -206,14 +207,14 @@ int main(int argc, char* argv[])
                 unsigned long int cpuSpeed = 0;
                 if (cpuOffloadBuffer->getSize() > 0)
                 {
-                    uint64_t cpuOffloadElapsedTime = max(1ul, cpuOffloadEndTime - cpuOffloadStartTime);
+                    uint64_t cpuOffloadElapsedTime = Algorithms::max(1ul, cpuOffloadEndTime - cpuOffloadStartTime);
                     cpuSpeed = cpuOffloadBuffer->getSize() * 1000 / cpuOffloadElapsedTime;
                 }
 
                 unsigned long int gpuSpeed = 0;
                 if (gpuOffloadBuffer->getSize() > 0)
                 {
-                    uint64_t gpuOffloadElapsedTime = max(1ul, gpuOffloadEndTime - gpuOffloadStartTime);
+                    uint64_t gpuOffloadElapsedTime = Algorithms::max(1ul, gpuOffloadEndTime - gpuOffloadStartTime);
                     gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
                 }
                 printf("[INFO] Solution: ");
@@ -248,7 +249,7 @@ int main(int argc, char* argv[])
 void configGPU()
 {
     //Heap
-    std::size_t sizeHeap = 3ul * 1024ul * 1024ul * 1024ul;
+    std::size_t sizeHeap = 4ul * 1024ul * 1024ul * 1024ul;
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, sizeHeap);
 
     //Stack
@@ -363,8 +364,7 @@ void doOffloadGpuAsync(OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, b
     {
         DD::MDD<ProblemType,StateType> const * const mdd = gpuOffloadBuffer->getMDD(0);
         unsigned int const blocksCount = gpuOffloadBuffer->getSize();
-        unsigned int const blockSize = mdd->width * mdd->problem->maxBranchingFactor;
-        assert(blockSize <= 1024);
+        unsigned int const blockSize = Algorithms::min(mdd->width * mdd->problem->maxBranchingFactor, 1024u);
         doOffloadKernel<ProblemType, StateType><<<blocksCount, blockSize, mdd->sizeOfScratchpadMemory()>>>(gpuOffloadBuffer, onlyRestricted);
     }
 }

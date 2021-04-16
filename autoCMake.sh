@@ -39,5 +39,6 @@ do
 done
 
 buildDir=$2
-
+rm -r $buildDir 2> /dev/null
+mkdir -p $buildDir
 cmake -B $buildDir -D CMAKE_BUILD_TYPE=$buildType
