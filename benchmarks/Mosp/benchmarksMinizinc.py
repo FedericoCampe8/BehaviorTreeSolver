@@ -54,7 +54,10 @@ for instance in benchmarksCommon.instances:
     print("Solving " + instance + "...")
     cost, search_time, solution = asyncio.run(solve(args, "./open_stacks_01.mzn", "./data/dzn/" + instance + ".dzn"))
     # Write results     
-    output_file.write("{};{};{:.3f};{}\n".format(instance, cost, search_time, solution))
+    if solution:
+        output_file.write("{};{};{:.3f};{}\n".format(instance, cost, search_time, solution or ""))
+    else:
+        output_file.write("{};;;\n".format(instance))
     output_file.flush()
 
 # Close csv file

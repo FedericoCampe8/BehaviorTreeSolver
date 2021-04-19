@@ -24,8 +24,11 @@ for instance in benchmarksCommon.instances:
     # Run solver
     print("Solving " + instance + "...")
     cost, search_time, solution = ortoolsTsppd.solve(args, "./data/json/" + instance + ".json")    
-    # Write results     
-    output_file.write("{};{};{:.3f};{}\n".format(instance, cost, search_time, solution))
+    # Write results
+    if solution:
+        output_file.write("{};{};{:.3f};{}\n".format(instance, cost, search_time, solution or ""))
+    else:
+        output_file.write("{};;;\n".format(instance))
     output_file.flush()
 
 output_file.close()
