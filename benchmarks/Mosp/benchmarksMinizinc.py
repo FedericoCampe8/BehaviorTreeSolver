@@ -20,9 +20,10 @@ async def solve(args, mzn_file, dzn_file):
     model = minizinc.Model([mzn_file, dzn_file])
     
     # Lookup solver
-    solver_config = benchmarksCommon.solvers_configs[args.solver]
+    solver_config = benchmarksCommon.solvers_configs[args.solver]["path"]
     solver = minizinc.Solver.load(pathlib.Path(solver_config))
-   
+    free_search = solver == "ortools"
+    
     # Solve
     cost = None
     search_time = None
@@ -30,7 +31,7 @@ async def solve(args, mzn_file, dzn_file):
     instance = minizinc.Instance(solver, model)
     timedelta_timeout = datetime.timedelta(seconds=args.timeout)
     start_time = time.perf_counter()
-    async for result in instance.solutions(timeout=timedelta_timeout, processes=args.jobs, intermediate_solutions=True, free_search=True):
+    async for result in instance.solutions(timeout=timedelta_timeout, processes=args.jobs, intermediate_solutions=True, free_search=benchmarksCommon.solvers_configs[args.solver]["free_search"]):
         if result.solution != None:
             search_time = time.perf_counter() - start_time
             cost = result.objective 

@@ -1,7 +1,16 @@
 # Solvers configurations
 solvers_configs = {
-    "yuck": "../Solvers/yuck/yuck.msc",
-    "ortools": "../Solvers/ortools/ortools.msc"}
+    "yuck": 
+        {
+            "path": "../Solvers/yuck/yuck.msc",
+            "free_search": False
+        },
+    "ortools":
+        {
+            "path": "../Solvers/ortools/ortools.msc",
+            "free_search": True
+        }
+}
 
 # Instances
 instances = [
