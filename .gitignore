@@ -8,4 +8,4 @@ cmake-build*/
 benchmarks/Solvers/
 
 # Python 
-__pycache__
+__pycache__/
