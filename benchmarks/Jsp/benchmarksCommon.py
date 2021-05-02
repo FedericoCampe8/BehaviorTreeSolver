@@ -1,3 +1,11 @@
+# Solvers configurations
+solvers_configs = {
+    "mdd": 
+        {
+            "path": "../../cmake-build-local-release/mdd-gpu",
+        }
+}
+
 # Instances
 instances = [
     "abz5",
