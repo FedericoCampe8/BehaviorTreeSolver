@@ -20,8 +20,8 @@ async def solve(args, mzn_file, dzn_file):
     model = minizinc.Model([mzn_file, dzn_file])
     
     # Lookup solver
-    solver_config = benchmarksCommon.solvers_configs[args.solver]["path"]
-    solver = minizinc.Solver.load(pathlib.Path(solver_config))
+    solver_config = benchmarksCommon.solvers_configs[args.solver]
+    solver = minizinc.Solver.load(pathlib.Path(solver_config["path"]))
     free_search = solver == "ortools"
     
     # Solve
@@ -31,7 +31,7 @@ async def solve(args, mzn_file, dzn_file):
     instance = minizinc.Instance(solver, model)
     timedelta_timeout = datetime.timedelta(seconds=args.timeout)
     start_time = time.perf_counter()
-    async for result in instance.solutions(timeout=timedelta_timeout, processes=args.jobs, intermediate_solutions=True, free_search=benchmarksCommon.solvers_configs[args.solver]["free_search"]):
+    async for result in instance.solutions(timeout=timedelta_timeout, processes=args.jobs, intermediate_solutions=True, free_search=solver_config["free_search"]):
         if result.solution != None:
             search_time = time.perf_counter() - start_time
             cost = result.objective 
@@ -43,7 +43,7 @@ async def solve(args, mzn_file, dzn_file):
 args = getArguments(sys.argv[1:])
 
 # Initialize csv file
-output_filename = "mosp-" + args.solver + "-" + str(int(time.time())) + ".csv"
+output_filename = "mosp-{}-{}-{}-{}.csv".format(args.solver, args.timeout, args.jobs, int(time.time()))
 output_file = open(output_filename, "w")
 output_file.write("Timeout:{};Jobs:{}\n".format(args.timeout, args.jobs))
 output_file.write("Instance;Cost;Time;Solution\n")

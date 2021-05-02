@@ -15,7 +15,7 @@ def getArguments(argv):
 args = getArguments(sys.argv[1:])
 
 # Initialize csv file
-output_filename = "jsp-ortools-"+ str(int(time.time())) + ".csv"
+output_filename = "jsp-{}-{}-{}-{}.csv".format("ortools", args.timeout, args.jobs, int(time.time()))
 output_file = open(output_filename, "w")
 output_file.write("Timeout:{};Jobs:{}\n".format(args.timeout, args.jobs))
 output_file.write("Instance;Cost;Time;Solution\n")

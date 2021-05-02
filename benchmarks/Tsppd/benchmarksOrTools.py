@@ -14,7 +14,7 @@ def getArguments(argv):
 args = getArguments(sys.argv[1:])
 
 # Initialize csv file
-output_filename = "tsppd-ortools-"+ str(int(time.time())) + ".csv"
+output_filename = "tsppd-{}-{}-{}-{}.csv".format("ortools", args.timeout, 1, int(time.time()))
 output_file = open(output_filename, "w")
 output_file.write("Timeout:{};\n".format(args.timeout))
 output_file.write("Instance;Cost;Time;Solution\n")
