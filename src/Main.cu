@@ -191,14 +191,14 @@ int main(int argc, char* argv[])
         if(foundBetterSolution)
         {
             clearLine();
-            printf("[INFO] Better solution found: ");
-            //bestSolution->selectedValues.print(false);
-            bestSolution->print(false);
-            printf(" | Value: %u", bestSolution->cost);
-            printf(" | Time: ");
+            printf("[SOLUTION] Time: ");
             printElapsedTime(now() - searchStartTime);
-            printf(" | Iterations: %u", iterationsCount);
-            printf(" | States: %u - %u - %u\n", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
+            printf(" | Cost: %u", bestSolution->cost);
+            printf(" | Solution: ");
+            bestSolution->print(true);
+
+            //printf(" | Iterations: %u", iterationsCount);
+            //printf(" | States: %u - %u - %u\n", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
         }
         else
         {
@@ -217,15 +217,15 @@ int main(int argc, char* argv[])
                     uint64_t gpuOffloadElapsedTime = Algorithms::max(1ul, gpuOffloadEndTime - gpuOffloadStartTime);
                     gpuSpeed = gpuOffloadBuffer->getSize() * 1000 / gpuOffloadElapsedTime;
                 }
-                printf("[INFO] Solution: ");
+                //printf("[INFO] Solution: ");
                 //currentSolution->selectedValues.print(false);
-                currentSolution->print(false);
-                printf(" | Value: %u", currentSolution->cost);
+                //currentSolution->print(false);
+                printf("[INFO] Current value: %u", currentSolution->cost);
                 printf(" | Time: ");
                 printElapsedTime(now() - searchStartTime);
                 printf(" | Iteration: %u", iterationsCount);
-                printf(" | States: %u - %u - %u", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
-                printf(" | Speed: %lu - %lu\r", cpuSpeed, gpuSpeed);
+                //printf(" | States: %u - %u - %u", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
+                printf(" | CPU: %lu MDD/s | GPU: %lu MDD/s\r", cpuSpeed, gpuSpeed);
             }
         }
         fflush(stdout);
@@ -233,15 +233,14 @@ int main(int argc, char* argv[])
     }
     while(now() - searchStartTime < options.timeout * 1000 and (not priorityQueue.isEmpty()));
 
-    clearLine();
-    printf("[RESULT] Solution: ");
+    //clearLine();
     //bestSolution->selectedValues.print(false);
-    bestSolution->print(false);
-    printf(" | Value: %u", bestSolution->cost);
-    printf(" | Time: ");
-    printElapsedTime(now() - searchStartTime);
-    printf(" | Iterations: %u", iterationsCount);
-    printf(" | States: %u - %u - %u\n", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
+    //bestSolution->print(false);
+    //printf(" | Value: %u", bestSolution->cost);
+    //printf(" | Time: ");
+    //printElapsedTime(now() - searchStartTime);
+    //printf(" | Iterations: %u", iterationsCount);
+    //printf(" | States: %u - %u - %u\n", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
 
     return EXIT_SUCCESS;
 }
@@ -422,7 +421,8 @@ void printElapsedTime(uint64_t elapsedTimeMs)
 
     unsigned int s = ms / 1000;
 
-    printf("%lums (%02uh%02um%02us)", elapsedTimeMs, h, m, s);
+    //printf("%lums (%02uh%02um%02us)", elapsedTimeMs, h, m, s);
+    printf("%.3f", ms / 1000.0);
 }
 
 void clearLine()
