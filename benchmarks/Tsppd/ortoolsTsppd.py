@@ -62,7 +62,7 @@ def prepare_data(json_file_path):
     json_file = open(json_file_path, "r")
     json_content = json.load(json_file)
     json_file.close()
-
+    
     # Adjust instance
     del json_content["nodes"][1]
     del json_content["edges"][1]

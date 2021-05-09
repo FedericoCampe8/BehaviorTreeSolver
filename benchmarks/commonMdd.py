@@ -1,3 +1,4 @@
+import time
 import argparse
 import subprocess
 from common import Result, Solvers
@@ -7,22 +8,22 @@ from parsimonious.nodes import NodeVisitor
 
 def parse_args(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t",    type=int, action="store", dest="t")
-    parser.add_argument("-i",    type=int, action="store", dest="t")
-    parser.add_argument("-q",    type=int, action="store", dest="q")
-    parser.add_argument("--wc",  type=int, action="store", dest="wc")
-    parser.add_argument("--pc",  type=int, action="store", dest="pc")
-    parser.add_argument("--wg",  type=int, action="store", dest="wg")
-    parser.add_argument("--pg",  type=int, action="store", dest="pg")
-    parser.add_argument("--eq",  type=int, action="store", dest="eq")
-    parser.add_argument("--neq", type=int, action="store", dest="neq")
+    parser.add_argument("-t",    type=int, action="store", dest="t",   default=60)
+    parser.add_argument("-i",    type=int, action="store", dest="i",   default=15)
+    parser.add_argument("-q",    type=int, action="store", dest="q",   default=50000)
+    parser.add_argument("--wc",  type=int, action="store", dest="wc",  required=True)
+    parser.add_argument("--pc",  type=int, action="store", dest="pc",  required=True)
+    parser.add_argument("--wg",  type=int, action="store", dest="wg",  required=True)
+    parser.add_argument("--pg",  type=int, action="store", dest="pg",  required=True)
+    parser.add_argument("--eq",  type=int, action="store", dest="eq",  default=25)
+    parser.add_argument("--neq", type=int, action="store", dest="neq", default=25)
     args, _ = parser.parse_known_args(argv)
     return args
 
 
 def get_args_str(args):
     flat_args = args.t, args.i, args.q, args.wc, args.pc, args.wg, args.pg, args.eq, args.neq
-    return "t{}-i{}-q{}-wc{}-pc{}-wg{}-pg{}-eq{}-neq{}-{}".format(prefix, *flat_args, int(time.time()))
+    return "t{}-i{}-q{}-wc{}-pc{}-wg{}-pg{}-eq{}-neq{}-{}".format(*flat_args, int(time.time()))
 
 
 def solve(args, json_file):

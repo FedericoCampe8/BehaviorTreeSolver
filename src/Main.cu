@@ -18,8 +18,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = TSPPDProblem;
-using StateType = TSPPDState;
+using ProblemType = CTWProblem;
+using StateType = CTWPState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);
