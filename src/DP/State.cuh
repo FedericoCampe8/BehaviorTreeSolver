@@ -8,7 +8,7 @@
 
 namespace DP
 {
-    class State
+    class  State
     {
         // Members
         public:
@@ -77,9 +77,9 @@ void DP::State::makeInvalid()
 __host__ __device__
 void DP::State::print(bool endLine) const
 {
-    printf("Values: ");
-    selectedValues.print(false);
-    printf(" | Cost: %d", cost);
+    //printf("Values: ");
+    selectedValues.print(endLine);
+    //printf(" | Cost: %d", cost);
     //printf(" | Values map: ", cost);
     //selectedValuesMap.print(false);
     //printf(" | Admissibles map: ");
@@ -100,7 +100,7 @@ u32 DP::State::sizeOfStorage(OP::Problem const * problem)
         BitSet::sizeOfStorage(problem->maxValue) + // selectedValuesMap
         BitSet::sizeOfStorage(problem->maxValue) + // admissibleValuesMap
         Vector<OP::ValueType>::sizeOfStorage(problem->variables.getCapacity()) + // selectedValues
-        Memory::DefaultAlignmentPadding; // alignment padding
+        Memory::DefaultAlignmentPadding * 3; // alignment padding
 }
 
 __host__ __device__

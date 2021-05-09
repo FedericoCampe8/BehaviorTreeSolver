@@ -9,7 +9,7 @@
 
 namespace OP
 {
-    class VRProblem: public Problem
+    class TSPPDProblem: public Problem
     {
         // Members
         public:
@@ -17,26 +17,26 @@ namespace OP
 
         // Functions
         public:
-        VRProblem(u32 variablesCount, Memory::MallocType mallocType);
+        TSPPDProblem(u32 variablesCount, Memory::MallocType mallocType);
         __host__ __device__ inline DP::CostType getDistance(ValueType from, ValueType to) const;
     };
 
     template<>
-    OP::VRProblem* parseInstance<OP::VRProblem>(char const * problemFilename, Memory::MallocType mallocType);
+    OP::TSPPDProblem* parseInstance<OP::TSPPDProblem>(char const * problemFilename, Memory::MallocType mallocType);
 }
 
-OP::VRProblem::VRProblem(unsigned int variablesCount, Memory::MallocType mallocType) :
+OP::TSPPDProblem::TSPPDProblem(unsigned int variablesCount, Memory::MallocType mallocType) :
     Problem(variablesCount, mallocType),
     distances(variablesCount * variablesCount, mallocType)
 {}
 
 __host__ __device__
-DP::CostType OP::VRProblem::getDistance(ValueType from, ValueType to) const
+DP::CostType OP::TSPPDProblem::getDistance(ValueType from, ValueType to) const
 {
     return *distances[(from * variables.getCapacity()) + to];
 }
 
-OP::VRProblem* OP::parseInstance(char const * problemFilename, Memory::MallocType mallocType)
+OP::TSPPDProblem* OP::parseInstance(char const * problemFilename, Memory::MallocType mallocType)
 {
     // Parse instance
     std::ifstream problemFile(problemFilename);
@@ -44,10 +44,10 @@ OP::VRProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTyp
     problemFile >> problemJson;
 
     // Init problem
-    u32 const problemSize = sizeof(OP::VRProblem);
-    OP::VRProblem* const problem = reinterpret_cast<OP::VRProblem*>(Memory::safeMalloc(problemSize, mallocType));
+    u32 const problemSize = sizeof(OP::TSPPDProblem);
+    OP::TSPPDProblem* const problem = reinterpret_cast<OP::TSPPDProblem*>(Memory::safeMalloc(problemSize, mallocType));
     u32 const variablesCount = problemJson["nodes"].size();
-    new (problem) OP::VRProblem(variablesCount, mallocType);
+    new (problem) OP::TSPPDProblem(variablesCount, mallocType);
 
     // Init variables
     Variable variable(0,0);

@@ -5,8 +5,8 @@
 #include <Containers/Vector.cuh>
 #include <Utils/Algorithms.cuh>
 #include <Utils/CUDA.cuh>
-#include "../DP/VRPState.cuh"
-#include "../DP/VRPModel.cuh"
+#include "../DP/TSPPDState.cuh"
+#include "../DP/TSPPDModel.cuh"
 #include "../OP/Problem.cuh"
 #include "../Neighbourhood.cuh"
 #include "Context.h"

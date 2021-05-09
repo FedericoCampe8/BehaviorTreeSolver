@@ -4,33 +4,33 @@
 #include <thrust/remove.h>
 #include "../DD/AuxiliaryData.cuh"
 #include "../OP/CTWProblem.cuh"
-#include "CTWState.cuh"
+#include "CTWPState.cuh"
 
 
 namespace DP
 {
-    __host__ __device__ inline void calcAdmissibleValues(OP::CTWProblem const * problem, CTWState* state);
-    __host__ __device__ inline DP::CostType calcCost(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value);
+    __host__ __device__ inline void calcAdmissibleValues(OP::CTWProblem const * problem, CTWPState* state);
+    __host__ __device__ inline DP::CostType calcCost(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType const value);
     __host__ __device__ inline OP::ValueType calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value);
-    __host__ __device__ inline bool closeInterruptedPair(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
-    __host__ __device__ inline bool isClosingPair(OP::CTWProblem const * problem, CTWState const * state);
-    void makeRoot(OP::CTWProblem const * problem, CTWState* root);
-    __host__ __device__ inline bool interruptPair(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType const value);
-    __host__ __device__ inline void makeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, DP::CostType cost, CTWState* nextState);
-    __host__ __device__ inline void mergeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, CTWState* nextState);
-    __host__ __device__ inline void updateInterruptedPairs(OP::CTWProblem const * problem, CTWState* state, OP::ValueType value);
-    __host__ __device__ inline void updatePrecedencesCount(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
-    __host__ __device__ inline bool checkDisjunctive1(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
-    __host__ __device__ inline bool checkDisjunctive2(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
-    __host__ __device__ inline bool checkPrecedence(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType i, OP::ValueType j);
-    __host__ __device__ inline u8 updatedS(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
-    __host__ __device__ inline u8 updatedM(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
-    __host__ __device__ inline u8 updatedL(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
-    __host__ __device__ inline u8 updatedN(OP::CTWProblem const * problem, CTWState const * state, OP::ValueType value);
+    __host__ __device__ inline bool closeInterruptedPair(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType const value);
+    __host__ __device__ inline bool isClosingPair(OP::CTWProblem const * problem, CTWPState const * state);
+    void makeRoot(OP::CTWProblem const * problem, CTWPState* root);
+    __host__ __device__ inline bool interruptPair(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType const value);
+    __host__ __device__ inline void makeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, DP::CostType cost, CTWPState* nextState);
+    __host__ __device__ inline void mergeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, CTWPState* nextState);
+    __host__ __device__ inline void updateInterruptedPairs(OP::CTWProblem const * problem, CTWPState* state, OP::ValueType value);
+    __host__ __device__ inline void updatePrecedencesCount(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
+    __host__ __device__ inline bool checkDisjunctive1(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
+    __host__ __device__ inline bool checkDisjunctive2(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
+    __host__ __device__ inline bool checkPrecedence(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType i, OP::ValueType j);
+    __host__ __device__ inline u8 updatedS(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
+    __host__ __device__ inline u8 updatedM(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
+    __host__ __device__ inline u8 updatedL(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
+    __host__ __device__ inline u8 updatedN(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
 }
 
 __host__ __device__
-void DP::calcAdmissibleValues(OP::CTWProblem const * problem, DP::CTWState* state)
+void DP::calcAdmissibleValues(OP::CTWProblem const * problem, DP::CTWPState* state)
 {
     state->admissibleValuesMap.clear();
     for (OP::ValueType value = 0; value < state->precedencesCount.getCapacity(); value += 1)
@@ -52,7 +52,7 @@ void DP::calcAdmissibleValues(OP::CTWProblem const * problem, DP::CTWState* stat
 }
 
 __host__ __device__
-DP::CostType DP::calcCost(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType const value)
+DP::CostType DP::calcCost(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType const value)
 {
     u32 s = 0;
     u32 m = 0;
@@ -72,7 +72,7 @@ DP::CostType DP::calcCost(OP::CTWProblem const * problem, CTWState const * curre
     return cost;
 }
 
-void DP::makeRoot(OP::CTWProblem const* problem, DP::CTWState* root)
+void DP::makeRoot(OP::CTWProblem const* problem, DP::CTWPState* root)
 {
     thrust::fill(thrust::seq, root->precedencesCount.begin(), root->precedencesCount.end(), 0);
     for(Pair<OP::ValueType> const * atomicConstraint = problem->atomicConstraints.begin();  atomicConstraint != problem->atomicConstraints.end(); atomicConstraint += 1)
@@ -85,7 +85,7 @@ void DP::makeRoot(OP::CTWProblem const* problem, DP::CTWState* root)
 
 
 __host__ __device__
-void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, DP::CostType cost, CTWState* nextState)
+void DP::makeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, DP::CostType cost, CTWPState* nextState)
 {
     *nextState = *currentState;
     nextState->cost = cost;
@@ -102,7 +102,7 @@ void DP::makeState(OP::CTWProblem const * problem, CTWState const * currentState
 }
 
 __host__ __device__
-void DP::mergeState(OP::CTWProblem const * problem, CTWState const * currentState, OP::ValueType value, CTWState* nextState)
+void DP::mergeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, CTWPState* nextState)
 {
     for (OP::ValueType value = 0; value < nextState->precedencesCount.getCapacity(); value += 1)
     {
@@ -130,7 +130,7 @@ OP::ValueType DP::calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType con
 }
 
 __host__ __device__
-bool DP::closeInterruptedPair(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType const value)
+bool DP::closeInterruptedPair(OP::CTWProblem const * problem, DP::CTWPState const * state, OP::ValueType const value)
 {
     if(not state->selectedValues.isEmpty())
     {
@@ -146,7 +146,7 @@ bool DP::closeInterruptedPair(OP::CTWProblem const * problem, DP::CTWState const
 }
 
 __host__ __device__
-bool DP::interruptPair(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType const value)
+bool DP::interruptPair(OP::CTWProblem const* problem, DP::CTWPState const* state, OP::ValueType const value)
 {
     if(not state->selectedValues.isEmpty())
     {
@@ -163,7 +163,7 @@ bool DP::interruptPair(OP::CTWProblem const* problem, DP::CTWState const* state,
 }
 
 __host__ __device__
-void DP::updatePrecedencesCount(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
+void DP::updatePrecedencesCount(OP::CTWProblem const* problem, DP::CTWPState const* state, OP::ValueType value)
 {
     LightVector<u16> const * const atomicConstraintsMap = problem->atomicToCheck[value];
     for(u16 const * atomicConstraintIdx = atomicConstraintsMap->begin(); atomicConstraintIdx != atomicConstraintsMap->end(); atomicConstraintIdx += 1)
@@ -179,7 +179,7 @@ void DP::updatePrecedencesCount(OP::CTWProblem const* problem, DP::CTWState cons
 }
 
 __host__ __device__
-bool DP::checkDisjunctive1(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
+bool DP::checkDisjunctive1(OP::CTWProblem const* problem, DP::CTWPState const* state, OP::ValueType value)
 {
     LightVector<u16> const * const disjunctive1ToCheck = problem->disjunctive1ToCheck[value];
     for(u16 const * disjunctiveConstraint1Idx = disjunctive1ToCheck->begin(); disjunctiveConstraint1Idx != disjunctive1ToCheck->end(); disjunctiveConstraint1Idx += 1)
@@ -198,7 +198,7 @@ bool DP::checkDisjunctive1(OP::CTWProblem const* problem, DP::CTWState const* st
 }
 
 __host__ __device__
-bool DP::checkDisjunctive2(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
+bool DP::checkDisjunctive2(OP::CTWProblem const* problem, DP::CTWPState const* state, OP::ValueType value)
 {
     LightVector<u16> const * const disjunctive2ToCheck = problem->disjunctive2ToCheck[value];
     for(u16 const * disjunctiveConstraint2Idx = disjunctive2ToCheck->begin(); disjunctiveConstraint2Idx != disjunctive2ToCheck->end(); disjunctiveConstraint2Idx += 1)
@@ -217,7 +217,7 @@ bool DP::checkDisjunctive2(OP::CTWProblem const* problem, DP::CTWState const* st
 }
 
 __host__ __device__
-u8 DP::updatedS(OP::CTWProblem const* problem, DP::CTWState const * state, OP::ValueType value)
+u8 DP::updatedS(OP::CTWProblem const* problem, DP::CTWPState const * state, OP::ValueType value)
 {
     u8 s = state->s;
     if (interruptPair(problem,state,value))
@@ -228,7 +228,7 @@ u8 DP::updatedS(OP::CTWProblem const* problem, DP::CTWState const * state, OP::V
 }
 
 __host__ __device__
-u8 DP::updatedM(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType value)
+u8 DP::updatedM(OP::CTWProblem const * problem, DP::CTWPState const * state, OP::ValueType value)
 {
     u32 interruptedPairCount = state->interruptedPairs.getSize();
     if(closeInterruptedPair(problem,state,value)) // Closing interrupted pair
@@ -240,7 +240,7 @@ u8 DP::updatedM(OP::CTWProblem const * problem, DP::CTWState const * state, OP::
 }
 
 __host__ __device__
-u8 DP::updatedL(OP::CTWProblem const * problem, DP::CTWState const * state, OP::ValueType value)
+u8 DP::updatedL(OP::CTWProblem const * problem, DP::CTWPState const * state, OP::ValueType value)
 {
     if (not state->interruptedPairs.isEmpty())
     {
@@ -258,7 +258,7 @@ u8 DP::updatedL(OP::CTWProblem const * problem, DP::CTWState const * state, OP::
 }
 
 __host__ __device__
-u8 DP::updatedN(OP::CTWProblem const* problem, DP::CTWState const* state, OP::ValueType value)
+u8 DP::updatedN(OP::CTWProblem const* problem, DP::CTWPState const* state, OP::ValueType value)
 {
     u8 n = state->n;
     LightVector<u16> const * const softAtomicConstraintsMap = problem->softAtomicToCheck[value];
@@ -276,7 +276,7 @@ u8 DP::updatedN(OP::CTWProblem const* problem, DP::CTWState const* state, OP::Va
 }
 
 __host__ __device__
-void DP::updateInterruptedPairs(OP::CTWProblem const* problem, DP::CTWState* state, OP::ValueType value)
+void DP::updateInterruptedPairs(OP::CTWProblem const* problem, DP::CTWPState* state, OP::ValueType value)
 {
     if(interruptPair(problem, state, value))
     {

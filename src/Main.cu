@@ -3,8 +3,8 @@
 #include <External/AnyOption/anyoption.h>
 #include <Utils/Algorithms.cuh>
 #include <Utils/Chrono.cuh>
-#include "DP/VRPModel.cuh"
-#include "DP/CTWModel.cuh"
+#include "DP/TSPPDModel.cuh"
+#include "DP/CTWPModel.cuh"
 #include "DP/MOSPModel.cuh"
 #include "DP/JSPModel.cuh"
 #include "OffloadBuffer.cuh"
@@ -18,8 +18,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = JSProblem;
-using StateType = JSPState;
+using ProblemType = TSPPDProblem;
+using StateType = TSPPDState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);

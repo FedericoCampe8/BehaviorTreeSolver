@@ -1,42 +1,74 @@
 import sys
 import time
 import json
+import argparse
+import threading
 from ortools.constraint_solver import pywrapcp
 from ortools.constraint_solver import routing_enums_pb2
 
-class solutionParser():
+sys.path.append("..")
+import common
 
+metaheuristics = [
+    (routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH),
+    (routing_enums_pb2.LocalSearchMetaheuristic.SIMULATED_ANNEALING),
+    (routing_enums_pb2.LocalSearchMetaheuristic.TABU_SEARCH)
+]
+
+def jobs(j):
+    jobs = int(j)
+    if jobs % len(metaheuristics) != 0:
+        raise argparse.ArgumentTypeError("Only multiple of {} jobs allowed".format(len(metaheuristics)))
+    return jobs
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", type=int, action="store", dest="t", default=60)
+    parser.add_argument("-i", type=int, action="store", dest="i", default=15)
+    parser.add_argument("-j", type=jobs, action="store", dest="j", default=3)
+    args, _ = parser.parse_known_args(argv)
+    return args
+
+def get_args_str(args):
+    return "t{}-i{}-j{}-{}".format(args.t, args.i, args.j, int(time.time()))
+
+class SolutionParser:
     def __init__(self, routing, manager):
-        self.__routing = routing
-        self.__manager = manager
-        self.__start_time = time.perf_counter()
-        self.__cost = None
-        self.__search_time = None    
-        self.__solution = None
+        self.routing = routing
+        self.manager = manager
+        self.start_time = time.perf_counter()
+        self.results = []
 
-    def OnSolutionCallback(self):       
-        self.__search_time = time.perf_counter() - self.__start_time
-        self.__cost = 0
-        self.__solution = []
+    def OnSolutionCallback(self):
+        cost = 0
+        search_time = time.perf_counter() - self.start_time
+        solution = []
         vehicle_id = 0
-        index = self.__routing.Start(vehicle_id)
-        while not self.__routing.IsEnd(index):
-            self.__solution.append(self.__manager.IndexToNode(index))
+        index = self.routing.Start(vehicle_id)
+        while not self.routing.IsEnd(index):
+            solution.append(self.manager.IndexToNode(index))
             previous_index = index
-            index = self.__routing.NextVar(index).Value()
-            self.__cost = self.__cost + self.__routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
-        self.__solution.append(self.__manager.IndexToNode(index))
+            index = self.routing.NextVar(index).Value()
+            cost = cost + self.routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
+        solution.append(self.manager.IndexToNode(index))
+        self.results.append(common.Result(cost, search_time, solution))
         
-    def getBestSolution(self):
-        return self.__cost, self.__search_time, self.__solution
+    def get_results(self):
+        return self.results
 
 
-def initializeData(json_content):
+def prepare_data(json_file_path):
+    # Read json
+    json_file = open(json_file_path, "r")
+    json_content = json.load(json_file)
+    json_file.close()
+
     # Adjust instance
     del json_content["nodes"][1]
     del json_content["edges"][1]
     for e in json_content["edges"]:
-        del e[0]         
+        del e[0]
+
     # Create data
     data = {}
     data['distance_matrix'] = json_content["edges"]
@@ -45,16 +77,34 @@ def initializeData(json_content):
     data['depot'] = 0
     return data
 
-def solve(args, json_file):  
-    
-    # Load json
-    json_filepath = json_file
-    json_file = open(json_filepath, "r")
-    json_content = json.load(json_file)
-    json_file.close()
-    
-    # Instantiate the data problem
-    data = initializeData(json_content)
+
+def solve(args, json_file):
+    # Prepare input
+    data = prepare_data(json_file)
+
+    # Search
+    threads = []
+    threads_results = []
+    for _ in range(args.j):
+        r = []
+        t = threading.Thread(target=solve_single_thread, args=(args, data, r, len(threads)))
+        threads.append(t)
+        threads_results.append(r)
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    results = []
+    for thread_results in threads_results:
+        for result in thread_results:
+            results.append(result)
+
+    results.sort(key=lambda result: result.search_time)
+    return results
+
+
+def solve_single_thread(args, data, results, thread_id):
 
     # Create the routing index manager
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']), data['num_vehicles'], data['depot'])
@@ -73,12 +123,7 @@ def solve(args, json_file):
 
     # Add Distance constraint
     dimension_name = 'Distance'
-    routing.AddDimension(
-        transit_callback_index,
-        0,  # no slack
-        50000,  # vehicle maximum travel distance
-        True,  # start cumul to zero
-        dimension_name)
+    routing.AddDimension(transit_callback_index, 0, 50000, True, dimension_name)
     distance_dimension = routing.GetDimensionOrDie(dimension_name)
     distance_dimension.SetGlobalSpanCostCoefficient(100000)
 
@@ -87,22 +132,18 @@ def solve(args, json_file):
         pickup_index = manager.NodeToIndex(request[0])
         delivery_index = manager.NodeToIndex(request[1])
         routing.AddPickupAndDelivery(pickup_index, delivery_index)
-        routing.solver().Add(
-            routing.VehicleVar(pickup_index) == routing.VehicleVar(
-                delivery_index))
-        routing.solver().Add(
-            distance_dimension.CumulVar(pickup_index) <=
-            distance_dimension.CumulVar(delivery_index))
+        routing.solver().Add(routing.VehicleVar(pickup_index) == routing.VehicleVar(delivery_index))
+        routing.solver().Add(distance_dimension.CumulVar(pickup_index) <= distance_dimension.CumulVar(delivery_index))
 
     # Setting search parameters
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (routing_enums_pb2.FirstSolutionStrategy.AUTOMATIC)
-    search_parameters.local_search_metaheuristic = (routing_enums_pb2.LocalSearchMetaheuristic.TABU_SEARCH)
-    search_parameters.time_limit.seconds = args.timeout
+    search_parameters.local_search_metaheuristic = metaheuristics[thread_id % len(metaheuristics)]
+    search_parameters.time_limit.seconds = args.t
 
     # Solve the problem
-    solution_parser = solutionParser(routing, manager)
+    solution_parser = SolutionParser(routing, manager)
     routing.AddAtSolutionCallback(solution_parser.OnSolutionCallback)
     routing.SolveWithParameters(search_parameters)
 
-    return solution_parser.getBestSolution()
+    results = solution_parser.get_results()

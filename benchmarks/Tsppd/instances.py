@@ -1,5 +1,4 @@
-# Instances
-instances = [
+Instances = [
     "grubhub-10-0",
     "grubhub-10-1",
     "grubhub-10-2",

@@ -34,11 +34,11 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 set(SOURCES
     src/Main.cu
     src/OP/Variable.cuh
-    src/DP/VRPModel.cuh
-    src/DP/CTWModel.cuh
+    src/DP/TSPPDModel.cuh
+    src/DP/CTWPModel.cuh
     src/DD/MDD.cuh
     src/OP/CTWProblem.cuh
-    src/OP/VRProblem.cuh
+    src/OP/TSPPDProblem.cuh
     src/OP/Problem.cuh
     src/DP/State.cuh
     src/OffloadBuffer.cuh
@@ -52,7 +52,7 @@ set(SOURCES
     include/Utils/Algorithms.cuh
     include/Containers/Pair.cuh
     src/Options.h
-    src/DP/CTWState.cuh
+    src/DP/CTWPState.cuh
     src/OP/MOSProblem.cuh
     src/DP/MOSPState.cuh
     src/DP/MOSPModel.cuh

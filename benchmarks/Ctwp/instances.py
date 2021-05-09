@@ -1,19 +1,4 @@
-# Solvers configurations
-solvers_configs = {
-    "yuck": 
-        {
-            "path": "../Solvers/yuck/yuck.msc",
-            "free_search": False
-        },
-    "ortools":
-        {
-            "path": "../Solvers/ortools/ortools.msc",
-            "free_search": True
-        }
-}
-
-# Instances
-instances = [
+Instances = [
     "A001",
     "A002",
     "A003",

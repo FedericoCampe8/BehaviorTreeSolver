@@ -1,30 +1,46 @@
+import sys
 import time
 import json
+import argparse
 import collections
 from ortools.sat.python import cp_model
 
-class solutionParser(cp_model.CpSolverSolutionCallback):
+sys.path.append("..")
+import common
 
-    def __init__(self, cost, variables):
+def parse_args(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", type=int, action="store", dest="t", default=60)
+    parser.add_argument("-i", type=int, action="store", dest="i", default=15)
+    parser.add_argument("-j", type=int, action="store", dest="j", default=1)
+    args, _ = parser.parse_known_args(argv)
+    return args
+
+
+def get_args_str(args):
+    return "t{}-i{}-j{}-{}".format(args.t, args.i, args.j, int(time.time()))
+
+
+class SolutionParser(cp_model.CpSolverSolutionCallback):
+    def __init__(self, cost_var, variables):
         cp_model.CpSolverSolutionCallback.__init__(self)
-        self.__cost_var = cost
-        self.__variables = variables
-        self.__start_time = time.perf_counter()
-        self.__cost = None
-        self.__search_time = None
-        self.__solution = None
-
+        self.cost_var = cost_var
+        self.variables = variables
+        self.start_time = time.perf_counter()
+        self.results = []
 
     def OnSolutionCallback(self): 
-        self.__cost = self.Value(self.__cost_var)
-        self.__search_time = time.perf_counter() - self.__start_time
-        self.__solution = []
-        for v in self.__variables:            
-            self.__solution.append(self.Value(v))    
-            
-    def getBestSolution(self): 
-        return self.__cost, self.__search_time, self.__solution
-    
+        cost = self.Value(self.cost_var)
+        search_time = time.perf_counter() - self.start_time
+        solution = []
+        for v in self.variables:
+            solution.append(self.Value(v))
+        self.results.append(common.Result(cost, search_time, solution))
+
+    def get_results(self):
+        return self.results
+
+
 def solve(args, json_file):
     # Create the model
     model = cp_model.CpModel()
@@ -92,10 +108,10 @@ def solve(args, json_file):
 
     # Solve model
     solver = cp_model.CpSolver()
-    solver.parameters.num_search_workers = args.jobs
-    solver.parameters.max_time_in_seconds = args.timeout
+    solver.parameters.num_search_workers = args.j
+    solver.parameters.max_time_in_seconds = args.t
     
-    solution_parser = solutionParser(obj_var, start_times)
-    solver.SolveWithSolutionCallback(model,solution_parser)
+    solution_parser = SolutionParser(obj_var, start_times)
+    solver.SolveWithSolutionCallback(model, solution_parser)
     
-    return solution_parser.getBestSolution()
+    return solution_parser.get_results()
