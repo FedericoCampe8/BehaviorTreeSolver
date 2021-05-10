@@ -69,10 +69,10 @@ DP::MOSPState& DP::MOSPState::operator=(DP::MOSPState const & other)
 __host__ __device__
 void DP::MOSPState::print(bool endLine) const
 {
-    State::print(false);
-    printf(" | Admissibles: ");
-    admissibleValuesMap.print(false);
-    printf(endLine ? "\n" : "");
+    State::print(endLine);
+    //printf(" | Admissibles: ");
+    //admissibleValuesMap.print(false);
+    //printf(endLine ? "\n" : "");
 }
 
 
