@@ -81,7 +81,7 @@ class BenchmarksManager:
                 cost, search_time, solution = tuple(brwt.best_result)
                 self.output_file.write("{};{:.3f};{}\n".format(cost, search_time, solution or ""))
             else:
-                self.output_file.write(";;;\n")
+                self.output_file.write(";;\n")
             self.output_file.flush()
 
 

@@ -86,10 +86,9 @@ def solve(args, json_file):
     threads = []
     threads_results = []
     for _ in range(args.j):
-        r = []
-        t = threading.Thread(target=solve_single_thread, args=(args, data, r, len(threads)))
+        threads_results.append([])
+        t = threading.Thread(target=solve_single_thread, args=(args, data, threads_results, len(threads)))
         threads.append(t)
-        threads_results.append(r)
     for t in threads:
         t.start()
     for t in threads:
@@ -104,8 +103,7 @@ def solve(args, json_file):
     return results
 
 
-def solve_single_thread(args, data, results, thread_id):
-
+def solve_single_thread(args, data, threads_results, thread_id):
     # Create the routing index manager
     manager = pywrapcp.RoutingIndexManager(len(data['distance_matrix']), data['num_vehicles'], data['depot'])
 
@@ -146,4 +144,4 @@ def solve_single_thread(args, data, results, thread_id):
     routing.AddAtSolutionCallback(solution_parser.OnSolutionCallback)
     routing.SolveWithParameters(search_parameters)
 
-    results = solution_parser.get_results()
+    threads_results[thread_id] =  solution_parser.get_results()
