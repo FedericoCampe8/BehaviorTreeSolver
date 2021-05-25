@@ -61,7 +61,10 @@ DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, unsigned int w
     top(problem, mallocType),
     bottom(problem, mallocType),
     cutset(width * problem->maxBranchingFactor, mallocType),
-    scratchpadMemory(Memory::safeMalloc(sizeOfScratchpadMemory(), Memory::MallocType::Std))
+    scratchpadMemory(Memory::safeMalloc(sizeOfScratchpadMemory(), Memory::MallocType::Std)),
+    currentStates(nullptr),
+    nextStates(nullptr),
+    auxiliaryData(nullptr)
 {
     // Cutset states
     std::byte* storages = StateType::mallocStorages(problem, cutset.getCapacity(), mallocType);
@@ -130,7 +133,7 @@ u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory() const
         sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) +  // currentStates
         sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) +  // nextStates
         sizeof(LightVector<AuxiliaryData>) + LightVector<AuxiliaryData>::sizeOfStorage(width * problem->maxBranchingFactor) + // auxiliaryData
-        Memory::DefaultAlignmentPadding * 7; // alignment padding
+        Memory::DefaultAlignmentPadding * 8; // alignment padding
     assert(size <= 64ul * 1024ul * 1024ul);
     return size;
 
@@ -153,7 +156,7 @@ void DD::MDD<ProblemType, StateType>::calcAuxiliaryData(u32 variableIdx, Neighbo
 #else
     for (u32 currentStateIdx = 0; currentStateIdx < currentStates->getSize(); currentStateIdx += 1)
     {
-        for (OP::ValueType value = 0; value < problem->maxBranchingFactor; value += 1)
+        for (u32 value = 0; value < problem->maxBranchingFactor; value += 1)
 #endif
         {
             StateType const * const currentState = currentStates->at(currentStateIdx);

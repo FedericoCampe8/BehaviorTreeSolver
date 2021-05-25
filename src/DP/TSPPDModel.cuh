@@ -42,7 +42,7 @@ void DP::ifPickupAddDelivery(OP::ValueType value, TSPPDState* state)
 void DP::makeRoot(OP::TSPPDProblem const* problem, TSPPDState* root)
 {
     root->cost = 0;
-    for (OP::ValueType value = 0; value <= problem->maxValue; value += 2)
+    for (u32 value = 0; value <= problem->maxValue; value += 2)
     {
         root->admissibleValuesMap.insert(value);
     }

@@ -18,8 +18,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = JSProblem;
-using StateType = JSPState;
+using ProblemType = CTWProblem;
+using StateType = CTWPState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);
@@ -419,7 +419,7 @@ void printElapsedTime(uint64_t elapsedTimeMs)
     unsigned int m = ms / (1000 * 60);
     ms -= m * 1000 * 60;
 
-    unsigned int s = ms / 1000;
+    //unsigned int s = ms / 1000;
 
     //printf("%lums (%02uh%02um%02us)", elapsedTimeMs, h, m, s);
     printf("%.3f", ms / 1000.0);

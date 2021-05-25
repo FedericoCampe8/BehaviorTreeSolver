@@ -33,7 +33,7 @@ __host__ __device__
 void DP::calcAdmissibleValues(OP::CTWProblem const * problem, DP::CTWPState* state)
 {
     state->admissibleValuesMap.clear();
-    for (OP::ValueType value = 0; value < state->precedencesCount.getCapacity(); value += 1)
+    for (u32 value = 0; value < state->precedencesCount.getCapacity(); value += 1)
     {
         if(not state->selectedValuesMap.contains(value))
         {
@@ -104,7 +104,7 @@ void DP::makeState(OP::CTWProblem const * problem, CTWPState const * currentStat
 __host__ __device__
 void DP::mergeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, CTWPState* nextState)
 {
-    for (OP::ValueType value = 0; value < nextState->precedencesCount.getCapacity(); value += 1)
+    for (u32 value = 0; value < nextState->precedencesCount.getCapacity(); value += 1)
     {
         u32 const blockingConstraintsCount0 = *currentState->precedencesCount[value];
         u32 const blockingConstraintsCount1 = *nextState->precedencesCount[value];

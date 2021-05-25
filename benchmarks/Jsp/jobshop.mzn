@@ -7,7 +7,7 @@ include "globals.mzn";
 
 int: n;
 int: m;
-int: span=2000;
+int: span=10000;
 
 array [1..n, 1..2*m] of int: job;
 array [1..n, 1..m] of var 0..span: t;
@@ -35,7 +35,7 @@ constraint
 	maximum(objective, [ t[i, m] + job[i, 2*m] | i in 1..n]);
 
 constraint
-  forall(i in 1..n, j in 1..m) ( ts[(i-1)*n + j] == t[i, j] );
+  forall(i in 1..n, j in 1..m) ( ts[(i-1)*m + j] == t[i, j] );
   
 solve ::
       int_search([t[i,j] | i in 1..n, j in 1..m], smallest, indomain_min, complete)

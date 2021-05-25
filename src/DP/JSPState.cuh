@@ -52,7 +52,8 @@ std::byte* DP::JSPState::endOfStorage() const
 __host__ __device__
 std::byte* DP::JSPState::mallocStorages(OP::JSProblem const* problem, unsigned int statesCount, Memory::MallocType mallocType)
 {
-    return Memory::safeMalloc(sizeOfStorage(problem) * statesCount, mallocType);
+    u64 size = static_cast<u64>(sizeOfStorage(problem)) * static_cast<u64>(statesCount);
+    return Memory::safeMalloc(size, mallocType);
 }
 
 __host__ __device__
@@ -76,13 +77,14 @@ void DP::JSPState::print(bool endLine) const
 __host__ __device__
 unsigned int DP::JSPState::sizeOfStorage(OP::JSProblem const * problem)
 {
-    return
-        State::sizeOfStorage(problem) +
-        Array<u16>::sizeOfStorage(problem->jobs * problem->machines) + // tasks_start
-        Array<u16>::sizeOfStorage(problem->jobs) + // jobs_progress
-        Array<u16>::sizeOfStorage(problem->jobs) + // jobs_makespan
-        Array<u16>::sizeOfStorage(problem->machines) + // machines_makespan
-        Memory::DefaultAlignmentPadding * 5;
+    u32 size = 0;
+    size += State::sizeOfStorage(problem);
+    size += Array<u16>::sizeOfStorage(problem->jobs * problem->machines);// tasks_start
+    size += Array<u16>::sizeOfStorage(problem->jobs); // jobs_progress
+    size += Array<u16>::sizeOfStorage(problem->jobs); // jobs_makespan
+    size += Array<u16>::sizeOfStorage(problem->machines); // machines_makespan
+    size += Memory::DefaultAlignmentPadding * 5;
+    return size;
 }
 
 __host__ __device__

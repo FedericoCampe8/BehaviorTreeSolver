@@ -14,9 +14,9 @@ namespace Memory
     __host__ __device__ inline T* align(std::byte const * ptr);
     __host__ __device__ inline std::byte* align(std::byte const * ptr, u32 alignment);
     __host__ __device__ inline uintptr_t align(uintptr_t address, u32 alignment);
-    __host__ __device__ std::byte* safeMalloc(unsigned int size, MallocType type);
-    __host__ __device__ std::byte* safeStdMalloc(unsigned int size);
-    std::byte* safeManagedMalloc(unsigned int size);
+    __host__ __device__ std::byte* safeMalloc(u64 size, MallocType type);
+    __host__ __device__ std::byte* safeStdMalloc(u64 size);
+    std::byte* safeManagedMalloc(u64 size);
 }
 
 template<typename T>
@@ -39,7 +39,7 @@ uintptr_t Memory::align(uintptr_t address, u32 alignment)
 }
 
 __host__ __device__
-std::byte* Memory::safeMalloc(unsigned int size, MallocType type)
+std::byte* Memory::safeMalloc(u64 size, MallocType type)
 {
     switch (type)
     {
@@ -56,14 +56,14 @@ std::byte* Memory::safeMalloc(unsigned int size, MallocType type)
 }
 
 __host__ __device__
-std::byte* Memory::safeStdMalloc(unsigned int size)
+std::byte* Memory::safeStdMalloc(u64 size)
 {
     void* memory = malloc(size);
     assert(memory != nullptr);
     return static_cast<std::byte*>(memory);
 }
 
-std::byte* Memory::safeManagedMalloc(unsigned int size)
+std::byte* Memory::safeManagedMalloc(u64 size)
 {
     void* memory;
     cudaError_t status = cudaMallocManaged(& memory, size);

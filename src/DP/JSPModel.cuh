@@ -38,7 +38,7 @@ void DP::makeRoot(OP::JSProblem const* problem, JSPState* root)
     {
         *root->machines_makespan[machine] = 0;
     }
-    for(OP::ValueType task = 0; task < root->tasks_start.getCapacity(); task +=1 )
+    for(u32 task = 0; task < root->tasks_start.getCapacity(); task +=1 )
     {
         *root->tasks_start[task] = 0;
     }

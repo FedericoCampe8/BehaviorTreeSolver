@@ -2,7 +2,7 @@ import sys
 import time
 import json
 import argparse
-import threading
+import multiprocessing
 from ortools.constraint_solver import pywrapcp
 from ortools.constraint_solver import routing_enums_pb2
 
@@ -52,7 +52,7 @@ class SolutionParser:
             cost = cost + self.routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
         solution.append(self.manager.IndexToNode(index))
         self.results.append(common.Result(cost, search_time, solution))
-        
+
     def get_results(self):
         return self.results
 
@@ -62,7 +62,7 @@ def prepare_data(json_file_path):
     json_file = open(json_file_path, "r")
     json_content = json.load(json_file)
     json_file.close()
-    
+
     # Adjust instance
     del json_content["nodes"][1]
     del json_content["edges"][1]
@@ -83,20 +83,18 @@ def solve(args, json_file):
     data = prepare_data(json_file)
 
     # Search
-    threads = []
-    threads_results = []
+    processes = []
+    processes_results = multiprocessing.Queue(maxsize=args.j)
     for _ in range(args.j):
-        threads_results.append([])
-        t = threading.Thread(target=solve_single_thread, args=(args, data, threads_results, len(threads)))
-        threads.append(t)
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+        p = multiprocessing.Process(target=solve_single_thread, args=(args, data, processes_results, len(processes)))
+        processes.append(p)
+    for p in processes:
+        p.start()
 
     results = []
-    for thread_results in threads_results:
-        for result in thread_results:
+    for _ in processes:
+        process_results = processes_results.get()
+        for result in process_results:
             results.append(result)
 
     results.sort(key=lambda result: result.search_time)
@@ -142,6 +140,7 @@ def solve_single_thread(args, data, threads_results, thread_id):
     # Solve the problem
     solution_parser = SolutionParser(routing, manager)
     routing.AddAtSolutionCallback(solution_parser.OnSolutionCallback)
+    routing.solver().ReSeed(thread_id)
     routing.SolveWithParameters(search_parameters)
 
-    threads_results[thread_id] =  solution_parser.get_results()
+    threads_results.put(solution_parser.get_results())

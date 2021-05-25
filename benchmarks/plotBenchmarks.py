@@ -1,5 +1,4 @@
 import os
-import sys
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -8,23 +7,17 @@ import common
 for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
     print("Plotting {} ...".format(benchmark))
 
-    instances_dir = "./{}/{}/json".format(benchmark, common.Directories["data"])
-    instances = os.listdir(instances_dir)
-    instances.sort(key=lambda f: os.stat("{}/{}".format(instances_dir,f)).st_size, reverse=True)
-    instances = instances[:20]
-    instances = [i.split(".")[0] for i in instances]
-
     results_dir = "./{}/{}".format(benchmark, common.Directories["results"])
     results_files = os.listdir(results_dir)
+    results_files.sort()
     dataframes = []
     for results_file in results_files:
         df = pd.read_csv("{}/{}".format(results_dir, results_file), sep=";")
-        df = df[["Instance", "Timeout", "Cost", "Time"]]
+        df = df[["Instance", "Timeout", "Cost", "Time"]]       
         solver_name = results_file.split("-")[0]
         df["Solver"] = solver_name
         dataframes.append(df)
     df = pd.concat(dataframes, ignore_index=True)
-    #df = df[df.Instance.isin(instances)]
     timeouts = df.Timeout.unique()
     for timeout in timeouts:
         df1 = df[df["Timeout"] == timeout]
