@@ -30,30 +30,38 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
     instances = data.Instance.unique()
     for solver in solvers:
         for timeout in timeouts:
-            avg_cost_diff = 0.0
-            avg_time_diff = 0.0
-            solved_instances = 0.0
-            unsolved_instances = 0.0
+            tmp_columns = ["cost_diffs", "time_diffs"]
+            tmp_df = pd.DataFrame(columns=tmp_columns)
             for instance in instances:
                 row = data[(data["Instance"] == instance) & (data["Timeout"] == timeout) & (data["Solver"] == solver)]
                 cost = row["Cost"]
                 time = row["Time"]
-                if (pd.isna(cost)).bool():
-                    unsolved_instances += 1
-                else:
+                if not cost.dropna().empty:
                     cost = row["Cost"].iat[0]
                     time = row["Time"].iat[0]
                     min_row = minimums[(minimums["Instance"] == instance) & (minimums["Timeout"] == timeout)]
                     min_cost = min_row["Cost"].iat[0]
                     min_time = min_row["Time"].iat[0]
-                    solved_instances += 1
-                    avg_cost_diff += (cost - min_cost) / (1 if min_cost <= 1 else min_cost)
-                    avg_time_diff += time - min_time
-            avg_cost_diff = 100 * avg_cost_diff / solved_instances
-            avg_time_diff = avg_time_diff / solved_instances
+                    cost_diff = 100 * (cost - min_cost) / (1 if min_cost <= 1 else min_cost)
+                    time_diff = time - min_time
+                    tmp_df.loc[len(tmp_df)] = [cost_diff, time_diff]
+            solved_instances = tmp_df.shape[0]
+            unsolved_instances = len(instances) - solved_instances
+            tmp_df = tmp_df[tmp_df["cost_diffs"] <= tmp_df["cost_diffs"].quantile(0.99)] 
+            avg_cost_diff = tmp_df["cost_diffs"].sum() / tmp_df.shape[0]
+            avg_time_diff = tmp_df["time_diffs"].sum() / tmp_df.shape[0]
             summary.loc[len(summary)] = [solver, statistics[0], timeout, avg_cost_diff]
             summary.loc[len(summary)] = [solver, statistics[1], timeout, avg_time_diff]
             summary.loc[len(summary)] = [solver, statistics[2], timeout, unsolved_instances]
-
-    summary = summary.sort_values(by=["Statistic", "Timeout", "Solver", "Value"], ignore_index=True)
-    print(summary)
+    # Pretty print summary
+    summary_formatted_columns = ["Timeout", "Statistic"] + [str(s) for s in solvers]
+    summary_formatted = pd.DataFrame(columns=summary_formatted_columns)
+    for timeout in timeouts:
+        for statistic in statistics:
+            row_data = []
+            for solver in solvers:     
+                summary_row = summary[(summary["Solver"] == solver) & (summary["Statistic"] == statistic) & (summary["Timeout"] == timeout)]
+                row_data.append(summary_row["Value"].iat[0])
+            summary_formatted.loc[len(summary_formatted)] = [timeout, statistic] + row_data
+    summary_formatted.to_csv("{}-summary.csv".format(benchmark), sep=';', index=False, encoding="utf-8",float_format="%.3f")
+    #print(summary_formatted)

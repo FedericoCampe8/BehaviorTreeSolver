@@ -1,0 +1,13 @@
+Timeout;Statistic;mdd;ortools;yuck
+15;Avg % cost diff;0.000;2.971;4.576
+15;Avg time diff [s];0.000;0.752;3.339
+15;Unsolved;0.000;1.000;0.000
+30;Avg % cost diff;0.000;2.971;4.576
+30;Avg time diff [s];0.000;0.752;3.339
+30;Unsolved;0.000;1.000;0.000
+45;Avg % cost diff;0.000;2.686;4.409
+45;Avg time diff [s];0.000;1.317;3.227
+45;Unsolved;0.000;0.000;0.000
+60;Avg % cost diff;0.000;2.825;4.511
+60;Avg time diff [s];0.000;1.078;3.195
+60;Unsolved;0.000;0.000;0.000

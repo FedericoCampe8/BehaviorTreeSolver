@@ -1,0 +1,13 @@
+Timeout;Statistic;mdd;ortools
+15;Avg % cost diff;0.023;7.411
+15;Avg time diff [s];-0.042;1.374
+15;Unsolved;0.000;0.000
+30;Avg % cost diff;0.018;7.401
+30;Avg time diff [s];-0.287;5.022
+30;Unsolved;0.000;0.000
+45;Avg % cost diff;0.056;7.217
+45;Avg time diff [s];-1.662;8.480
+45;Unsolved;0.000;0.000
+60;Avg % cost diff;0.096;6.949
+60;Avg time diff [s];-2.208;14.056
+60;Unsolved;0.000;0.000
