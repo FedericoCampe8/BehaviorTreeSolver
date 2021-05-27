@@ -47,7 +47,6 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
                     tmp_df.loc[len(tmp_df)] = [cost_diff, time_diff]
             solved_instances = tmp_df.shape[0]
             unsolved_instances = len(instances) - solved_instances
-            tmp_df = tmp_df[tmp_df["cost_diffs"] <= tmp_df["cost_diffs"].quantile(0.99)] 
             avg_cost_diff = tmp_df["cost_diffs"].sum() / tmp_df.shape[0]
             avg_time_diff = tmp_df["time_diffs"].sum() / tmp_df.shape[0]
             summary.loc[len(summary)] = [solver, statistics[0], timeout, avg_cost_diff]
@@ -63,5 +62,5 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
                 summary_row = summary[(summary["Solver"] == solver) & (summary["Statistic"] == statistic) & (summary["Timeout"] == timeout)]
                 row_data.append(summary_row["Value"].iat[0])
             summary_formatted.loc[len(summary_formatted)] = [statistic, timeout] + row_data
-    summary_formatted.to_csv("{}-summary.csv".format(benchmark), sep=';', index=False, encoding="utf-8",float_format="%.1f")
+    summary_formatted.to_csv("{}-summary.csv".format(benchmark), sep=';', index=False, encoding="utf-8",float_format="%.2f")
     #print(summary_formatted)
