@@ -1,13 +1,13 @@
-Timeout;Statistic;mdd;ortools;yuck
-15;Avg % cost diff;9.733;0.000;93.403
-15;Avg time diff [s];-3.572;0.001;5.263
-15;Unsolved;0.000;10.000;10.000
-30;Avg % cost diff;10.854;0.000;56.711
-30;Avg time diff [s];-4.405;0.001;11.684
-30;Unsolved;0.000;10.000;9.000
-45;Avg % cost diff;11.457;0.036;43.287
-45;Avg time diff [s];-4.958;0.134;17.456
-45;Unsolved;0.000;0.000;0.000
-60;Avg % cost diff;11.631;0.025;36.151
-60;Avg time diff [s];-2.524;0.202;24.003
-60;Unsolved;0.000;0.000;0.000
+Statistic;Timeout;mdd;ortools;yuck
+Avg % cost diff;15;9.7;0.0;93.4
+Avg time diff [s];15;-3.6;0.0;5.3
+Unsolved;15;0.0;10.0;10.0
+Avg % cost diff;30;10.9;0.0;56.7
+Avg time diff [s];30;-4.4;0.0;11.7
+Unsolved;30;0.0;10.0;9.0
+Avg % cost diff;45;11.5;0.0;43.3
+Avg time diff [s];45;-5.0;0.1;17.5
+Unsolved;45;0.0;0.0;0.0
+Avg % cost diff;60;11.6;0.0;36.2
+Avg time diff [s];60;-2.5;0.2;24.0
+Unsolved;60;0.0;0.0;0.0

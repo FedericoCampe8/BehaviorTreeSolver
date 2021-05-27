@@ -54,7 +54,7 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
             summary.loc[len(summary)] = [solver, statistics[1], timeout, avg_time_diff]
             summary.loc[len(summary)] = [solver, statistics[2], timeout, unsolved_instances]
     # Pretty print summary
-    summary_formatted_columns = ["Timeout", "Statistic"] + [str(s) for s in solvers]
+    summary_formatted_columns = ["Statistic", "Timeout"] + [str(s) for s in solvers]
     summary_formatted = pd.DataFrame(columns=summary_formatted_columns)
     for timeout in timeouts:
         for statistic in statistics:
@@ -62,6 +62,6 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
             for solver in solvers:     
                 summary_row = summary[(summary["Solver"] == solver) & (summary["Statistic"] == statistic) & (summary["Timeout"] == timeout)]
                 row_data.append(summary_row["Value"].iat[0])
-            summary_formatted.loc[len(summary_formatted)] = [timeout, statistic] + row_data
-    summary_formatted.to_csv("{}-summary.csv".format(benchmark), sep=';', index=False, encoding="utf-8",float_format="%.3f")
+            summary_formatted.loc[len(summary_formatted)] = [statistic, timeout] + row_data
+    summary_formatted.to_csv("{}-summary.csv".format(benchmark), sep=';', index=False, encoding="utf-8",float_format="%.1f")
     #print(summary_formatted)

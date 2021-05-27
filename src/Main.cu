@@ -18,8 +18,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = CTWProblem;
-using StateType = CTWPState;
+using ProblemType = MOSProblem;
+using StateType = MOSPState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);
