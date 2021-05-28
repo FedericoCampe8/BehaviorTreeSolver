@@ -29,6 +29,11 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
     g.add_legend()
     plot_file = "{}-cost.pdf".format(benchmark,)
     g.savefig(plot_file, dpi=300, bbox_inches="tight")
+    # Cost (Log)
+    for axes in g.axes.flat:
+        axes.set_yscale("log")
+    plot_file = "{}-cost-log.pdf".format(benchmark,)
+    g.savefig(plot_file, dpi=300, bbox_inches="tight")
     # Time
     g = sns.FacetGrid(df, row="Timeout", height=h, aspect=w/h, row_order=timeouts )
     g.map_dataframe(sns.barplot, x="Instance", y="Time", hue="Solver", order=None, data=df, ci=None, palette="tab10")
@@ -37,4 +42,9 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
         axes.set_xticklabels(axes.get_xticklabels(), rotation=90)
     g.add_legend()
     plot_file = "{}-time.pdf".format(benchmark,)
+    g.savefig(plot_file, dpi=300, bbox_inches="tight")
+    # Time (Log)
+    for axes in g.axes.flat:
+        axes.set_yscale("log")
+    plot_file = "{}-time-log.pdf".format(benchmark,)
     g.savefig(plot_file, dpi=300, bbox_inches="tight")

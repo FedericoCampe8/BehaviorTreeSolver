@@ -18,8 +18,8 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = MOSProblem;
-using StateType = MOSPState;
+using ProblemType = JSProblem;
+using StateType = JSPState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);

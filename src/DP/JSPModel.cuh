@@ -16,8 +16,8 @@ namespace DP
 __host__ __device__
 DP::CostType DP::calcCost(OP::JSProblem const * problem, JSPState const * currentState, OP::ValueType const value)
 {
-    OP::ValueType const task = value;
-    OP::ValueType const job = task / problem->machines;
+    OP::ValueType const job = value;
+    OP::ValueType const task = job * problem->machines + *currentState->jobs_progress[job];
     u16 const machine = problem->tasks[task]->first;
     u16 const duration = problem->tasks[task]->second;
     DP::CostType const makespan = Algorithms::max(*currentState->machines_makespan[machine], *currentState->jobs_makespan[job]) + duration;
@@ -32,7 +32,7 @@ void DP::makeRoot(OP::JSProblem const* problem, JSPState* root)
     {
         *root->jobs_progress[job] = 0;
         *root->jobs_makespan[job] = 0;
-        root->admissibleValuesMap.insert(job * problem->machines); // First task of each job
+        root->admissibleValuesMap.insert(job);
     }
     for (OP::ValueType machine = 0; machine < problem->machines; machine += 1)
     {
@@ -54,8 +54,8 @@ void DP::makeState(OP::JSProblem const * problem, JSPState const * currentState,
     nextState->selectValue(value);
 
     // Problem specific
-    OP::ValueType const task = value;
-    OP::ValueType const job = value / problem->machines;
+    OP::ValueType const job = value;
+    OP::ValueType const task = job * problem->machines + *nextState->jobs_progress[job];
     u16 const machine = problem->tasks[task]->first;
     u16 const duration = problem->tasks[task]->second;
 
@@ -65,12 +65,13 @@ void DP::makeState(OP::JSProblem const * problem, JSPState const * currentState,
     *nextState->jobs_progress[job] += 1;
     if (*nextState->jobs_progress[job] < problem->machines)
     {
-        nextState->admissibleValuesMap.insert(task + 1);
+        nextState->admissibleValuesMap.insert(job);
     }
 
     u16 makespan = task_start + duration;
     *nextState->machines_makespan[machine] = makespan;
     *nextState->jobs_makespan[job] = makespan;
+
     //nextState->print(true);
 }
 

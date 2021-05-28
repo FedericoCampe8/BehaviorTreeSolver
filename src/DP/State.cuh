@@ -29,7 +29,6 @@ namespace DP
         __host__ __device__ inline void selectValue(OP::ValueType value);
         __host__ __device__ static u32 sizeOfStorage(OP::Problem const* problem);
         __host__ __device__ static void swap(State& s0, State& s1);
-
     };
 }
 

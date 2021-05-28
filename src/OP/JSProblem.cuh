@@ -50,9 +50,8 @@ OP::JSProblem* OP::parseInstance(char const * problemFilename, Memory::MallocTyp
     new (problem) OP::JSProblem(jobs, machines, mallocType);
 
     // Init variables
-    u16 const tasksCount = jobs * machines;
-    Variable const variable(0, tasksCount - 1);
-    for (OP::ValueType variableIdx = 0; variableIdx < tasksCount; variableIdx += 1)
+    Variable const variable(0, jobs - 1);
+    for (OP::ValueType variableIdx = 0; variableIdx < jobs * machines; variableIdx += 1)
     {
         problem->add(&variable);
     }
