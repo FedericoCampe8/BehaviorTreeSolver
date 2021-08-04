@@ -4,6 +4,7 @@ import pandas as pd
 import common
 
 good_cost_threshold_percentage = 115
+good_time_threshold_percentage = 75
 
 def incrementValue(df, statistic, timeout, solver):
     row_index = df.index[(df["Statistic"] == statistic) & (df["Timeout"] == timeout)].tolist()[0]
@@ -28,7 +29,7 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
     minimums = minimums.drop_duplicates(subset=["Instance", "Timeout"], ignore_index=True, keep="first")
     # Create empty summary
     solvers = sorted(data.Solver.unique())
-    statistics = ["Best solution", "Good solution and better time", "Unsolved"]
+    statistics = ["Best solution", "Good solution in less time", "Unsolved"]
     timeouts = sorted(data.Timeout.unique())
     summary_columns = ["Statistic", "Timeout"] + solvers
     summary = pd.DataFrame(columns=summary_columns)
@@ -51,8 +52,8 @@ for benchmark in ["Ctwp", "Jsp", "Mosp", "Tsppd"]:
                     min_time_value = min_row["Time"].iat[0]                    
                     if cost_value <= min_cost_value and time_value <= min_time_value:
                         incrementValue(summary, "Best solution", timeout, solver) 
-                    elif cost_value <= good_cost_threshold_percentage / 100 * min_cost_value and time_value <= min_time_value:
-                        incrementValue(summary, "Good solution and better time", timeout, solver) 
+                    elif cost_value <= good_cost_threshold_percentage / 100 * min_cost_value and time_value <= good_time_threshold_percentage / 100 * max(1,min_time_value):
+                        incrementValue(summary, "Good solution in less time", timeout, solver) 
                 else:
                    incrementValue(summary, "Unsolved", timeout, solver) 
     summary.sort_values(["Timeout", "Statistic"], inplace=True)
