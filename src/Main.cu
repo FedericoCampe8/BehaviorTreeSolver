@@ -53,6 +53,9 @@ template<typename ProblemType, typename StateType>
 void doOffloadsAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer, bool onlyRestricted);
 
 template<typename ProblemType, typename StateType>
+void doOffloadLoop(OffloadBuffer<ProblemType,StateType>* offloadBuffer, unsigned int begin, unsigned int step, unsigned int end, bool onlyRestricted);
+
+template<typename ProblemType, typename StateType>
 __global__ void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, bool onlyRestricted);
 
 void waitOffloadCpu(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime);
@@ -141,6 +144,9 @@ int main(int argc, char* argv[])
     printf("\n");
     do
     {
+
+        uint64_t iterationStartTime = now();
+
         switch(searchStatus)
         {
             case SearchStatus::BB:
@@ -188,6 +194,8 @@ int main(int argc, char* argv[])
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, gpuOffloadBuffer);
 
+        uint64_t iterationEndTime = now();
+
         if(foundBetterSolution)
         {
             clearLine();
@@ -223,7 +231,10 @@ int main(int argc, char* argv[])
                 printf("[INFO] Current value: %u", currentSolution->cost);
                 printf(" | Time: ");
                 printElapsedTime(now() - searchStartTime);
-                printf(" | Iteration: %u", iterationsCount);
+                printf(" | Iteration: %u ", iterationsCount);
+                printf("(");
+                printElapsedTime(iterationEndTime - iterationStartTime);
+                printf("s) ");
                 //printf(" | States: %u - %u - %u", visitedStatesCount, priorityQueue.getSize(), filteredStatesCount);
                 printf(" | CPU: %lu MDD/s | GPU: %lu MDD/s\r", cpuSpeed, gpuSpeed);
             }
@@ -349,10 +360,12 @@ template<typename ProblemType, typename StateType>
 void doOffloadCpuAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vector<std::thread>* cpuThreads, bool onlyRestricted)
 {
     cpuThreads->clear();
-    for (unsigned int index = 0; index < cpuOffloadBuffer->getSize(); index += 1)
+    unsigned int step = cpuThreads->getCapacity();
+    unsigned int end = cpuOffloadBuffer->getSize();
+    for (unsigned int begin = 0; begin < cpuThreads->getCapacity(); begin += 1)
     {
         cpuThreads->resize(cpuThreads->getSize() + 1);
-        new (cpuThreads->back()) std::thread(&OffloadBuffer<ProblemType,StateType>::doOffload, cpuOffloadBuffer, index, onlyRestricted);
+        new (cpuThreads->back()) std::thread(doOffloadLoop<ProblemType,StateType>, cpuOffloadBuffer, begin, step, end, onlyRestricted);
     }
 }
 
@@ -374,6 +387,16 @@ void doOffloadsAsync(OffloadBuffer<ProblemType,StateType>* cpuOffloadBuffer, Vec
     doOffloadCpuAsync(cpuOffloadBuffer, cpuThreads, onlyRestricted);
     doOffloadGpuAsync(gpuOffloadBuffer, onlyRestricted);
 }
+
+template<typename ProblemType, typename StateType>
+void doOffloadLoop(OffloadBuffer<ProblemType, StateType>* offloadBuffer, unsigned int begin, unsigned int step, unsigned int end, bool onlyRestricted)
+{
+    for(unsigned int index = begin; index < end; index += step)
+    {
+        offloadBuffer->doOffload(index, onlyRestricted);
+    }
+}
+
 
 template<typename ProblemType, typename StateType>
 __global__
