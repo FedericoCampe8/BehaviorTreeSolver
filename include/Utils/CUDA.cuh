@@ -24,6 +24,6 @@ u32 CUDA::getElementsPerThread(u32 const threads, u32 const elements)
     }
     else
     {
-        return elements / threads + (elements % threads != 0);
+        return (elements / threads) + 1;
     }
 }

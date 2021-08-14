@@ -205,7 +205,8 @@ void BitSet::print(bool endLine) const
 __host__ __device__
 u32 BitSet::sizeOfStorage(u32 maxValue)
 {
-    return sizeof(u32) * BitSet::chunksCount(maxValue);
+    return
+        sizeof(u32) * BitSet::chunksCount(maxValue);
 }
 
 __host__ __device__

@@ -13,6 +13,8 @@ class MaxHeap
     __host__ __device__ MaxHeap(unsigned int capacity, Memory::MallocType mallocType);
     __host__ __device__ void erase(T const * t);
     __host__ __device__ inline T* front() const;
+    __host__ __device__ inline T* at(u32 index) const;
+    __host__ __device__ inline u32 getSize() const;
     __host__ __device__ void insert(T const * t);
     __host__ __device__ inline bool isEmpty() const;
     __host__ __device__ inline bool isFull() const;
@@ -123,4 +125,17 @@ __host__ __device__
 unsigned int MaxHeap<T>::right(unsigned int index)
 {
     return 2 * index + 2;
+}
+
+template<typename T>
+__host__ __device__
+T* MaxHeap<T>::at(u32 index) const
+{
+    return vector.at(index);
+}
+template<typename T>
+__host__ __device__
+u32 MaxHeap<T>::getSize() const
+{
+    return vector.getSize();
 }

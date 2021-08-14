@@ -1,17 +1,12 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.18)
 
 project(mdd-gpu LANGUAGES CXX)
 
 # CUDA
 enable_language(CUDA)
-if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.18")
-    set(CMAKE_CUDA_STANDARD 17)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    set(CMAKE_CUDA_ARCHITECTURES 52)
-else ()
-    string(APPEND CMAKE_CUDA_FLAGS " --std=c++17")
-    string(APPEND CMAKE_CUDA_FLAGS " --gpu-architecture=sm_86")
-endif ()
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_ARCHITECTURES 86)
 string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda")
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 string(APPEND CMAKE_CUDA_FLAGS " --compiler-options=-Wall")
@@ -36,9 +31,11 @@ set(SOURCES
     src/OP/Variable.cuh
     src/DP/TSPPDModel.cuh
     src/DP/CTWPModel.cuh
+    src/DP/SOPModel.cuh
     src/DD/MDD.cuh
     src/OP/CTWProblem.cuh
     src/OP/TSPPDProblem.cuh
+    src/OP/SOPProblem.cuh
     src/OP/Problem.cuh
     src/DP/State.cuh
     src/OffloadBuffer.cuh
@@ -53,6 +50,7 @@ set(SOURCES
     include/Containers/Pair.cuh
     src/Options.h
     src/DP/CTWPState.cuh
+    src/DP/SOPState.cuh
     src/OP/MOSProblem.cuh
     src/DP/MOSPState.cuh
     src/DP/MOSPModel.cuh

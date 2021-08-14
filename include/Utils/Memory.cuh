@@ -35,7 +35,7 @@ std::byte* Memory::align(std::byte const * ptr, u32 alignment)
 __host__ __device__
 uintptr_t Memory::align(uintptr_t address, u32 alignment)
 {
-    return address + alignment - (address % alignment);
+    return address % alignment == 0 ? address : address + alignment - (address % alignment);
 }
 
 __host__ __device__

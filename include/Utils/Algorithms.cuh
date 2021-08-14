@@ -2,6 +2,7 @@
 
 #include <Utils/CUDA.cuh>
 #include <Utils/TypeAlias.h>
+#include <thrust/swap.h>
 
 namespace Algorithms
 {
@@ -18,7 +19,7 @@ namespace Algorithms
     __host__ __device__ inline T& max(T const & a, T const& b);
 
     template<typename T>
-    __device__ inline void oddEvenSort(T* array, unsigned int size);
+    __host__ __device__ inline void oddEvenSort(T* array, unsigned int size);
 }
 
 template<typename T>
@@ -50,35 +51,84 @@ T& Algorithms::max(T& a, T& b)
 }
 
 template<typename T>
-__device__
+__host__ __device__
 void Algorithms::oddEvenSort(T* array, unsigned int size)
 {
+#ifdef __CUDA_ARCH__
+    __shared__ bool sorted;
     u32 const threads = blockDim.x;
-    u32 const pairs = size / 2 + (size % 2 != 0);
-    u32 const pairsPerThread = CUDA::getElementsPerThread(threads, pairs);
-    u32 const elementsPerThread = 2 * pairsPerThread;
+    u32 const pairs = size / 2;
 
-    for (unsigned int iterationIdx = 0; iterationIdx < pairs + 1; iterationIdx += 1)
+    do
     {
         __syncthreads();
-        u32 beginIdx = threadIdx.x * elementsPerThread;
-        u32 endIdx = Algorithms::min(beginIdx + elementsPerThread, size - 1);
-        for(u32 i = beginIdx; i < endIdx; i += 2)
+        if(threadIdx.x == 0)
         {
-            if (not(array[i] < array[i+1]))
+            sorted = true;
+        }
+        __syncthreads();
+        for(u32 pairIdx = threadIdx.x; pairIdx < pairs; pairIdx += threads)
+        {
+            u32 const idx0 = pairIdx * 2;
+            u32 const idx1 = pairIdx * 2 + 1;
+            if(array[idx1] < array[idx0])
             {
-                T::swap(array[i], array[i+1]);
+                T::swap(array[idx1],array[idx0]);
+                sorted = false;
             }
         }
         __syncthreads();
-        beginIdx = threadIdx.x * elementsPerThread + 1;
-        endIdx = Algorithms::min(beginIdx + elementsPerThread + 1, size - 1);
-        for(u32 i = beginIdx; i < endIdx; i += 2)
+
+        for(u32 pairIdx = threadIdx.x; pairIdx < pairs; pairIdx += threads)
         {
-            if (not(array[i] < array[i+1]))
+            u32 const idx0 = 1 + pairIdx * 2;
+            u32 const idx1 = 1 + pairIdx * 2 + 1;
+            if(idx1 < size)
             {
-                T::swap(array[i], array[i+1]);
+                if(array[idx1] < array[idx0])
+                {
+                   T::swap(array[idx1],array[idx0]);
+                   sorted = false;
+                }
             }
         }
+        __syncthreads();
     }
+    while (not sorted);
+#else
+    bool sorted;
+    u32 const pairs = size / 2;
+
+    do
+    {
+        sorted = true;
+        for(u32 pairIdx = 0; pairIdx < pairs; pairIdx += 1)
+        {
+            u32 const idx0 = pairIdx * 2;
+            u32 const idx1 = pairIdx * 2 + 1;
+            if(array[idx1] < array[idx0])
+            {
+                T::swap(array[idx1],array[idx0]);
+                sorted = false;
+            }
+        }
+
+        for(u32 pairIdx = 0; pairIdx < pairs; pairIdx += 1)
+        {
+            u32 const idx0 = 1 + pairIdx * 2;
+            u32 const idx1 = 1 + pairIdx * 2 + 1;
+            if(idx1 < size)
+            {
+                if(array[idx1] < array[idx0])
+                {
+                    T::swap(array[idx1],array[idx0]);
+                    sorted = false;
+                }
+            }
+        }
+
+    }
+    while (not sorted);
+
+#endif
 }

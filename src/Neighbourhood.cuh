@@ -25,6 +25,7 @@ class Neighbourhood
     __host__ __device__ bool constraintsCheck(u32 variableIdx, OP::ValueType value) const;
     void generate(Vector<OP::ValueType> const * solution, u32 eqPercentage, u32 neqPercentage, std::mt19937* rng);
     void print(bool endLine = true);
+    void prefetchAsync(i32 dstDevice);
 };
 
 Neighbourhood::Neighbourhood(OP::Problem const * problem, Memory::MallocType mallocType) :
@@ -39,11 +40,19 @@ Neighbourhood::Neighbourhood(OP::Problem const * problem, Memory::MallocType mal
 __host__ __device__
 bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType value) const
 {
-    Neighbourhood::ConstraintType const constraint = *constraints[variableIdx];
-    bool const isFree = constraint == ConstraintType::None and (not fixedValue.contains(value));
-    bool const isEq = constraint == ConstraintType::Eq and *solution[variableIdx] == value;
-    bool const isNeq = constraint == ConstraintType::Neq and *solution[variableIdx] != value;
-    return isFree or isEq or isNeq;
+    if (*constraints[variableIdx] == ConstraintType::Eq and *solution[variableIdx] != value)
+    {
+        return false;
+    }
+    else if(*constraints[variableIdx] == ConstraintType::Neq and *solution[variableIdx] == value)
+    {
+        return false;
+    }
+    else if(*constraints[variableIdx] == ConstraintType::None and fixedValue.contains(value))
+    {
+        return false;
+    }
+    return true;
 }
 
 void Neighbourhood::generate(Vector<OP::ValueType> const * solution, u32 eqPercentage, u32 neqPercentage, std::mt19937* rng)

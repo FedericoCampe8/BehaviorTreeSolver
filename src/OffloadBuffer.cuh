@@ -9,7 +9,6 @@ class OffloadBuffer
     // Members
     private:
     unsigned int size;
-    Array<BB::AugmentedState<StateType>> augmentedStates;
     Array<StateType> statesBuffer;
     Array<DD::MDD<ProblemType, StateType>> mdds;
     Array<Neighbourhood> neighbourhoods;
@@ -17,20 +16,19 @@ class OffloadBuffer
     // Functions
     public:
     OffloadBuffer(ProblemType const * problem, unsigned int width, unsigned int capacity, Memory::MallocType mallocType);
-    __host__ __device__ void doOffload(unsigned int index, bool onlyRestricted);
+    __host__ __device__ void doOffload(unsigned int index);
     void clear();
-    void enqueue(BB::AugmentedState<StateType> const* augmentedState);
-    void generateNeighbourhoods(StateType const* currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng);
+    void enqueue(StateType const * state);
+    void generateNeighbourhoods(StateType const* currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, Array<std::mt19937>* rngs, Vector<std::thread>* cpuThreads);
     BB::AugmentedState<StateType> const* getAugmentedState(unsigned int index) const;
     DD::MDD<ProblemType, StateType> const* getMDD(unsigned int index) const;
     unsigned int getSize() const;
     bool isEmpty() const;
     bool isFull() const;
     protected:
+    void generateNeighbourhoodsLoop(StateType const* currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, Array<std::mt19937>* rngs, unsigned int begin, unsigned int step, unsigned int end);
     __host__ __device__ inline void barrier() const;
-    __host__ __device__ inline void setLowerbound(unsigned int index) const;
     __host__ __device__ void setTop(unsigned int index);
-    __host__ __device__ inline void setUpperbound(unsigned int index);
 
 };
 
@@ -65,18 +63,8 @@ OffloadBuffer<ProblemType, StateType>::OffloadBuffer(ProblemType const * problem
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index, bool onlyRestricted)
+void OffloadBuffer<ProblemType, StateType>::doOffload(unsigned int index)
 {
-
-    if (not onlyRestricted)
-    {
-        //setTop(index);
-        //barrier();
-        //mdds[index]->buildTopDown(DD::Type::Relaxed, neighbourhoods[index]);
-        //barrier();
-        //setLowerbound(index);
-        augmentedStates[index]->lowerbound = 0;
-    }
     setTop(index);
     barrier();
     mdds[index]->buildTopDown(DD::Type::Restricted, neighbourhoods[index]);
@@ -100,26 +88,31 @@ void OffloadBuffer<ProblemType, StateType>::enqueue(BB::AugmentedState<StateType
 }
 
 template<typename ProblemType, typename StateType>
-void OffloadBuffer<ProblemType, StateType>::generateNeighbourhoods(StateType const* currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, std::mt19937* rng)
+void OffloadBuffer<ProblemType, StateType>::generateNeighbourhoods(StateType const* currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, Array<std::mt19937>* rngs, Vector<std::thread>* cpuThreads)
 {
-    for (unsigned int index = 0; index < size; index += 1)
+    cpuThreads->clear();
+    unsigned int step = cpuThreads->getCapacity();
+    unsigned int end = size;
+    for (unsigned int begin = 0; begin < cpuThreads->getCapacity(); begin += 1)
     {
-        neighbourhoods[index]->generate(&currentSolution->selectedValues, eqPercentage, neqPercentage, rng);
+        cpuThreads->resize(cpuThreads->getSize() + 1);
+        new (cpuThreads->back()) std::thread(&OffloadBuffer<ProblemType, StateType>::generateNeighbourhoodsLoop, this, currentSolution, eqPercentage, neqPercentage, rngs, begin, step, end);
     }
+
 }
 
 template<typename ProblemType, typename StateType>
 BB::AugmentedState<StateType> const* OffloadBuffer<ProblemType, StateType>::getAugmentedState(unsigned int index) const
 {
     return augmentedStates[index];
-}
+}augmentedStates
 
 template<typename ProblemType, typename StateType>
 DD::MDD<ProblemType, StateType> const* OffloadBuffer<ProblemType, StateType>::getMDD(unsigned int index) const
 {
     return mdds[index];
 }
-
+augmentedStates
 template<typename ProblemType, typename StateType>
 unsigned int OffloadBuffer<ProblemType, StateType>::getSize() const
 {
@@ -138,25 +131,6 @@ bool OffloadBuffer<ProblemType, StateType>::isFull() const
     return size == statesBuffer.getCapacity();
 }
 
-template<typename ProblemType, typename StateType>
-__host__ __device__ void OffloadBuffer<ProblemType, StateType>::barrier() const
-{
-#ifdef __CUDA_ARCH__
-    __syncthreads();
-#endif
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void OffloadBuffer<ProblemType, StateType>::setLowerbound(unsigned int index) const
-{
-#ifdef __CUDA_ARCH__
-    if (threadIdx.x == 0)
-#endif
-    {
-        augmentedStates[index]->lowerbound = mdds[index]->bottom.cost;
-    }
-}
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
@@ -180,3 +154,11 @@ __host__ __device__ void OffloadBuffer<ProblemType, StateType>::setUpperbound(un
     }
 }
 
+template<typename ProblemType, typename StateType>
+void OffloadBuffer<ProblemType, StateType>::generateNeighbourhoodsLoop(StateType const* currentSolution, unsigned int eqPercentage, unsigned int neqPercentage, Array<std::mt19937>* rngs, unsigned int begin, unsigned int step, unsigned int end)
+{
+    for(unsigned int index = begin; index < end; index += step)
+    {
+        neighbourhoods[index]->generate(&currentSolution->selectedValues, eqPercentage, neqPercentage, rngs->at(index));
+    }
+}

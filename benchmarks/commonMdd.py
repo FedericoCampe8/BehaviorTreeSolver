@@ -9,21 +9,20 @@ from parsimonious.nodes import NodeVisitor
 def parse_args(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("-t",    type=int, action="store", dest="t",   default=60)
-    parser.add_argument("-i",    type=int, action="store", dest="i",   default=15)
     parser.add_argument("-q",    type=int, action="store", dest="q",   default=50000)
     parser.add_argument("--wc",  type=int, action="store", dest="wc",  required=True)
     parser.add_argument("--pc",  type=int, action="store", dest="pc",  required=True)
     parser.add_argument("--wg",  type=int, action="store", dest="wg",  required=True)
     parser.add_argument("--pg",  type=int, action="store", dest="pg",  required=True)
-    parser.add_argument("--eq",  type=int, action="store", dest="eq",  default=25)
+    parser.add_argument("--eq",  type=int, action="store", dest="eq",  default=0)
     parser.add_argument("--neq", type=int, action="store", dest="neq", default=25)
     args, _ = parser.parse_known_args(argv)
     return args
 
 
 def get_args_str(args):
-    flat_args = args.t, args.i, args.q, args.wc, args.pc, args.wg, args.pg, args.eq, args.neq
-    return "t{}-i{}-q{}-wc{}-pc{}-wg{}-pg{}-eq{}-neq{}-{}".format(*flat_args, int(time.time()))
+    flat_args = args.t, args.q, args.wc, args.pc, args.wg, args.pg, args.eq, args.neq
+    return "t{}-q{}-wc{}-pc{}-wg{}-pg{}-eq{}-neq{}-{}".format(*flat_args, int(time.time()))
 
 
 def solve(args, json_file):
@@ -57,7 +56,8 @@ def solve(args, json_file):
 output_grammar = Grammar("""
     output = output_line*
     output_line = solution / info
-    solution = "[SOLUTION] Time: " float " | Cost: " int " | Solution: " list_int nl
+    solution = "[SOLUTION] Source: " source " | Time: " float " | Cost: " int " | Solution: " list_int nl
+    source = "CPU" / "GPU"
     info = "[INFO]" ~"."+ nl
     list_int = "[" ~"[0-9,\\s]*" "]"
     float = int "." int
@@ -74,10 +74,9 @@ class OutputVisitor(NodeVisitor):
         return visited_children[0]
 
     def visit_solution(self, node, visited_children):
-        search_time = visited_children[1]
-        cost = visited_children[3]
-        solution = visited_children[5]
-        return Result(cost, search_time, solution)
+        cost = visited_children[5]
+        solution = visited_children[7]
+        return Result(cost, solution)
 
     def visit_list_int(self, node, visited_children):
         l = node.children[1].text.split(",")

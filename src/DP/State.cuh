@@ -25,6 +25,7 @@ namespace DP
         __host__ __device__ static std::byte* mallocStorages(OP::Problem const*  problem, u32 statesCount, Memory::MallocType mallocType);
         __host__ __device__ State& operator=(State const & other);
         __host__ __device__ inline void makeInvalid();
+        __host__ __device__ inline bool isValid();
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ inline void selectValue(OP::ValueType value);
         __host__ __device__ static u32 sizeOfStorage(OP::Problem const* problem);
@@ -71,6 +72,12 @@ __host__ __device__
 void DP::State::makeInvalid()
 {
     cost = DP::MaxCost;
+}
+
+__host__ __device__
+bool DP::State::isValid()
+{
+    return cost != DP::MaxCost;
 }
 
 __host__ __device__

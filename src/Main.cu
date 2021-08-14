@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <thread>
+#include <curand_kernel.h>
 #include <External/AnyOption/anyoption.h>
 #include <Utils/Algorithms.cuh>
 #include <Utils/Chrono.cuh>
@@ -7,6 +8,7 @@
 #include "DP/CTWPModel.cuh"
 #include "DP/MOSPModel.cuh"
 #include "DP/JSPModel.cuh"
+#include "DP/SOPModel.cuh"
 #include "OffloadBuffer.cuh"
 #include "BB/PriorityQueue.cuh"
 #include "Options.h"
@@ -18,13 +20,19 @@ using namespace BB;
 using namespace DD;
 using namespace DP;
 using namespace OP;
-using ProblemType = JSProblem;
-using StateType = JSPState;
+using ProblemType = TSPPDProblem;
+using StateType = TSPPDState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);
 
 void configGPU();
+
+void initRNGs(Array<std::mt19937>* rngs, u32 seed);
+
+void initRNGs(Array<curandState_t>* rngs, u32 seed);
+
+__global__ void initRNGsKernel(Array<curandState_t>* rngs, u32 seed);
 
 // Search
 template<typename ProblemType, typename StateType>
@@ -60,9 +68,9 @@ __global__ void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuf
 
 void waitOffloadCpu(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime);
 
-void waitOffloadGpu(uint64_t* gpuOffloadEndTime);
+void waitOffloadGpu(uint64_t* gpuOffloadEndTime, OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer);
 
-void waitOffloads(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime, uint64_t* gpuOffloadEndTime);
+void waitOffloads(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime, uint64_t* gpuOffloadEndTime, OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer);
 
 // Debug
 void printElapsedTime(uint64_t elapsedTimeMs);
@@ -87,17 +95,20 @@ int main(int argc, char* argv[])
     // *******************
 
     // Context initialization
-    std::mt19937 rng(options.randomSeed);
-    MallocType gpuMallocType = MallocType::Std;
     if (options.parallelismGpu > 0)
     {
-        gpuMallocType = MallocType::Managed;
         configGPU();
     };
-    Vector<std::thread>* cpuThreads = new Vector<std::thread>(options.parallelismCpu, MallocType::Std);
 
-    // Problems
+    // CPU
+    Vector<std::thread>* cpuThreads = new Vector<std::thread>(std::thread::hardware_concurrency(), MallocType::Std);
+    Array<std::mt19937>* rngsCpu = new Array<std::mt19937>(options.parallelismCpu, MallocType::Std);
+    initRNGs(rngsCpu, options.randomSeed);
     ProblemType* const cpuProblem = parseInstance<ProblemType>(options.inputFilename, MallocType::Std);
+
+    // GPU
+    Array<curandState_t>* rngsGPU = new Array<curandState_t>(options.parallelismGpu, gpuMallocType);
+    initRNGs(rngsGPU, options.randomSeed);
     ProblemType* const gpuProblem = parseInstance<ProblemType>(options.inputFilename, gpuMallocType);
 
     // PriorityQueue
@@ -147,6 +158,9 @@ int main(int argc, char* argv[])
 
         uint64_t iterationStartTime = now();
 
+        uint64_t cpuOffloadEndTime;
+        uint64_t gpuOffloadEndTime;
+
         switch(searchStatus)
         {
             case SearchStatus::BB:
@@ -155,7 +169,7 @@ int main(int argc, char* argv[])
                 {
                     searchStatus = SearchStatus::LNS;
                     clearLine();
-                    printf("[INFO] Switching to large neighborhood search");
+                    printf("[INFO] Switch to LNS");
                     printf(" | Time: ");
                     printElapsedTime(now() - searchStartTime);
                     printf("\n");
@@ -169,8 +183,8 @@ int main(int argc, char* argv[])
             {
                 prepareOffload(&augmentedRoot, cpuOffloadBuffer);
                 prepareOffload(&augmentedRoot, gpuOffloadBuffer);
-                cpuOffloadBuffer->generateNeighbourhoods(currentSolution, options.eqProbability, options.neqProbability, &rng);
-                gpuOffloadBuffer->generateNeighbourhoods(currentSolution, options.eqProbability, options.neqProbability, &rng);
+                cpuOffloadBuffer->generateNeighbourhoods(bestSolution, options.eqProbability, options.neqProbability, rngsCpu, cpuThreads);
+                waitOffloads(cpuThreads, &cpuOffloadEndTime, &gpuOffloadEndTime, gpuOffloadBuffer);
                 currentSolution->makeInvalid();
             }
                 break;
@@ -179,27 +193,24 @@ int main(int argc, char* argv[])
         uint64_t cpuOffloadStartTime = now();
         uint64_t gpuOffloadStartTime = now();
         doOffloadsAsync(cpuOffloadBuffer, cpuThreads, gpuOffloadBuffer, searchStatus == SearchStatus::LNS);
-
-        uint64_t cpuOffloadEndTime;
-        uint64_t gpuOffloadEndTime;
-        waitOffloads(cpuThreads, &cpuOffloadEndTime, &gpuOffloadEndTime);
+        waitOffloads(cpuThreads, &cpuOffloadEndTime, &gpuOffloadEndTime, gpuOffloadBuffer);
 
         visitedStatesCount += cpuOffloadBuffer->getSize();
         visitedStatesCount += gpuOffloadBuffer->getSize();
 
-        bool foundBetterSolution =
-                checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadBuffer) or
-                checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadBuffer);
+        bool foundBetterSolutionCpu = checkForBetterSolutions(bestSolution, currentSolution, cpuOffloadBuffer);
+        bool foundBetterSolutionGpu = checkForBetterSolutions(bestSolution, currentSolution, gpuOffloadBuffer);
 
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, cpuOffloadBuffer);
         updatePriorityQueue(bestSolution, &filteredStatesCount, &priorityQueue, gpuOffloadBuffer);
 
         uint64_t iterationEndTime = now();
 
-        if(foundBetterSolution)
+        if(foundBetterSolutionCpu or foundBetterSolutionGpu)
         {
             clearLine();
-            printf("[SOLUTION] Time: ");
+            printf("[SOLUTION] Source: %s", foundBetterSolutionCpu ? "CPU" : "GPU");
+            printf(" | Time: ");
             printElapsedTime(now() - searchStartTime);
             printf(" | Cost: %u", bestSolution->cost);
             printf(" | Solution: ");
@@ -259,11 +270,11 @@ int main(int argc, char* argv[])
 void configGPU()
 {
     //Heap
-    std::size_t sizeHeap = 4ul * 1024ul * 1024ul * 1024ul;
+    std::size_t const sizeHeap = 4ul * 1024ul * 1024ul * 1024ul;
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, sizeHeap);
 
     //Stack
-    size_t sizeStackThread = 4 * 1024;
+    size_t const sizeStackThread = 4 * 1024;
     cudaDeviceSetLimit(cudaLimitStackSize, sizeStackThread);
 
     //Cache
@@ -308,11 +319,12 @@ template<typename ProblemType, typename StateType>
 bool checkForBetterSolutions(StateType* bestSolution, StateType* currentSolution, OffloadBuffer<ProblemType,StateType>* offloadBuffer)
 {
     bool foundBetterSolution = false;
-
+    std::uniform_int_distribution<u32> randomDistribution(0, 1);
     for (unsigned int index = 0; index < offloadBuffer->getSize(); index += 1)
     {
         StateType const * const approximateSolution = &offloadBuffer->getMDD(index)->bottom;
-        if (approximateSolution->cost < currentSolution->cost)
+
+        if(approximateSolution->cost < currentSolution->cost)
         {
             *currentSolution = *approximateSolution;
         }
@@ -417,16 +429,16 @@ void waitOffloadCpu(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime
     *cpuOffloadEndTime = now();
 }
 
-void waitOffloadGpu(uint64_t* gpuOffloadEndTime)
+void waitOffloadGpu(uint64_t* gpuOffloadEndTime, OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer)
 {
     cudaDeviceSynchronize();
     *gpuOffloadEndTime = now();
 }
 
-void waitOffloads(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime, uint64_t* gpuOffloadEndTime)
+void waitOffloads(Vector<std::thread>* cpuThreads, uint64_t* cpuOffloadEndTime, uint64_t* gpuOffloadEndTime, OffloadBuffer<ProblemType,StateType>* gpuOffloadBuffer)
 {
     std::thread waitCpu(waitOffloadCpu, cpuThreads, cpuOffloadEndTime);
-    std::thread waitGpu(waitOffloadGpu, gpuOffloadEndTime);
+    std::thread waitGpu(waitOffloadGpu, gpuOffloadEndTime, gpuOffloadBuffer);
 
     waitCpu.join();
     waitGpu.join();
@@ -452,4 +464,24 @@ void clearLine()
 {
     // ANSI clear line escape code
     printf("\33[2K\r");
+}
+
+void initRNGs(Array<std::mt19937>* rngs, u32 const seed)
+{
+    for(u32 i = 0; i < rngs->getCapacity(); i += 1)
+    {
+        new (rngs->at(i)) std::mt19937(seed + i);
+    }
+}
+
+void initRNGs(Array<curandState_t>* rngs, u32 seed)
+{
+    initRNGsKernel<<<rngs->getCapacity(), 1>>>(rngs, seed);
+    cudaDeviceSynchronize();
+}
+
+__global__ void initRNGsKernel(Array<curandState_t>* rngs, u32 const seed)
+{
+    u32 i = blockIdx.x;
+    curand_init(seed + i, 0, 0, rngs->at(i));
 }

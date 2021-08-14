@@ -39,8 +39,8 @@ Options::Options() :
     timeout(60),
     widthCpu(1000),
     widthGpu(3),
-    eqProbability(15),
-    neqProbability(15),
+    eqProbability(60),
+    neqProbability(3),
     randomSeed(static_cast<unsigned int>(Chrono::now() % 1000)),
     anyOption(new AnyOption())
 {

@@ -7,7 +7,7 @@
 namespace DP
 {
     __host__ __device__ inline DP::CostType calcCost(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType const value);
-    __host__ __device__ inline void ifPickupAddDelivery(OP::ValueType value, TSPPDState* state);
+    __host__ __device__ inline void updateAdmissible(OP::ValueType value, TSPPDState* state);
     void makeRoot(OP::TSPPDProblem const * problem, TSPPDState* root);
     __host__ __device__ inline void makeState(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType value, DP::CostType cost, TSPPDState* nextState);
     __host__ __device__ inline void mergeState(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType value, TSPPDState* nextState);
@@ -30,7 +30,7 @@ DP::CostType DP::calcCost(OP::TSPPDProblem const * problem, TSPPDState const * c
 
 
 __host__ __device__
-void DP::ifPickupAddDelivery(OP::ValueType value, TSPPDState* state)
+void DP::updateAdmissible(OP::ValueType value, TSPPDState* state)
 {
     if (value % 2 == 0)
     {
@@ -55,12 +55,12 @@ void DP::makeState(OP::TSPPDProblem const * problem, TSPPDState const * currentS
     nextState->cost = cost;
     nextState->admissibleValuesMap.erase(value);
     nextState->selectValue(value);
-    ifPickupAddDelivery(value, nextState);
+    updateAdmissible(value, nextState);
 }
 
 __host__ __device__
 void DP::mergeState(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType value, TSPPDState* nextState)
 {
     nextState->admissibleValuesMap.merge(currentState->admissibleValuesMap);
-    ifPickupAddDelivery(value, nextState);
+    updateAdmissible(value, nextState);
 }
