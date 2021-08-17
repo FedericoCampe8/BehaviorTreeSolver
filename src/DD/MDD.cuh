@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <thrust/binary_search.h>
 #include <thrust/partition.h>
 #include <thrust/functional.h>
@@ -9,9 +10,9 @@
 #include "../DP/TSPPDState.cuh"
 #include "../DP/TSPPDModel.cuh"
 #include "../OP/Problem.cuh"
-#include "../Neighbourhood.cuh"
+#include <LNS/Neighbourhood.cuh>
 #include "Context.h"
-#include "AuxiliaryData.cuh"
+#include "StateMetadata.cuh"
 
 namespace DD
 {
@@ -22,126 +23,79 @@ namespace DD
         public:
         u32 const width;
         ProblemType const * const problem;
-        StateType top;
-        StateType bottom;
-        Vector<StateType> cutset;
+        Vector<StateType> cutsetStates;
         private:
         std::byte* scratchpadMemory;
         LightVector<StateType>* currentStates;
         LightVector<StateType>* nextStates;
-        LightVector<AuxiliaryData>* auxiliaryData;
+        LightVector<StateMetadata>* nextStatesMetadata;
 
         // Functions
         public:
         MDD(ProblemType const * problem, u32 width, Memory::MallocType mallocType);
-        __host__ __device__ inline void buildTopDown(DD::Type type, Neighbourhood const * neighbourhood);
+        __host__ __device__ inline void buildTopDown(Neighbourhood const * neighbourhood, StateType const * top, StateType * bottom, bool lns);
         __host__ __device__ u32 sizeOfScratchpadMemory() const;
         private:
-        __host__ __device__ inline void calcAuxiliaryData(u32 variableIdx, Neighbourhood const * neighbourhood);
+        __host__ __device__ inline void calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, bool lns);
+        __host__ __device__ inline void initializeNextStatesMetadata();
+        __host__ __device__ inline void finalizeNextStatesMetadata();
         __host__ __device__ inline void calcNextStates(u32 variableIdx);
-        __host__ __device__ inline void initScratchpadMemory();
-        __host__ __device__ inline void initTop();
-        __host__ __device__ void mergeNextStates(u32 variableIdx);
-        __host__ __device__ inline void resetAuxiliaryData();
-        __host__ __device__ inline void resizeAuxiliaryData();
-        __host__ __device__ inline void resizeCutset();
-        __host__ __device__ void resizeNextStates(u32 variableIdx, u32 variablesCount);
-        __host__ __device__ inline void saveCutset();
-        __host__ __device__ void saveBottom();
-        __host__ __device__ void setInvalid();
-        __host__ __device__ void shirkToFitAuxiliaryData();
-        __host__ __device__ inline void sortAuxiliaryData();
+        __host__ __device__ inline void initializeScratchpadMemory();
+        __host__ __device__ inline void initializeTop(StateType const * top);
+        __host__ __device__ inline void saveCutsetStates();
+        __host__ __device__ void saveInvalidBottom(StateType * bottom);
+        __host__ __device__ void saveBottom(StateType * bottom);
         __host__ __device__ void swapCurrentAndNextStates();
     };
 }
 
 template<typename ProblemType, typename StateType>
-DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, unsigned int width, Memory::MallocType mallocType) :
+DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, u32 width, Memory::MallocType mallocType) :
     width(width),
     problem(problem),
-    top(problem, mallocType),
-    bottom(problem, mallocType),
-    cutset(width * problem->maxBranchingFactor, mallocType),
+    cutsetStates(width, mallocType),
     scratchpadMemory(Memory::safeMalloc(sizeOfScratchpadMemory(), Memory::MallocType::Std)),
     currentStates(nullptr),
     nextStates(nullptr),
-    auxiliaryData(nullptr)
+    nextStatesMetadata(nullptr)
 {
     // Cutset states
-    std::byte* storages = StateType::mallocStorages(problem, cutset.getCapacity(), mallocType);
-    for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutset.getCapacity(); cutsetStateIdx += 1)
+    std::byte* storage = StateType::mallocStorages(problem, cutsetStates.getCapacity(), mallocType);
+    for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutsetStates.getCapacity(); cutsetStateIdx += 1)
     {
-        StateType* cutsetState = cutset.LightArray<StateType>::at(cutsetStateIdx);
-        new (cutsetState) StateType(problem, storages);
-        storages = Memory::align(cutsetState->endOfStorage(), Memory::DefaultAlignment);
+        StateType* cutsetState = cutsetStates.LightArray<StateType>::at(cutsetStateIdx);
+        new (cutsetState) StateType(problem, storage);
+        storage = Memory::align(cutsetState->endOfStorage(), Memory::DefaultAlignment);
     }
 }
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::buildTopDown(DD::Type type, Neighbourhood const* neighbourhood)
+void DD::MDD<ProblemType, StateType>::buildTopDown(Neighbourhood const* neighbourhood, StateType const * top, StateType * bottom, bool lns)
 {
-    initScratchpadMemory();
-    CUDA_THREADS_BARRIER
-    initTop();
-    CUDA_THREADS_BARRIER
-    bool cutsetSaved = false;
-    u32 const variablesCount = problem->variables.getCapacity();
-    for (u32 variableIdx = currentStates->at(0)->selectedValues.getSize(); variableIdx < variablesCount; variableIdx += 1)
+    initializeScratchpadMemory();
+    initializeTop(top);
+    bool cutsetStatesSaved = false;
+    u32 const variableIdxBegin = currentStates->at(0)->selectedValues.getSize();
+    u32 const variableIdxEnd = problem->variables.getCapacity();
+    for (u32 variableIdx = variableIdxBegin; variableIdx < variableIdxEnd; variableIdx += 1)
     {
-        resizeAuxiliaryData();
-        CUDA_THREADS_BARRIER
-        resetAuxiliaryData();
-        CUDA_THREADS_BARRIER
-        calcAuxiliaryData(variableIdx, neighbourhood);
-        CUDA_THREADS_BARRIER
-        sortAuxiliaryData();
-        CUDA_THREADS_BARRIER
-        shirkToFitAuxiliaryData();
-        CUDA_THREADS_BARRIER
-        resizeNextStates(variableIdx, variablesCount);
-        CUDA_THREADS_BARRIER
-        if (nextStates->isEmpty())
+        calcNextStatesMetadata(variableIdx, neighbourhood, lns);
+        if (nextStatesMetadata->isEmpty())
         {
-            /*
-            for(u32 i = 0; i < currentStates->getSize(); i +=1)
-            {
-                printf("%d ",currentStates->at(i)->cost);
-                currentStates->at(i)->print();
-            }
-            */
-            setInvalid();
+            saveInvalidBottom(bottom);
             return;
         }
-        else
-        {
-            /*
-              for(u32 i = 0; i < currentStates->getSize(); i +=1)
-              {
-                  printf("%d ",currentStates->at(i)->cost);
-                  currentStates->at(i)->print();
-              }
-              */
-
-        }
-
-
         calcNextStates(variableIdx);
-        if (type == Type::Relaxed)
+        if (not (lns or cutsetStatesSaved))
         {
-            mergeNextStates(variableIdx);
+            saveCutsetStates();
+            cutsetStatesSaved = true;
         }
-        else if (not cutsetSaved)
-        {
-            resizeCutset();
-            CUDA_THREADS_BARRIER
-            saveCutset();
-            cutsetSaved = true;
-        }
-        CUDA_THREADS_BARRIER
         swapCurrentAndNextStates();
     }
-    saveBottom();
+    saveBottom(bottom);
+
 }
 
 template<typename ProblemType, typename StateType>
@@ -150,16 +104,17 @@ u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory() const
 {
     u32 const sizeCurrentStates = sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
     u32 const sizeNextStates =    sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
-    u32 const sizeAuxiliaryData = sizeof(LightVector<AuxiliaryData>) + LightVector<AuxiliaryData>::sizeOfStorage(width * problem->maxBranchingFactor) + Memory::DefaultAlignmentPadding * 2;
-    u32 const size = sizeCurrentStates + sizeNextStates + sizeAuxiliaryData;
-    return size + 1000 * Memory::DefaultAlignmentPadding;
-
+    u32 const sizeNextStatesMetadata = sizeof(LightVector<StateMetadata>) + LightVector<StateMetadata>::sizeOfStorage(Algorithms::nextPower2(width * problem->maxBranchingFactor)) + Memory::DefaultAlignmentPadding * 2;
+    u32 const size = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
+    return size + Memory::DefaultAlignmentPadding;
 }
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::calcAuxiliaryData(u32 variableIdx, Neighbourhood const * neighbourhood)
+void DD::MDD<ProblemType, StateType>::calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, bool lns)
 {
+    initializeNextStatesMetadata();
+    
     u32 const elements = currentStates->getSize() * problem->maxBranchingFactor;
 #ifdef __CUDA_ARCH__
     u32 const threads = blockDim.x;
@@ -169,28 +124,37 @@ void DD::MDD<ProblemType, StateType>::calcAuxiliaryData(u32 variableIdx, Neighbo
 #endif
     {
         u32 const currentStateIdx = index / problem->maxBranchingFactor;
-        OP::ValueType value = index % problem->maxBranchingFactor;
-
         StateType const * const currentState = currentStates->at(currentStateIdx);
+        OP::ValueType value = index % problem->maxBranchingFactor;
         if(currentState->admissibleValuesMap.contains(value))
         {
-            bool const boundsChk = problem->variables[variableIdx]->boundsCheck(value);
-            bool const constraintsChk = neighbourhood->constraintsCheck(variableIdx, value);
-            if (boundsChk and constraintsChk)
+            if((not lns) or neighbourhood->constraintsCheck(variableIdx, value))
             {
-                u32 const auxiliaryDataIdx = problem->maxBranchingFactor * currentStateIdx + value;
-                auxiliaryData->at(auxiliaryDataIdx)->cost = calcCost(problem, currentState, value);
+                u32 const stateMetadataIdx = problem->maxBranchingFactor * currentStateIdx + value;
+                nextStatesMetadata->at(stateMetadataIdx)->cost = calcCost(problem, currentState, value);
             }
         }
     }
+
+    
+    finalizeNextStatesMetadata();
 }
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::calcNextStates(unsigned int variableIdx)
+void DD::MDD<ProblemType, StateType>::calcNextStates(u32 variableIdx)
 {
-    u32 const elements = nextStates->getSize();
+    //Resize
+    CUDA_ONLY_FIRST_THREAD
+    {
+        u32 const nextStatesMetadataSize = nextStatesMetadata->getSize();
+        thrust::minimum min;
+        nextStates->resize(min(width, nextStatesMetadataSize));
+    }
+    CUDA_BLOCK_BARRIER
 
+    
+    u32 const elements = nextStates->getSize();
 #ifdef __CUDA_ARCH__
     u32 const threads = blockDim.x;
     for (u32 nextStateIdx = threadIdx.x; nextStateIdx < elements; nextStateIdx += threads)
@@ -198,29 +162,29 @@ void DD::MDD<ProblemType, StateType>::calcNextStates(unsigned int variableIdx)
     for (u32 nextStateIdx = 0; nextStateIdx < elements; nextStateIdx += 1)
 #endif
     {
-        AuxiliaryData const ad = *auxiliaryData->at(nextStateIdx);
-        u32 const currentStateIdx = ad.index / problem->maxBranchingFactor;
-        OP::ValueType const value = ad.index % problem->maxBranchingFactor;
-        makeState(problem, currentStates->at(currentStateIdx), value, auxiliaryData->at(nextStateIdx)->cost, nextStates->at(nextStateIdx));
+        StateMetadata const sm = *nextStatesMetadata->at(nextStateIdx);
+        u32 const currentStateIdx = sm.index / problem->maxBranchingFactor;
+        OP::ValueType const value = sm.index % problem->maxBranchingFactor;
+        makeState(problem, currentStates->at(currentStateIdx), value, nextStatesMetadata->at(nextStateIdx)->cost, nextStates->at(nextStateIdx));
     }
+    CUDA_BLOCK_BARRIER
 }
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::initScratchpadMemory()
+void DD::MDD<ProblemType, StateType>::initializeScratchpadMemory()
 {
-    std::byte* freeScratchpadMemory;
-#ifdef __CUDA_ARCH__
-    extern __shared__ u32 sharedMemory[];
-    freeScratchpadMemory = reinterpret_cast<std::byte*>(&sharedMemory);
-#else
-    freeScratchpadMemory = scratchpadMemory;
-#endif
     CUDA_ONLY_FIRST_THREAD
     {
-
-        //std::byte* const freeScratchpadMemoryBeforeCurrent = freeScratchpadMemory;
+        std::byte* freeScratchpadMemory = nullptr;
+#ifdef __CUDA_ARCH__
+        extern __shared__ u32 sharedMemory[];
+        freeScratchpadMemory = reinterpret_cast<std::byte*>(&sharedMemory);
+#else
+        freeScratchpadMemory = scratchpadMemory;
+#endif
         // Current states
+        std::byte const * const freeScratchpadMemoryBeforeCurrentStates = freeScratchpadMemory;
         currentStates = reinterpret_cast<LightVector<StateType>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<StateType>);
         freeScratchpadMemory = Memory::align(freeScratchpadMemory, Memory::DefaultAlignment);
@@ -232,10 +196,11 @@ void DD::MDD<ProblemType, StateType>::initScratchpadMemory()
             new (currentState) StateType(problem, freeScratchpadMemory);
             freeScratchpadMemory = Memory::align(currentState->endOfStorage(), Memory::DefaultAlignment);
         }
-        //u32 const sizeCurrentStates = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeCurrent);
+        u32 const sizeCurrentStates = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeCurrentStates);
 
-        //std::byte* const freeScratchpadMemoryBeforeNext = freeScratchpadMemory;
+
         // Next states
+        std::byte const * const freeScratchpadMemoryBeforeNextStates = freeScratchpadMemory;
         nextStates = reinterpret_cast<LightVector<StateType>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<StateType>);
         freeScratchpadMemory = Memory::align(freeScratchpadMemory, Memory::DefaultAlignment);
@@ -247,155 +212,63 @@ void DD::MDD<ProblemType, StateType>::initScratchpadMemory()
             new (nextState) StateType(problem, freeScratchpadMemory);
             freeScratchpadMemory = Memory::align(nextState->endOfStorage(), Memory::DefaultAlignment);
         }
-        //u32 const sizeNextStates = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeNext);
+        u32 const sizeNextStates = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeNextStates);
 
-        //std::byte* const freeScratchpadMemoryBeforeAuxiliary = freeScratchpadMemory;
-        // Auxiliary information
-        auxiliaryData = reinterpret_cast<LightVector<AuxiliaryData>*>(freeScratchpadMemory);
-        freeScratchpadMemory += sizeof(LightVector<AuxiliaryData>);
+
+        // Next states metadata
+        std::byte* const freeScratchpadMemoryBeforeNextStatesMetadata = freeScratchpadMemory;
+        nextStatesMetadata = reinterpret_cast<LightVector<StateMetadata>*>(freeScratchpadMemory);
+        freeScratchpadMemory += sizeof(LightVector<StateMetadata>);
         freeScratchpadMemory = Memory::align(freeScratchpadMemory, Memory::DefaultAlignment);
-        new (auxiliaryData) LightVector<AuxiliaryData>(width * problem->maxBranchingFactor, reinterpret_cast<AuxiliaryData*>(freeScratchpadMemory));
-        freeScratchpadMemory = auxiliaryData->endOfStorage();
+        new (nextStatesMetadata) LightVector<StateMetadata>(Algorithms::nextPower2(width * problem->maxBranchingFactor), reinterpret_cast<StateMetadata*>(freeScratchpadMemory));
+        freeScratchpadMemory = nextStatesMetadata->endOfStorage();
+        u32 const sizeNextStatesMetadata = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeNextStatesMetadata);
 
-        //u32 const sizeAuxiliaryData = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeAuxiliary);
-        //u32 const usedScratchpadMemory = sizeCurrentStates + sizeNextStates + sizeAuxiliaryData;
+
+        // Memory
+        [[maybe_unused]] u32 const usedScratchpadMemory = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
     }
-
+    CUDA_BLOCK_BARRIER
 }
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::initTop()
+void DD::MDD<ProblemType, StateType>::initializeTop(StateType const * top)
 {
     CUDA_ONLY_FIRST_THREAD
     {
         currentStates->resize(1);
-        *currentStates->at(0) = top;
+        *currentStates->at(0) = *top;
     }
+    CUDA_BLOCK_BARRIER
 }
+
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::mergeNextStates(unsigned int variableIdx)
+void DD::MDD<ProblemType, StateType>::saveCutsetStates()
 {
+    //Resize
     CUDA_ONLY_FIRST_THREAD
     {
-        for (u32 auxiliaryDataIdx = nextStates->getSize(); auxiliaryDataIdx < auxiliaryData->getSize(); auxiliaryDataIdx += 1)
-        {
-            AuxiliaryData ad = *auxiliaryData->at(auxiliaryDataIdx);
-            u32 const currentStateIdx = ad.index / problem->maxBranchingFactor;
-            OP::ValueType const value = ad.index % problem->maxBranchingFactor;
-            mergeState(problem, currentStates->at(currentStateIdx), value, nextStates->back());
-        }
+        thrust::minimum min;
+        cutsetStates.resize(min(width,nextStatesMetadata->getSize()));
     }
-}
+    CUDA_BLOCK_BARRIER
 
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::resetAuxiliaryData()
-{
-    u32 const elements = auxiliaryData->getSize();
-#ifdef __CUDA_ARCH__
-    u32 const threads = blockDim.x;
-    for (u32 auxiliaryDataIdx = threadIdx.x; auxiliaryDataIdx < elements; auxiliaryDataIdx += threads)
-#else
-    for (u32 auxiliaryDataIdx = 0; auxiliaryDataIdx < elements; auxiliaryDataIdx += 1)
-#endif
-    {
-        auxiliaryData->at(auxiliaryDataIdx)->cost = DP::MaxCost;
-        auxiliaryData->at(auxiliaryDataIdx)->index = auxiliaryDataIdx;
-    }
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::resizeAuxiliaryData()
-{
-    CUDA_ONLY_FIRST_THREAD
-    {
-        auxiliaryData->resize(currentStates->getSize() * problem->maxBranchingFactor);
-    }
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::resizeCutset()
-{
-    CUDA_ONLY_FIRST_THREAD
-    {
-        cutset.resize(nextStates->getSize());
-    }
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::resizeNextStates(unsigned int variableIdx, unsigned int variablesCount)
-{
-    CUDA_ONLY_FIRST_THREAD
-    {
-        u32 const nextStatesMaxCount = variableIdx < variablesCount - 1 ? width : 1;
-        nextStates->resize(min(nextStatesMaxCount, auxiliaryData->getSize()));
-    }
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::saveCutset()
-{
-    u32 const elements = cutset.getSize();
+    u32 const elements = cutsetStates.getSize();
 #ifdef __CUDA_ARCH__
     u32 const threads = blockDim.x;
     for (u32 cutsetStateIdx = threadIdx.x; cutsetStateIdx < elements; cutsetStateIdx += threads)
 #else
-    for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutset.getSize(); cutsetStateIdx += 1)
+    for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutsetStates.getSize(); cutsetStateIdx += 1)
 #endif
     {
-        *cutset[cutsetStateIdx] = *nextStates->at(cutsetStateIdx);
+        *cutsetStates[cutsetStateIdx] = *nextStates->at(cutsetStateIdx);
     }
+    CUDA_BLOCK_BARRIER
 }
 
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::saveBottom()
-{
-    CUDA_ONLY_FIRST_THREAD
-    {
-        bottom = *currentStates->at(0);
-    }
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::setInvalid()
-{
-    CUDA_ONLY_FIRST_THREAD
-    {
-        bottom.makeInvalid();
-    }
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::shirkToFitAuxiliaryData()
-{
-    CUDA_ONLY_FIRST_THREAD
-    {
-        AuxiliaryData const invalidAuxiliaryData(DP::MaxCost, 0);
-        AuxiliaryData const * const auxiliaryDataEnd = thrust::lower_bound(thrust::seq, auxiliaryData->begin(), auxiliaryData->end(), invalidAuxiliaryData);
-        auxiliaryData->resize(auxiliaryDataEnd);
-    }
-}
-
-template<typename ProblemType, typename StateType>
-__host__ __device__
-void DD::MDD<ProblemType, StateType>::sortAuxiliaryData()
-{
-#ifdef __CUDA_ARCH__
-    Algorithms::oddEvenSort(auxiliaryData->begin(), auxiliaryData->getSize());
-#else
-    thrust::sort(thrust::seq, auxiliaryData->begin(), auxiliaryData->end());
-#endif
-}
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
@@ -405,4 +278,80 @@ void DD::MDD<ProblemType, StateType>::swapCurrentAndNextStates()
     {
         LightVector<StateType>::swap(*currentStates, *nextStates);
     }
+    CUDA_BLOCK_BARRIER
 }
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::initializeNextStatesMetadata()
+{
+    //Resize
+    u32 elements;
+#ifdef __CUDA_ARCH__
+    elements = Algorithms::nextPower2(currentStates->getSize() * problem->maxBranchingFactor);
+#else
+    elements = currentStates->getSize() * problem->maxBranchingFactor;
+#endif
+
+    CUDA_ONLY_FIRST_THREAD
+    {
+       nextStatesMetadata->resize(elements);
+    }
+    CUDA_BLOCK_BARRIER
+
+    //Reset
+#ifdef __CUDA_ARCH__
+    u32 const threads = blockDim.x;
+    for (u32 stateMetadataIdx = threadIdx.x; stateMetadataIdx < elements; stateMetadataIdx += threads)
+#else
+    for (u32 stateMetadataIdx = 0; stateMetadataIdx < elements; stateMetadataIdx += 1)
+#endif
+    {
+        nextStatesMetadata->at(stateMetadataIdx)->cost = DP::MaxCost;
+        nextStatesMetadata->at(stateMetadataIdx)->index = stateMetadataIdx;
+    }
+    CUDA_BLOCK_BARRIER
+}
+
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::finalizeNextStatesMetadata()
+{
+    //Sort
+    Algorithms::sort(nextStatesMetadata->begin(), nextStatesMetadata->getSize());
+
+    //Discard invalid
+    CUDA_ONLY_FIRST_THREAD
+    {
+        StateMetadata const invalidStateMetadata(DP::MaxCost, 0);
+        StateMetadata const * const nextStatesMetadataEnd = thrust::lower_bound(thrust::seq, nextStatesMetadata->begin(), nextStatesMetadata->end(), invalidStateMetadata);
+        nextStatesMetadata->resize(nextStatesMetadataEnd);
+    }
+    CUDA_BLOCK_BARRIER
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::saveInvalidBottom(StateType * bottom)
+{
+    CUDA_ONLY_FIRST_THREAD
+    {
+       bottom->makeInvalid();
+    }
+    CUDA_BLOCK_BARRIER
+}
+
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void DD::MDD<ProblemType, StateType>::saveBottom(StateType* bottom)
+{
+    CUDA_ONLY_FIRST_THREAD
+    {
+        *bottom = *currentStates->at(0);
+        //printf("[DEBUG] Bottom cost: %d\n", currentStates->at(0)->cost);
+    }
+    CUDA_BLOCK_BARRIER
+}
+

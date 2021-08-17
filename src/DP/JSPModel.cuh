@@ -1,7 +1,8 @@
 #pragma once
 
+#include <thrust/functional.h>
 #include <Utils/Algorithms.cuh>
-#include "../DD/AuxiliaryData.cuh"
+#include "../DD/StateMetadata.cuh"
 #include "../OP/JSProblem.cuh"
 #include "JSPState.cuh"
 
@@ -10,7 +11,6 @@ namespace DP
     __host__ __device__ inline DP::CostType calcCost(OP::JSProblem const * problem, JSPState const * currentState, OP::ValueType const value);
     void makeRoot(OP::JSProblem const * problem, JSPState* root);
     __host__ __device__ inline void makeState(OP::JSProblem const * problem, JSPState const * currentState, OP::ValueType value, DP::CostType cost, JSPState* nextState);
-    __host__ __device__ inline void mergeState(OP::JSProblem const * problem, JSPState const * currentState, OP::ValueType value, JSPState* nextState);
 }
 
 __host__ __device__
@@ -20,8 +20,8 @@ DP::CostType DP::calcCost(OP::JSProblem const * problem, JSPState const * curren
     OP::ValueType const task = job * problem->machines + *currentState->jobs_progress[job];
     u16 const machine = problem->tasks[task]->first;
     u16 const duration = problem->tasks[task]->second;
-    DP::CostType const makespan = Algorithms::max(*currentState->machines_makespan[machine], *currentState->jobs_makespan[job]) + duration;
-    return Algorithms::max(currentState->cost, makespan);
+    DP::CostType const makespan = thrust::max(*currentState->machines_makespan[machine], *currentState->jobs_makespan[job]) + duration;
+    return thrust::max(currentState->cost, makespan);
 }
 
 
@@ -59,7 +59,7 @@ void DP::makeState(OP::JSProblem const * problem, JSPState const * currentState,
     u16 const machine = problem->tasks[task]->first;
     u16 const duration = problem->tasks[task]->second;
 
-    u16 const task_start = Algorithms::max(*nextState->machines_makespan[machine], *nextState->jobs_makespan[job]);
+    u16 const task_start = thrust::max(*nextState->machines_makespan[machine], *nextState->jobs_makespan[job]);
     *nextState->tasks_start[task] = task_start;
 
     *nextState->jobs_progress[job] += 1;
@@ -73,18 +73,4 @@ void DP::makeState(OP::JSProblem const * problem, JSPState const * currentState,
     *nextState->jobs_makespan[job] = makespan;
 
     //nextState->print(true);
-}
-
-__host__ __device__
-void DP::mergeState(OP::JSProblem const * problem, JSPState const * currentState, OP::ValueType value, JSPState* nextState)
-{
-    nextState->cost = Algorithms::min(currentState->cost, nextState->cost);
-    for (OP::ValueType job = 0; job < problem->jobs; job += 1)
-    {
-        *nextState->jobs_makespan[job] = Algorithms::min(*currentState->jobs_makespan[job], *nextState->jobs_makespan[job]);
-    }
-    for (OP::ValueType machine = 0; machine < problem->machines; machine += 1)
-    {
-        *nextState->machines_makespan[machine] = Algorithms::min(* currentState->machines_makespan[machine], *nextState->machines_makespan[machine]);
-    }
 }

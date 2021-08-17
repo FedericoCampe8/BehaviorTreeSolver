@@ -5,7 +5,7 @@
 #include <thrust/fill.h>
 #include <Containers/Array.cuh>
 #include <Containers/BitSet.cuh>
-#include "OP/Problem.cuh"
+#include <OP/Problem.cuh>
 
 class Neighbourhood
 {
@@ -15,23 +15,33 @@ class Neighbourhood
 
     // Members
     public:
-    Vector<OP::ValueType> solution;
+    float eqProbability;
+    float neqProbability;
+    Array<OP::ValueType> values;
     Array<ConstraintType> constraints;
     BitSet fixedValue;
 
     // Functions
     public:
-    Neighbourhood(OP::Problem const * problem, Memory::MallocType mallocType);
+    Neighbourhood(OP::Problem const * problem, float eqProbability, float neqProbability, Memory::MallocType mallocType);
     __host__ __device__ bool constraintsCheck(u32 variableIdx, OP::ValueType value) const;
-    void generate(Vector<OP::ValueType> const * solution, u32 eqPercentage, u32 neqPercentage, std::mt19937* rng);
+    __host__ __device__ void reset();
+    __host__ __device__ void constraintVariable(u32 variableIdx, OP::ValueType value, float random);
     void print(bool endLine = true);
-    void prefetchAsync(i32 dstDevice);
 };
 
-Neighbourhood::Neighbourhood(OP::Problem const * problem, Memory::MallocType mallocType) :
-    solution(problem->variables.getCapacity(), mallocType),
+Neighbourhood::Neighbourhood(OP::Problem const * problem,float eqProbability, float neqProbability, Memory::MallocType mallocType) :
+    eqProbability(eqProbability),
+    neqProbability(neqProbability),
+    values(problem->variables.getCapacity(), mallocType),
     constraints(problem->variables.getCapacity(), mallocType),
     fixedValue(problem->maxValue + 1, mallocType)
+{
+    reset();
+}
+
+__host__ __device__
+void Neighbourhood::reset()
 {
     thrust::fill(thrust::seq, constraints.begin(), constraints.end(), ConstraintType::None);
     fixedValue.clear();
@@ -40,11 +50,11 @@ Neighbourhood::Neighbourhood(OP::Problem const * problem, Memory::MallocType mal
 __host__ __device__
 bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType value) const
 {
-    if (*constraints[variableIdx] == ConstraintType::Eq and *solution[variableIdx] != value)
+    if (*constraints[variableIdx] == ConstraintType::Eq and *values[variableIdx] != value)
     {
         return false;
     }
-    else if(*constraints[variableIdx] == ConstraintType::Neq and *solution[variableIdx] == value)
+    else if(*constraints[variableIdx] == ConstraintType::Neq and *values[variableIdx] == value)
     {
         return false;
     }
@@ -55,26 +65,19 @@ bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType val
     return true;
 }
 
-void Neighbourhood::generate(Vector<OP::ValueType> const * solution, u32 eqPercentage, u32 neqPercentage, std::mt19937* rng)
+__host__ __device__
+void Neighbourhood::constraintVariable(u32 variableIdx, OP::ValueType value, float random)
 {
-    this->solution = *solution;
-    std::uniform_int_distribution<u32> randomDistribution(0, 100);
-    for (u32 variableIdx = 0; variableIdx < solution->getCapacity(); variableIdx += 1)
+    if (random < eqProbability)
     {
-        ConstraintType* const constraint = constraints[variableIdx];
-        OP::ValueType const value = *solution->at(variableIdx);
-        *constraint = ConstraintType::None;
-        fixedValue.erase(value);
-        u32 random = randomDistribution(*rng);
-        if (random < eqPercentage)
-        {
-            *constraint = ConstraintType::Eq;
-            fixedValue.insert(value);
-        }
-        else if (random < eqPercentage + neqPercentage)
-        {
-            *constraint = ConstraintType::Neq;
-        }
+        *constraints[variableIdx] = ConstraintType::Eq;
+        *values[variableIdx] = value;
+        fixedValue.insert(value);
+    }
+    else if (random < eqProbability + neqProbability)
+    {
+        *constraints[variableIdx] = ConstraintType::Neq;
+        *values[variableIdx] = value;
     }
 }
 
@@ -85,13 +88,13 @@ void Neighbourhood::print(bool endLine)
         switch (*constraints[variableIdx])
         {
             case ConstraintType::None:
-                printf("  ");
+                printf("*");
                 break;
             case ConstraintType::Eq:
-                printf("\033[30;42m%2d\033[0m", *solution[variableIdx]);
+                printf("\033[30;42m%2d\033[0m", *values[variableIdx]);
                 break;
             case ConstraintType::Neq:
-                printf("\033[30;41m%2d\033[0m", *solution[variableIdx]);
+                printf("\033[30;41m%2d\033[0m", *values[variableIdx]);
                 break;
         }
     };
@@ -105,5 +108,3 @@ void Neighbourhood::print(bool endLine)
     }
     printf(endLine ? "]\n" : "]");
 }
-
-

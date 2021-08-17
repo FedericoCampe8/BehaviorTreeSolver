@@ -38,13 +38,14 @@ set(SOURCES
     src/OP/SOPProblem.cuh
     src/OP/Problem.cuh
     src/DP/State.cuh
-    src/OffloadBuffer.cuh
-    src/Neighbourhood.cuh
+    src/LNS/OffloadBuffer.cuh
+    src/LNS/OffloadBufferCPU.cuh
+    src/LNS/OffloadBufferGPU.cuh
+    src/LNS/Neighbourhood.cuh
     src/OP/Context.h
     src/DP/Context.h
-    src/DD/AuxiliaryData.cuh
-    src/BB/AugmentedState.cuh
-    src/BB/PriorityQueue.cuh
+    src/DD/StateMetadata.cuh
+    src/LNS/StatesPriorityQueue.cuh
     src/DD/Context.h
     include/Utils/Algorithms.cuh
     include/Containers/Pair.cuh
@@ -60,6 +61,7 @@ set(SOURCES
 
 
 # Add include path
+include_directories(src)
 include_directories(include)
 
 # Add target executable

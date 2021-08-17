@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../DD/AuxiliaryData.cuh"
+#include "../DD/StateMetadata.cuh"
 #include "../OP/SOPProblem.cuh"
 #include "SOPState.cuh"
 

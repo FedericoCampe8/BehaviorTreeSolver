@@ -68,6 +68,6 @@ std::byte* Memory::safeManagedMalloc(u64 size)
     void* memory;
     cudaError_t status = cudaMallocManaged(& memory, size);
     assert(status == cudaSuccess);
-    assert(memory != nullptr);
+    assert(memory != nullptr or size == 0);
     return static_cast<std::byte*>(memory);
 }

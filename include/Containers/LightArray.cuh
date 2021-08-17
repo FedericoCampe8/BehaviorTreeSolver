@@ -14,32 +14,32 @@ class LightArray
 {
     // Members
     protected:
-    unsigned int capacity;
+    u32 capacity;
     T* storage;
 
     // Functions
     public:
-    __host__ __device__ LightArray(unsigned int capacity, T* storage);
+    __host__ __device__ LightArray(u32 capacity, T* storage);
     __host__ __device__ ~LightArray();
-    __host__ __device__ inline T* at(unsigned int index) const;
+    __host__ __device__ inline T* at(u32 index) const;
     __host__ __device__ inline T* begin() const;
     __host__ __device__ inline T* end() const;
     __host__ __device__ inline std::byte* endOfStorage() const;
-    __host__ __device__ inline unsigned int getCapacity() const;
-    __host__ __device__ inline unsigned int indexOf(T const * t) const;
+    __host__ __device__ inline u32 getCapacity() const;
+    __host__ __device__ inline u32 indexOf(T const * t) const;
     __host__ __device__ LightArray<T>& operator=(LightArray<T> const & other);
-    __host__ __device__ inline T* operator[](unsigned int index) const;
+    __host__ __device__ inline T* operator[](u32 index) const;
     __host__ __device__ void print(bool endLine = true) const;
-    __host__ __device__ inline static unsigned int sizeOfStorage(unsigned int capacity);
+    __host__ __device__ inline static u32 sizeOfStorage(u32 capacity);
     __host__ __device__ inline static void swap(LightArray<T>& a0, LightArray<T>& a1);
     protected:
-    __host__ __device__ void print(unsigned int beginIdx, unsigned int endIdx, bool endLine) const;
+    __host__ __device__ void print(u32 beginIdx, u32 endIdx, bool endLine) const;
 
 };
 
 template<typename T>
 __host__ __device__
-LightArray<T>::LightArray(unsigned int capacity, T* storage) :
+LightArray<T>::LightArray(u32 capacity, T* storage) :
     capacity(capacity),
     storage(storage)
 {}
@@ -51,7 +51,7 @@ LightArray<T>::~LightArray()
 
 template<typename T>
 __host__ __device__
-T* LightArray<T>::at(unsigned int index) const
+T* LightArray<T>::at(u32 index) const
 {
     assert(capacity > 0);
     assert(index < capacity);
@@ -81,19 +81,19 @@ std::byte* LightArray<T>::endOfStorage() const
 
 template<typename T>
 __host__ __device__
-unsigned int LightArray<T>::getCapacity() const
+u32 LightArray<T>::getCapacity() const
 {
     return capacity;
 }
 
 template<typename T>
 __host__ __device__
-unsigned int LightArray<T>::indexOf(T const * t) const
+u32 LightArray<T>::indexOf(T const * t) const
 {
     T const * const begin = this->begin();
     assert(begin <= t);
     assert(t < end());
-    return static_cast<unsigned int>(t - begin);
+    return static_cast<u32>(t - begin);
 }
 
 template<typename T>
@@ -107,7 +107,7 @@ LightArray<T>& LightArray<T>::operator=(LightArray<T> const & other)
 
 template<typename T>
 __host__ __device__
-T* LightArray<T>::operator[](unsigned int index) const
+T* LightArray<T>::operator[](u32 index) const
 {
     return at(index);
 }
@@ -121,7 +121,7 @@ void LightArray<T>::print(bool endLine) const
 
 template<typename T>
 __host__ __device__
-unsigned int LightArray<T>::sizeOfStorage(unsigned int capacity)
+u32 LightArray<T>::sizeOfStorage(u32 capacity)
 {
     return sizeof(T) * capacity;
 }
@@ -136,7 +136,7 @@ void LightArray<T>::swap(LightArray<T>& a0, LightArray<T>& a1)
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::print(unsigned int beginIdx, unsigned int endIdx, bool endLine) const
+void LightArray<T>::print(u32 beginIdx, u32 endIdx, bool endLine) const
 {
     if constexpr (std::is_integral_v<T>)
     {
@@ -144,7 +144,7 @@ void LightArray<T>::print(unsigned int beginIdx, unsigned int endIdx, bool endLi
         if (beginIdx < endIdx)
         {
             printf("%d",static_cast<int>(*at(beginIdx)));
-            for (unsigned int index = beginIdx + 1; index < endIdx; index += 1)
+            for (u32 index = beginIdx + 1; index < endIdx; index += 1)
             {
                 printf(",");
                 printf("%d", static_cast<int>(*at(index)));

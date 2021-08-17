@@ -2,7 +2,7 @@
 
 #include <thrust/find.h>
 #include <thrust/remove.h>
-#include "../DD/AuxiliaryData.cuh"
+#include "../DD/StateMetadata.cuh"
 #include "../OP/CTWProblem.cuh"
 #include "CTWPState.cuh"
 

@@ -1,15 +1,15 @@
 #pragma once
 
-#include "../DD/AuxiliaryData.cuh"
+#include "../DD/StateMetadata.cuh"
 #include "../OP/MOSProblem.cuh"
 #include "MOSPState.cuh"
+#include <thrust/functional.h>
 
 namespace DP
 {
     __host__ __device__ inline DP::CostType calcCost(OP::MOSProblem const * problem, MOSPState const * currentState, OP::ValueType const value);
     void makeRoot(OP::MOSProblem const * problem, MOSPState* root);
     __host__ __device__ inline void makeState(OP::MOSProblem const * problem, MOSPState const * currentState, OP::ValueType value, DP::CostType cost, MOSPState* nextState);
-    __host__ __device__ inline void mergeState(OP::MOSProblem const * problem, MOSPState const * currentState, OP::ValueType value, MOSPState* nextState);
 }
 
 __host__ __device__
@@ -28,7 +28,7 @@ DP::CostType DP::calcCost(OP::MOSProblem const * problem, MOSPState const * curr
         }
     }
     DP::CostType cost = currentState->openStacksCount + openStacksCount - currentState->clientsToClose;
-    return Algorithms::max(currentState->cost, cost);
+    return thrust::max(currentState->cost, cost);
 }
 
 
@@ -79,19 +79,5 @@ void DP::makeState(OP::MOSProblem const * problem, MOSPState const * currentStat
                 nextState->clientsToClose += 1;
             }
         }
-    }
-    //nextState->print(true);
-}
-
-__host__ __device__
-void DP::mergeState(OP::MOSProblem const * problem, MOSPState const * currentState, OP::ValueType value, MOSPState* nextState)
-{
-    nextState->admissibleValuesMap.merge(currentState->admissibleValuesMap);
-    nextState->openStacksCount = Algorithms::min(nextState->openStacksCount, currentState->openStacksCount);
-    nextState->maxOpenStacksCount = Algorithms::min(nextState->maxOpenStacksCount, currentState->maxOpenStacksCount);
-    nextState->clientsToClose = Algorithms::min(nextState->clientsToClose, currentState->clientsToClose);
-    for (OP::ValueType client = 0; client < problem->clients; client += 1)
-    {
-       *nextState->productsToDo[client] = Algorithms::min(*nextState->productsToDo[client], *currentState->productsToDo[client]);
     }
 }

@@ -7,23 +7,23 @@ class Vector: public LightVector<T>
 {
     // Functions
     public:
-    __host__ __device__ Vector(unsigned int capacity, T* storage);
-    __host__ __device__ Vector(unsigned int capacity, Memory::MallocType mallocType);
+    __host__ __device__ Vector(u32 capacity, T* storage);
+    __host__ __device__ Vector(u32 capacity, Memory::MallocType mallocType);
     __host__ __device__ ~Vector();
     __host__ __device__ Vector<T>& operator=(Vector<T> const & other);
     private:
-    __host__ __device__ static T* mallocStorage(unsigned int capacity, Memory::MallocType mallocType);
+    __host__ __device__ static T* mallocStorage(u32 capacity, Memory::MallocType mallocType);
 };
 
 template<typename T>
 __host__ __device__
-Vector<T>::Vector(unsigned int capacity, T* storage) :
+Vector<T>::Vector(u32 capacity, T* storage) :
     LightVector<T>(capacity, storage)
 {}
 
 template<typename T>
 __host__ __device__
-Vector<T>::Vector(unsigned int capacity, Memory::MallocType mallocType) :
+Vector<T>::Vector(u32 capacity, Memory::MallocType mallocType) :
     Vector<T>(capacity, mallocStorage(capacity, mallocType))
 {}
 
@@ -45,8 +45,8 @@ Vector<T>& Vector<T>::operator=(Vector<T> const & other)
 
 template<typename T>
 __host__ __device__
-T* Vector<T>::mallocStorage(unsigned int capacity, Memory::MallocType mallocType)
+T* Vector<T>::mallocStorage(u32 capacity, Memory::MallocType mallocType)
 {
-    unsigned int const storageSize = Vector<T>::sizeOfStorage(capacity);
+    u32 const storageSize = Vector<T>::sizeOfStorage(capacity);
     return reinterpret_cast<T*>(Memory::safeMalloc(storageSize, mallocType));
 }

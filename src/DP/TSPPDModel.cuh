@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../DD/AuxiliaryData.cuh"
+#include "../DD/StateMetadata.cuh"
 #include "../OP/TSPPDProblem.cuh"
 #include "TSPPDState.cuh"
 
@@ -10,13 +10,12 @@ namespace DP
     __host__ __device__ inline void updateAdmissible(OP::ValueType value, TSPPDState* state);
     void makeRoot(OP::TSPPDProblem const * problem, TSPPDState* root);
     __host__ __device__ inline void makeState(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType value, DP::CostType cost, TSPPDState* nextState);
-    __host__ __device__ inline void mergeState(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType value, TSPPDState* nextState);
 }
 
 __host__ __device__
 DP::CostType DP::calcCost(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType const value)
 {
-    if(not currentState->selectedValues.isEmpty())
+    if(currentState->selectedValues.getSize() > 1)
     {
         OP::ValueType const from = *currentState->selectedValues.back();
         OP::ValueType const to = value;
@@ -32,7 +31,18 @@ DP::CostType DP::calcCost(OP::TSPPDProblem const * problem, TSPPDState const * c
 __host__ __device__
 void DP::updateAdmissible(OP::ValueType value, TSPPDState* state)
 {
-    if (value % 2 == 0)
+    if(state->selectedValues.getSize() == 1)
+    {
+        for (u32 value = 2; value <= state->admissibleValuesMap.getMaxValue(); value += 2)
+        {
+            state->admissibleValuesMap.insert(value);
+        }
+    }
+    else if(state->selectedValues.getSize() == state->selectedValues.getCapacity() - 1)
+    {
+        state->admissibleValuesMap.insert(1);
+    }
+    else if (value % 2 == 0)
     {
         state->admissibleValuesMap.insert(value + 1);
     }
@@ -42,10 +52,7 @@ void DP::updateAdmissible(OP::ValueType value, TSPPDState* state)
 void DP::makeRoot(OP::TSPPDProblem const* problem, TSPPDState* root)
 {
     root->cost = 0;
-    for (u32 value = 0; value <= problem->maxValue; value += 2)
-    {
-        root->admissibleValuesMap.insert(value);
-    }
+    root->admissibleValuesMap.insert(0);
 }
 
 __host__ __device__
@@ -55,12 +62,5 @@ void DP::makeState(OP::TSPPDProblem const * problem, TSPPDState const * currentS
     nextState->cost = cost;
     nextState->admissibleValuesMap.erase(value);
     nextState->selectValue(value);
-    updateAdmissible(value, nextState);
-}
-
-__host__ __device__
-void DP::mergeState(OP::TSPPDProblem const * problem, TSPPDState const * currentState, OP::ValueType value, TSPPDState* nextState)
-{
-    nextState->admissibleValuesMap.merge(currentState->admissibleValuesMap);
     updateAdmissible(value, nextState);
 }

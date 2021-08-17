@@ -24,6 +24,7 @@ namespace DP
         __host__ __device__ inline std::byte* endOfStorage() const;
         __host__ __device__ static std::byte* mallocStorages(OP::Problem const*  problem, u32 statesCount, Memory::MallocType mallocType);
         __host__ __device__ State& operator=(State const & other);
+        __host__ __device__ bool operator<(State const & other) const;
         __host__ __device__ inline void makeInvalid();
         __host__ __device__ inline bool isValid();
         __host__ __device__ void print(bool endLine = true) const;
@@ -116,4 +117,9 @@ void DP::State::swap(DP::State& s0, DP::State& s1)
     BitSet::swap(s0.selectedValuesMap, s1.selectedValuesMap);
     BitSet::swap(s0.admissibleValuesMap, s1.admissibleValuesMap);
     Vector<OP::ValueType>::swap(s0.selectedValues, s1.selectedValues);
+}
+__host__ __device__
+bool DP::State::operator<(DP::State const & other) const
+{
+    return cost < other.cost;
 }

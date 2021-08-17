@@ -50,17 +50,11 @@ OP::TSPPDProblem* OP::parseInstance(char const * problemFilename, Memory::Malloc
     new (problem) OP::TSPPDProblem(variablesCount, mallocType);
 
     // Init variables
-    Variable variable(0,0);
-    problem->add(&variable);
-    variable.minValue = 2;
-    variable.maxValue = static_cast<ValueType>(variablesCount - 1);
-    for (u32 variableIdx = 1; variableIdx < variablesCount - 1; variableIdx += 1)
+    Variable variable(0,variablesCount - 1);
+    for (u32 variableIdx = 0; variableIdx < variablesCount; variableIdx += 1)
     {
         problem->add(&variable);
     }
-    variable.minValue = 1;
-    variable.maxValue = 1;
-    problem->add(&variable);
 
     // Init distances
     for (u32 from = 0; from < variablesCount; from += 1)

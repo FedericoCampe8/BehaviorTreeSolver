@@ -7,34 +7,34 @@ class LightVector: public LightArray<T>
 {
     // Members
     protected:
-    unsigned int size;
+    u32 size;
 
     // Functions
     public:
-    __host__ __device__ LightVector(unsigned int capacity, T* storage);
+    __host__ __device__ LightVector(u32 capacity, T* storage);
     __host__ __device__ ~LightVector();
-    __host__ __device__ inline T* at(unsigned int index) const;
+    __host__ __device__ inline T* at(u32 index) const;
     __host__ __device__ inline T* back() const;
     __host__ __device__ inline void clear();
     __host__ __device__ inline T* end() const;
     __host__ __device__ inline T* front() const;
-    __host__ __device__ inline unsigned int getSize() const;
+    __host__ __device__ inline u32 getSize() const;
     __host__ __device__ inline bool isEmpty() const;
     __host__ __device__ inline bool isFull() const;
-    __host__ __device__ inline unsigned int indexOf(T const* t) const;
+    __host__ __device__ inline u32 indexOf(T const* t) const;
     __host__ __device__ LightVector<T>& operator=(LightVector<T> const& other);
-    __host__ __device__ inline T* operator[](unsigned int index) const;
+    __host__ __device__ inline T* operator[](u32 index) const;
     __host__ __device__ inline void popBack();
     __host__ __device__ void print(bool endLine = true) const;
     __host__ __device__ void pushBack(T const* t);
-    __host__ __device__ inline void resize(unsigned int size);
+    __host__ __device__ inline void resize(u32 size);
     __host__ __device__ inline void resize(T const * end);
     __host__ __device__ inline static void swap(LightVector<T>& v0, LightVector<T>& v1);
 };
 
 template<typename T>
 __host__ __device__
-LightVector<T>::LightVector(unsigned int capacity, T* storage) :
+LightVector<T>::LightVector(u32 capacity, T* storage) :
     LightArray<T>(capacity, storage),
     size(0)
 {}
@@ -46,7 +46,7 @@ LightVector<T>::~LightVector()
 
 template<typename T>
 __host__ __device__
-T* LightVector<T>::at(unsigned int index) const
+T* LightVector<T>::at(u32 index) const
 {
     assert(index < size);
     return LightArray<T>::at(index);
@@ -84,7 +84,7 @@ T* LightVector<T>::front() const
 
 template<typename T>
 __host__ __device__
-unsigned int LightVector<T>::getSize() const
+u32 LightVector<T>::getSize() const
 {
     return size;
 }
@@ -105,12 +105,12 @@ bool LightVector<T>::isFull() const
 
 template<typename T>
 __host__ __device__
-unsigned int LightVector<T>::indexOf(T const* t) const
+u32 LightVector<T>::indexOf(T const* t) const
 {
     T const * const begin = this->begin();
     assert(begin <= t);
     assert(t < end());
-    return static_cast<unsigned int>(t - begin);
+    return static_cast<u32>(t - begin);
 }
 
 template<typename T>
@@ -124,7 +124,7 @@ LightVector<T>& LightVector<T>::operator=(LightVector<T> const& other)
 
 template<typename T>
 __host__ __device__
-T* LightVector<T>::operator[](unsigned int index) const
+T* LightVector<T>::operator[](u32 index) const
 {
     return at(index);
 }
@@ -148,12 +148,12 @@ __host__ __device__
 void LightVector<T>::pushBack(T const* t)
 {
     resize(size + 1);
-    *back() = * t;
+    *back() = *t;
 }
 
 template<typename T>
 __host__ __device__
-void LightVector<T>::resize(unsigned int size)
+void LightVector<T>::resize(u32 size)
 {
     assert(size <= this->capacity);
     this->size = size;
@@ -165,7 +165,7 @@ void LightVector<T>::resize(T const * end)
 {
     if(end < this->end())
     {
-        unsigned int const size = this->indexOf(end);
+        u32 const size = this->indexOf(end);
         resize(size);
     }
 }

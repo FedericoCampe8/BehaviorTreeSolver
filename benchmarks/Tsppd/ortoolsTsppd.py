@@ -82,7 +82,7 @@ def solve(args, json_file):
     # Prepare input
     data = prepare_data(json_file)
 
-    # Search
+    # LNS
     processes = []
     processes_results = multiprocessing.Queue(maxsize=args.j)
     for _ in range(args.j):
