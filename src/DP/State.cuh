@@ -3,7 +3,7 @@
 #include <thrust/find.h>
 #include <Containers/BitSet.cuh>
 #include <Containers/Vector.cuh>
-#include "../OP/Problem.cuh"
+#include <OP/Problem.cuh>
 #include "Context.h"
 
 namespace DP
@@ -25,7 +25,7 @@ namespace DP
         __host__ __device__ static std::byte* mallocStorages(OP::Problem const*  problem, u32 statesCount, Memory::MallocType mallocType);
         __host__ __device__ State& operator=(State const & other);
         __host__ __device__ bool operator<(State const & other) const;
-        __host__ __device__ inline void makeInvalid();
+        __host__ __device__ inline void invalidate();
         __host__ __device__ inline bool isValid();
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ inline void selectValue(OP::ValueType value);
@@ -35,7 +35,7 @@ namespace DP
 }
 
 __host__ __device__
-DP::State::State(OP::Problem const* problem, std::byte* storage) :
+DP::State::State(OP::Problem const * problem, std::byte* storage) :
     cost(0),
     selectedValuesMap(problem->maxValue, reinterpret_cast<u32*>(storage)),
     admissibleValuesMap(problem->maxValue, Memory::align<u32>(selectedValuesMap.endOfStorage())),
@@ -43,7 +43,7 @@ DP::State::State(OP::Problem const* problem, std::byte* storage) :
 {}
 
 __host__ __device__
-DP::State::State(OP::Problem const* problem, Memory::MallocType mallocType) :
+DP::State::State(OP::Problem const * problem, Memory::MallocType mallocType) :
     State(problem, mallocStorages(problem,1,mallocType))
 {}
 
@@ -70,7 +70,7 @@ DP::State& DP::State::operator=(DP::State const & other)
 }
 
 __host__ __device__
-void DP::State::makeInvalid()
+void DP::State::invalidate()
 {
     cost = DP::MaxCost;
 }

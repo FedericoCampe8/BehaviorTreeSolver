@@ -4,16 +4,17 @@
 #include <LNS/Context.h>
 #include <LNS/Neighbourhood.cuh>
 #include <LNS/StatesPriorityQueue.cuh>
+#include <LNS/SyncState.cuh>
 
 template<typename ProblemType, typename StateType>
 class OffloadBuffer
 {
     // Members
-    protected:
-    Array<StateType> topStates;
-    Array<StateType> bottomStates;
+    private:
     u32 size;
     u32 capacity;
+    Array<StateType> topStates;
+    Array<StateType> bottomStates;
     Array<DD::MDD<ProblemType, StateType>> mdds;
     Array<Neighbourhood> neighbourhoods;
 
@@ -22,12 +23,15 @@ class OffloadBuffer
     OffloadBuffer(ProblemType const * problem, u32 mddsWidth, u32 capacity, float eqProbability, float neqProbability, Memory::MallocType mallocType);
     void initializeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue);
     void initializeOffload(StateType const * statesPriorityQueue);
+    __host__ __device__ void doOffload(LNS::SearchPhase searchPhase, u32 index);
     void finalizeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue);
-    u32 getSize() const;
-    StateType const * getBestSolution(LNS::SearchPhase searchPhase) const;
-    void printNeighbourhoods() const;
-    protected:
+    void getBestSolution(LNS::SearchPhase searchPhase, SyncState<StateType> * solution);
+    void generateNeighborhood(Array<std::mt19937>* rngs, Vector<OP::ValueType> * values, u32 index);
+    __device__ void generateNeighborhood(Array<curandStatePhilox4_32_10_t>* rngs, Vector<OP::ValueType> * values, u32 index);
     bool isEmpty() const;
+    u32 getSize() const;
+    u32 getCapacity() const;
+    private:
     bool isFull() const;
 };
 
@@ -71,6 +75,8 @@ OffloadBuffer<ProblemType, StateType>::OffloadBuffer(ProblemType const * problem
 template<typename ProblemType, typename StateType>
 void OffloadBuffer<ProblemType, StateType>::initializeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue)
 {
+    statesPriorityQueue->mutex.lock();
+
     size = 0;
     while (not (statesPriorityQueue->isEmpty() or isFull()))
     {
@@ -78,6 +84,8 @@ void OffloadBuffer<ProblemType, StateType>::initializeOffload(StatesPriorityQueu
         statesPriorityQueue->popFront();
         size += 1;
     }
+
+    statesPriorityQueue->mutex.unlock();
 }
 
 template<typename ProblemType, typename StateType>
@@ -89,7 +97,7 @@ bool OffloadBuffer<ProblemType, StateType>::isFull() const
 template<typename ProblemType, typename StateType>
 void OffloadBuffer<ProblemType, StateType>::initializeOffload(StateType const * state)
 {
-    if(capacity > 0) //In case of no capacity
+    if(not isEmpty())
     {
         size = 1;
         *topStates[0] = *state;
@@ -99,17 +107,21 @@ void OffloadBuffer<ProblemType, StateType>::initializeOffload(StateType const * 
 template<typename ProblemType, typename StateType>
 void OffloadBuffer<ProblemType, StateType>::finalizeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue)
 {
+    statesPriorityQueue->mutex.lock();
+
     for (u32 index = 0; index < size; index += 1)
     {
-        Vector<StateType>& cutset = mdds[index]->cutsetStates;
-        for (StateType* cutsetState = cutset.begin(); cutsetState != cutset.end(); cutsetState += 1)
+        Vector<StateType> const * cutset = &mdds[index]->cutsetStates;
+        for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
         {
-            if (not statesPriorityQueue->isFull() and cutsetState->isValid())
+            if (not statesPriorityQueue->isFull())
             {
                 statesPriorityQueue->insert(cutsetState);
             }
         }
     }
+
+    statesPriorityQueue->mutex.unlock();
 }
 template<typename ProblemType, typename StateType>
 u32 OffloadBuffer<ProblemType, StateType>::getSize() const
@@ -118,32 +130,19 @@ u32 OffloadBuffer<ProblemType, StateType>::getSize() const
 }
 
 template<typename ProblemType, typename StateType>
-StateType const * OffloadBuffer<ProblemType, StateType>::getBestSolution(LNS::SearchPhase searchPhase) const
+void OffloadBuffer<ProblemType, StateType>::getBestSolution(LNS::SearchPhase searchPhase, SyncState<StateType> * solution)
 {
-    if(not this->isEmpty())
+    solution->mutex.lock();
+    solution->state.invalidate();
+    u32 stateIdxEnd = searchPhase == LNS::SearchPhase::Init ? size : capacity;
+    for(u32 stateIdx = 0; stateIdx < stateIdxEnd; stateIdx += 1)
     {
-        u32 stateIdxEnd = searchPhase == LNS::SearchPhase::Init ? size : capacity;
-        StateType* bestSolution = bottomStates[0];
-        for(u32 stateIdx = 1; stateIdx < stateIdxEnd; stateIdx += 1)
+        if(bottomStates[stateIdx]->cost < solution->state.cost)
         {
-            if(bottomStates[stateIdx]->cost < bestSolution->cost)
-            {
-                bestSolution = bottomStates[stateIdx];
-            }
-        }
-        if(bestSolution->isValid())
-        {
-            return bestSolution;
-        }
-        else
-        {
-            return nullptr;
+            solution->state = *bottomStates[stateIdx];
         }
     }
-    else
-    {
-        return nullptr;
-    }
+    solution->mutex.unlock();
 }
 
 template<typename ProblemType, typename StateType>
@@ -153,10 +152,34 @@ bool OffloadBuffer<ProblemType, StateType>::isEmpty() const
 }
 
 template<typename ProblemType, typename StateType>
-void OffloadBuffer<ProblemType, StateType>::printNeighbourhoods() const
+u32 OffloadBuffer<ProblemType, StateType>::getCapacity() const
 {
-    for(u32 index = 0; index < capacity; index +=1)
+    return capacity;
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void OffloadBuffer<ProblemType, StateType>::doOffload(LNS::SearchPhase searchPhase, u32 index)
+{
+    if(searchPhase == LNS::SearchPhase::Init)
     {
-        neighbourhoods.at(index)->print(true);
+        mdds[index]->buildTopDown(neighbourhoods[index], topStates[index], bottomStates[index], false);
     }
+    else
+    {
+        mdds[index]->buildTopDown(neighbourhoods[index], topStates[0], bottomStates[index], true);
+    }
+}
+
+template<typename ProblemType, typename StateType>
+void OffloadBuffer<ProblemType, StateType>::generateNeighborhood(Array<std::mt19937>* rngs, Vector<OP::ValueType> * values, u32 index)
+{
+    neighbourhoods[index]->generate(rngs->at(index), values);
+}
+
+template<typename ProblemType, typename StateType>
+__device__
+void OffloadBuffer<ProblemType, StateType>::generateNeighborhood(Array<curandStatePhilox4_32_10_t>* rngs, Vector<OP::ValueType>* values, u32 index)
+{
+    neighbourhoods[index]->generate(rngs->at(index), values);
 }

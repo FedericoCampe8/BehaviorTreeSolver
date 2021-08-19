@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <random>
+#include <curand_kernel.h>
 #include <thrust/fill.h>
 #include <Containers/Array.cuh>
 #include <Containers/BitSet.cuh>
@@ -10,29 +11,31 @@
 class Neighbourhood
 {
     // Aliases, Enums, ...
-    public:
+    private:
     enum ConstraintType: u8 {None, Eq, Neq};
 
     // Members
-    public:
-    float eqProbability;
-    float neqProbability;
+    private:
+    float probEq;
+    float probNeq;
     Array<OP::ValueType> values;
     Array<ConstraintType> constraints;
     BitSet fixedValue;
 
     // Functions
     public:
-    Neighbourhood(OP::Problem const * problem, float eqProbability, float neqProbability, Memory::MallocType mallocType);
+    Neighbourhood(OP::Problem const * problem, float probEq, float probNeq, Memory::MallocType mallocType);
+    void generate(std::mt19937* rng, Vector<OP::ValueType>* values);
+    __device__ void generate(curandStatePhilox4_32_10_t* rng, Vector<OP::ValueType>* values);
     __host__ __device__ bool constraintsCheck(u32 variableIdx, OP::ValueType value) const;
     __host__ __device__ void reset();
     __host__ __device__ void constraintVariable(u32 variableIdx, OP::ValueType value, float random);
     void print(bool endLine = true);
 };
 
-Neighbourhood::Neighbourhood(OP::Problem const * problem,float eqProbability, float neqProbability, Memory::MallocType mallocType) :
-    eqProbability(eqProbability),
-    neqProbability(neqProbability),
+Neighbourhood::Neighbourhood(OP::Problem const * problem,float probEq, float probNeq, Memory::MallocType mallocType) :
+    probEq(probEq),
+    probNeq(probNeq),
     values(problem->variables.getCapacity(), mallocType),
     constraints(problem->variables.getCapacity(), mallocType),
     fixedValue(problem->maxValue + 1, mallocType)
@@ -45,6 +48,30 @@ void Neighbourhood::reset()
 {
     thrust::fill(thrust::seq, constraints.begin(), constraints.end(), ConstraintType::None);
     fixedValue.clear();
+}
+
+void Neighbourhood::generate(std::mt19937* rng, Vector<OP::ValueType>* values)
+{
+    std::uniform_real_distribution<float> distribution(0.0,1.0);
+    reset();
+    for(u32 valueIdx = 0; valueIdx < values->getCapacity(); valueIdx += 1)
+    {
+        OP::ValueType const value = *values->at(valueIdx);
+        float const random = distribution(*rng);
+        constraintVariable(valueIdx, value, random);
+    }
+}
+
+__device__
+void Neighbourhood::generate(curandStatePhilox4_32_10_t* rng, Vector<OP::ValueType>* values)
+{
+    reset();
+    for(u32 valueIdx = 0; valueIdx < values->getCapacity(); valueIdx += 1)
+    {
+        OP::ValueType const value = *values->at(valueIdx);
+        float const random = curand_uniform(rng);
+        constraintVariable(valueIdx, value, random);
+    }
 }
 
 __host__ __device__
@@ -68,13 +95,13 @@ bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType val
 __host__ __device__
 void Neighbourhood::constraintVariable(u32 variableIdx, OP::ValueType value, float random)
 {
-    if (random < eqProbability)
+    if (random < probEq)
     {
         *constraints[variableIdx] = ConstraintType::Eq;
         *values[variableIdx] = value;
         fixedValue.insert(value);
     }
-    else if (random < eqProbability + neqProbability)
+    else if (random < probEq + probNeq)
     {
         *constraints[variableIdx] = ConstraintType::Neq;
         *values[variableIdx] = value;

@@ -39,9 +39,10 @@ set(SOURCES
     src/OP/Problem.cuh
     src/DP/State.cuh
     src/LNS/OffloadBuffer.cuh
-    src/LNS/OffloadBufferCPU.cuh
-    src/LNS/OffloadBufferGPU.cuh
+    src/LNS/SearchManagerCPU.cuh
+    src/LNS/SearchManagerGPU.cuh
     src/LNS/Neighbourhood.cuh
+    src/LNS/SyncState.cuh
     src/OP/Context.h
     src/DP/Context.h
     src/DD/StateMetadata.cuh

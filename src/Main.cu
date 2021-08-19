@@ -9,9 +9,10 @@
 #include "DP/MOSPModel.cuh"
 #include "DP/JSPModel.cuh"
 #include "DP/SOPModel.cuh"
-#include "LNS/OffloadBufferCPU.cuh"
-#include "LNS/OffloadBufferGPU.cuh"
+#include "LNS/SearchManagerCPU.cuh"
+#include "LNS/SearchManagerGPU.cuh"
 #include "LNS/StatesPriorityQueue.cuh"
+#include "LNS/SyncState.cuh"
 #include "Options.h"
 
 using namespace std;
@@ -28,6 +29,11 @@ using StateType = TSPPDState;
 AnyOption* parseOptions(int argc, char* argv[]);
 
 void configGPU();
+template<typename ProblemType, typename StateType>
+void printStatistics(u64 startTime, SearchManagerCPU<ProblemType,StateType>* searchManagerCpu, SearchManagerGPU<ProblemType,StateType>* searchManagerGpu);
+
+template<typename ProblemType, typename StateType>
+void printBestSolution(StateType* bestSolution, u64 startTime, SearchManagerCPU<ProblemType,StateType>* searchManagerCpu, SearchManagerGPU<ProblemType,StateType>* searchManagerGpu);
 
 // Debug
 void printElapsedTime(u64 elapsedTimeMs);
@@ -51,7 +57,7 @@ int main(int argc, char* argv[])
 
     // Context initialization
     MallocType mallocTypeGpu = MallocType::Std;
-    if (options.parallelismGpu > 0)
+    if (options.mddsGpu > 0)
     {
         configGPU();
         mallocTypeGpu = MallocType::Managed;
@@ -61,23 +67,20 @@ int main(int argc, char* argv[])
     ProblemType* const problemCpu = parseInstance<ProblemType>(options.inputFilename, MallocType::Std);
     ProblemType* const problemGpu = parseInstance<ProblemType>(options.inputFilename, mallocTypeGpu);
 
-    // StatesPriorityQueue
+    // Queue
     StatesPriorityQueue<StateType> statesPriorityQueue(problemCpu, options.queueSize);
 
-    // OffloadBuffers
+    // Search managers
     byte* memory = nullptr;
-    memory = safeMalloc(sizeof(OffloadBufferCPU<ProblemType,StateType>), MallocType::Std);
-    OffloadBufferCPU<ProblemType,StateType>* offloadBufferCpu = new (memory) OffloadBufferCPU<ProblemType, StateType>(problemCpu, options);
-    memory = safeMalloc(sizeof(OffloadBufferGPU<ProblemType,StateType>), mallocTypeGpu);
-    OffloadBufferGPU<ProblemType,StateType>* offloadBufferGpu = new (memory) OffloadBufferGPU<ProblemType,StateType>(problemGpu, options, mallocTypeGpu);
+    memory = safeMalloc(sizeof(SearchManagerCPU<ProblemType,StateType>), MallocType::Std);
+    SearchManagerCPU<ProblemType,StateType>* searchManagerCpu = new (memory) SearchManagerCPU<ProblemType, StateType>(problemCpu, &options);
+    memory = safeMalloc(sizeof(SearchManagerGPU<ProblemType,StateType>), mallocTypeGpu);
+    SearchManagerGPU<ProblemType,StateType>* searchManagerGpu = new (memory) SearchManagerGPU<ProblemType, StateType>(problemGpu, &options, mallocTypeGpu);
 
-    // Solutions
+    // Solution
     memory = safeMalloc(sizeof(StateType), mallocTypeGpu);
     StateType* bestSolution = new (memory) StateType(problemCpu, mallocTypeGpu);
-    bestSolution->makeInvalid();
-    memory = safeMalloc(sizeof(StateType), mallocTypeGpu);
-    StateType* currentSolution = new (memory) StateType(problemCpu, mallocTypeGpu);
-    currentSolution->makeInvalid();
+    bestSolution->invalidate();
 
     // Root
     memory = safeMalloc(sizeof(StateType), mallocTypeGpu);
@@ -85,9 +88,8 @@ int main(int argc, char* argv[])
     makeRoot(problemCpu, root);
     statesPriorityQueue.insert(root);
 
-    // LNS
-    u32 iterationsCount = 0;
-    SearchPhase searchPhase = SearchPhase::Init;
+    // Search
+    bool timeout = false;
 
     clearLine();
     u64 searchStartTime = now();
@@ -95,148 +97,55 @@ int main(int argc, char* argv[])
     printf(" | Time: ");
     printElapsedTime(now() - startTime);
     printf("\n");
-    do
+
+    std::thread searchInitCpu(&SearchManagerCPU<ProblemType,StateType>::searchInitLoop, searchManagerCpu, &statesPriorityQueue, &timeout);
+    searchInitCpu.detach();
+    std::thread searchInitGpu(&SearchManagerGPU<ProblemType,StateType>::searchInitLoop, searchManagerGpu, &statesPriorityQueue, &timeout);
+    searchInitGpu.detach();
+
+    while(not timeout)
     {
-
-        u64 iterationStartTime = now();
-
-        switch(searchPhase)
+        if (searchManagerCpu->done and searchManagerGpu->done)
         {
-            case SearchPhase::Init:
-            {
-                if (statesPriorityQueue.isFull())
-                {
-                    searchPhase = SearchPhase::LNS;
-                    clearLine();
-                    printf("[INFO] Switch to LNS");
-                    printf(" | Time: ");
-                    printElapsedTime(now() - startTime);
-                    printf("\n");
-
-                    offloadBufferCpu->initializeRngsAsync(options.randomSeed);
-                    offloadBufferGpu->initializeRngsAsync(options.randomSeed);
-
-                    offloadBufferCpu->wait();
-                    offloadBufferGpu->wait();
-
-                    *currentSolution = *bestSolution;
-
-                    continue;
-                }
-
-                offloadBufferCpu->initializeOffload(&statesPriorityQueue);
-                offloadBufferGpu->initializeOffload(&statesPriorityQueue);
-            }
-            break;
-
-            case SearchPhase::LNS:
-            {
-                offloadBufferCpu->generateNeighbourhoodsAsync(bestSolution);
-                offloadBufferGpu->generateNeighbourhoodsAsync(bestSolution);
-
-                offloadBufferCpu->wait();
-                offloadBufferGpu->wait();
-
-                offloadBufferCpu->initializeOffload(root);
-                offloadBufferGpu->initializeOffload(root);
-
-                currentSolution->makeInvalid();
-            }
             break;
         }
 
-        u64 offloadStartTime = now();
-
-        offloadBufferCpu->doOffloadAsync(searchPhase);
-        offloadBufferGpu->doOffloadAsync(searchPhase);
-
-        offloadBufferCpu->wait();
-        offloadBufferGpu->wait();
-
-        u64 offloadElapsedTime = max(now() - offloadStartTime, 1ul);
-
-        if(searchPhase ==  SearchPhase::Init)
+        if (options.statistics)
         {
-            offloadBufferCpu->finalizeOffload(&statesPriorityQueue);
-            offloadBufferGpu->finalizeOffload(&statesPriorityQueue);
+            printStatistics(startTime, searchManagerCpu, searchManagerGpu);
         }
 
-        u64 iterationEndTime = now();
+        printBestSolution(bestSolution, startTime, searchManagerCpu, searchManagerGpu);
 
-        bool betterSolutionFromCpu = false;
-        StateType const * bestSolutionCpu = offloadBufferCpu->getBestSolution(searchPhase);
-        if(bestSolutionCpu != nullptr)
-        {
-            if(*bestSolutionCpu < *currentSolution)
-            {
-                *currentSolution = *bestSolutionCpu;
-            }
-
-            if(*bestSolutionCpu < *bestSolution)
-            {
-                betterSolutionFromCpu = true;
-                *bestSolution = *bestSolutionCpu;
-            }
-        }
-
-        bool betterSolutionFromGpu = false;
-        StateType const * bestSolutionGpu = offloadBufferGpu->getBestSolution(searchPhase);
-        if(bestSolutionGpu != nullptr)
-        {
-            if(*bestSolutionGpu < *currentSolution)
-            {
-                *currentSolution = *bestSolutionGpu;
-            }
-
-            if(*bestSolutionGpu < *bestSolution)
-            {
-                betterSolutionFromGpu = true;
-                *bestSolution = *bestSolutionGpu;
-            }
-        }
-
-        if(betterSolutionFromCpu or betterSolutionFromGpu)
-        {
-            clearLine();
-            printf("[SOLUTION] Source: %s", betterSolutionFromCpu ? "CPU" : "GPU");
-            printf(" | Time: ");
-            printElapsedTime(now() - searchStartTime);
-            printf(" | Iteration: %u ", iterationsCount);
-            printf(" | Cost: %u", bestSolution->cost);
-            printf(" | Solution: ");
-            bestSolution->print(true);
-        }
-        else
-        {
-            if(options.statistics)
-            {
-                u64 cpuSpeed = 0;
-                if (offloadBufferCpu->getSize() > 0)
-                {
-                    cpuSpeed = options.parallelismCpu * 1000 / offloadElapsedTime;
-                }
-
-               u64 gpuSpeed = 0;
-                if (offloadBufferGpu->getSize() > 0)
-                {;
-                    gpuSpeed = options.parallelismGpu * 1000 / offloadElapsedTime;
-                }
-
-                printf("[INFO] Current value: %u", currentSolution->cost);
-                printf(" | Time: ");
-                printElapsedTime(now() - searchStartTime);
-                printf(" | Iteration: %u ", iterationsCount);
-                printf("(");
-                printElapsedTime(iterationEndTime - iterationStartTime);
-                printf(") ");
-                printf(" | CPU: %lu MDD/s | GPU: %lu MDD/s\r", cpuSpeed, gpuSpeed);
-            }
-        }
-        fflush(stdout);
-        iterationsCount += 1;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        timeout = (now() - searchStartTime) < (options.timeout * 1000);
     }
-    while(now() - searchStartTime < options.timeout * 1000 and (not statesPriorityQueue.isEmpty()));
 
+    searchManagerCpu->initializeRngs(&timeout);
+    searchManagerGpu->initializeRngs(&timeout);
+
+    std::thread searchLnsCpu(&SearchManagerCPU<ProblemType,StateType>::searchLnsLoop, searchManagerCpu, &timeout);
+    searchLnsCpu.detach();
+    std::thread searchLnsGpu(&SearchManagerGPU<ProblemType,StateType>::searchLnsLoop, searchManagerGpu, &timeout);
+    searchInitGpu.detach();
+
+    while(not timeout)
+    {
+        if (searchManagerCpu->done and searchManagerGpu->done)
+        {
+            break;
+        }
+
+        if (options.statistics)
+        {
+            printStatistics(startTime, searchManagerCpu, searchManagerGpu);
+        }
+
+        printBestSolution(bestSolution, startTime, searchManagerCpu, searchManagerGpu);
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        timeout = (now() - searchStartTime) < (options.timeout * 1000);
+    }
 
     return EXIT_SUCCESS;
 }
@@ -276,4 +185,55 @@ void clearLine()
 {
     // ANSI clear line escape code
     printf("\33[2K\r");
+}
+
+template<typename ProblemType, typename StateType>
+void printStatistics(u64 startTime, SearchManagerCPU<ProblemType,StateType>* searchManagerCpu, SearchManagerGPU<ProblemType,StateType>* searchManagerGPU)
+{
+    printf("[INFO] Time: ");
+    printElapsedTime(now() - startTime);
+    printf(" | CPU: %lu MDD/s | GPU: %lu MDD/s\r", searchManagerCpu->speed, searchManagerGPU->speed);
+}
+
+template<typename ProblemType, typename StateType>
+void printBestSolution(StateType* bestSolution, u64 startTime, SearchManagerCPU<ProblemType, StateType>* searchManagerCpu, SearchManagerGPU<ProblemType, StateType>* searchManagerGpu)
+{
+    bool betterSolutionFromCpu = false;
+    bool betterSolutionFromGpu = false;
+
+    searchManagerCpu->bestSolution.mutex.lock();
+    searchManagerCpu->neighborhoodSolution.mutex.lock();
+    searchManagerGpu->bestSolution.mutex.lock();
+    searchManagerGpu->neighborhoodSolution.mutex.lock();
+
+    if(searchManagerCpu->bestSolution.state.cost < bestSolution->cost)
+    {
+        *bestSolution = searchManagerCpu->bestSolution.state;
+        searchManagerGpu->neighborhoodSolution.state = searchManagerCpu->bestSolution.state;
+        betterSolutionFromCpu = true;
+    }
+
+    if(searchManagerGpu->bestSolution.state.cost < bestSolution->cost)
+    {
+        *bestSolution = searchManagerGpu->bestSolution.state;
+        searchManagerCpu->neighborhoodSolution.state = searchManagerGpu->bestSolution.state;
+        betterSolutionFromGpu = true;
+    }
+
+    if (betterSolutionFromCpu or betterSolutionFromGpu)
+    {
+        *bestSolution = searchManagerCpu->bestSolution.state;
+        clearLine();
+        printf("[SOLUTION] Source: %s", betterSolutionFromCpu ? "CPU" : "GPU");
+        printf(" | Time: ");
+        printElapsedTime(now() - startTime);
+        printf(" | Cost: %u", bestSolution->cost);
+        printf(" | Solution: ");
+        bestSolution->print(true);
+    }
+
+    searchManagerCpu->bestSolution.mutex.unlock();
+    searchManagerCpu->neighborhoodSolution.mutex.unlock();
+    searchManagerGpu->bestSolution.mutex.unlock();
+    searchManagerGpu->neighborhoodSolution.mutex.unlock();
 }

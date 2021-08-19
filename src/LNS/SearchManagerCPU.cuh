@@ -1,0 +1,196 @@
+#pragma once
+
+#include <thread>
+#include <mutex>
+#include <random>
+#include <LNS/OffloadBuffer.cuh>
+#include <LNS/SyncState.cuh>
+#include <Options.h>
+#include <thrust/extrema.h>
+#include <Utils/Chrono.cuh>
+
+template<typename ProblemType, typename StateType>
+class SearchManagerCPU
+{
+    // Members
+    public:
+    u64 speed;
+    bool done;
+    SyncState<StateType> bestSolution;
+    SyncState<StateType> neighborhoodSolution;
+    private:
+    ProblemType const * problem;
+    Options const * options;
+    OffloadBuffer<ProblemType,StateType> offloadBuffer;
+    Array<std::mt19937> rngs;
+    Array<std::thread> threads;
+
+    // Functions
+    public:
+    SearchManagerCPU(ProblemType const * problem, Options const * options);
+    void searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool * timeout);
+    void initializeRngs(bool * timeout);
+    void searchLnsLoop(bool * timeout);
+    private:
+    void waitThreads();
+    void doOffloadsAsync(LNS::SearchPhase searchPhase);
+    void doOffload(LNS::SearchPhase searchPhase, u32 beginIdx, u32 endIdx, u32 step);
+    void initializeRng(u32 beginIdx, u32 endIdx, u32 step);
+    void generateNeighbourhoodsAsync();
+    void generateNeighbourhoods(u32 beginIdx, u32 endIdx, u32 step);
+};
+
+template<typename ProblemType, typename StateType>
+SearchManagerCPU<ProblemType, StateType>::SearchManagerCPU(ProblemType const * problem, Options const * options) :
+    speed(0),
+    done(false),
+    problem(problem),
+    options(options),
+    bestSolution(problem, Memory::MallocType::Std),
+    neighborhoodSolution(problem, Memory::MallocType::Std),
+    offloadBuffer(problem, options->widthCpu, options->mddsCpu, options->probEq, options->probNeq, Memory::MallocType::Std),
+    rngs(options->mddsCpu, Memory::MallocType::Std),
+    threads(std::thread::hardware_concurrency(), Memory::MallocType::Std)
+{}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool * timeout)
+{
+    done = false;
+
+    if(options->mddsCpu > 0)
+    {
+        while(not (statesPriorityQueue->isFull() or *timeout))
+        {
+            u64 const startTime = Chrono::now();
+
+            // Initialize offload
+            offloadBuffer.initializeOffload(statesPriorityQueue);
+
+            // Offload
+            doOffloadsAsync(LNS::SearchPhase::Init);
+            waitThreads();
+
+            //Finalize offload
+            offloadBuffer.finalizeOffload(statesPriorityQueue);
+            offloadBuffer.getBestSolution(LNS::SearchPhase::Init, &bestSolution);
+
+            u64 const elapsedTime = Chrono::now() - startTime;
+            speed = offloadBuffer.getSize() * 1000 / elapsedTime;
+        }
+    }
+
+    done = true;
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::initializeRngs(bool * timeout)
+{
+    // Random Numbers Generators
+    if((not *timeout) and options->mddsCpu > 0)
+    {
+        u32 elements = rngs.getCapacity();
+        u32 threadsCount = threads.getCapacity();
+        for (u32 threadIdx = 0; threadIdx < threadsCount; threadIdx += 1)
+        {
+            new (threads[threadIdx]) std::thread(&SearchManagerCPU<ProblemType, StateType>::initializeRng, this, threadIdx, elements, threadsCount);
+        }
+        waitThreads();
+    }
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::searchLnsLoop(bool * timeout)
+{
+    done = false;
+
+    if(options->mddsCpu > 0)
+    {
+        while(not *timeout)
+        {
+            u64 const startTime = Chrono::now();
+
+            // Generate neighborhoods
+            neighborhoodSolution.mutex.lock();
+            generateNeighbourhoodsAsync();
+            waitThreads();
+            neighborhoodSolution.mutex.unlock();
+
+            // Offload
+            doOffloadsAsync(LNS::SearchPhase::LNS);
+            waitThreads();
+
+            //Finalize offload
+            bestSolution.mutex.lock();
+            offloadBuffer.getBestSolution(LNS::SearchPhase::LNS, &bestSolution);
+            bestSolution.mutex.unlock();
+
+            u64 const elapsedTime = Chrono::now() - startTime;
+            speed = offloadBuffer.getSize() * 1000 / elapsedTime;
+        }
+    }
+
+    done = true;
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::initializeRng(u32 beginIdx, u32 endIdx, u32 step)
+{
+    for (u32 index = beginIdx; index < endIdx; index += step)
+    {
+        new (rngs[index]) std::mt19937(options->randomSeed + index);
+    }
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::waitThreads()
+{
+    for (std::thread* thread = threads.begin(); thread != threads.end(); thread += 1)
+    {
+        if(thread->joinable())
+        {
+            thread->join();
+        }
+    }
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::generateNeighbourhoodsAsync()
+{
+    u32 const elements = options->mddsCpu;
+    u32 const threadsCount = threads.getCapacity();
+    for (u32 threadIdx = 0; threadIdx < threadsCount; threadIdx += 1)
+    {
+        new (threads[threadIdx]) std::thread(& SearchManagerCPU<ProblemType, StateType>::generateNeighbourhoods, this, threadIdx, threadsCount, elements);
+    }
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::generateNeighbourhoods(u32 beginIdx, u32 endIdx, u32 step)
+{
+   for(u32 index = beginIdx; index < endIdx; index += step)
+   {
+        offloadBuffer.generateNeighborhood(&rngs, &neighborhoodSolution.state.selectedValues, index);
+   }
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::doOffload(LNS::SearchPhase searchPhase, u32 beginIdx, u32 endIdx, u32 step)
+{
+    for(u32 index = beginIdx; index < endIdx; index += step)
+    {
+        offloadBuffer.doOffload(searchPhase, index);
+    }
+}
+
+template<typename ProblemType, typename StateType>
+void SearchManagerCPU<ProblemType, StateType>::doOffloadsAsync(LNS::SearchPhase searchPhase)
+{
+    u32 const elements = searchPhase == LNS::SearchPhase::Init ? offloadBuffer.getSize() : offloadBuffer.getCapacity();
+    u32 const threadsCount = threads.getCapacity();
+    for (u32 threadIdx = 0; threadIdx < threadsCount; threadIdx += 1)
+    {
+        new (threads[threadIdx]) std::thread(&SearchManagerCPU<ProblemType, StateType>::doOffload, this, searchPhase, threadIdx, elements, threadsCount);
+    }
+}
+

@@ -17715,7 +17715,7 @@ class basic_json
 
         void destroy(value_t t) noexcept
         {
-            // flatten the current json_value to a minHeap-allocated stack
+            // flatten the current json_value to a statesMinHeap-allocated stack
             std::vector<basic_json> stack;
 
             // move the top-level items to stack

@@ -34,7 +34,7 @@ namespace DD
         public:
         MDD(ProblemType const * problem, u32 width, Memory::MallocType mallocType);
         __host__ __device__ inline void buildTopDown(Neighbourhood const * neighbourhood, StateType const * top, StateType * bottom, bool lns);
-        __host__ __device__ u32 sizeOfScratchpadMemory() const;
+        static u32 sizeOfScratchpadMemory(ProblemType const * problem, u32 width);
         private:
         __host__ __device__ inline void calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, bool lns);
         __host__ __device__ inline void initializeNextStatesMetadata();
@@ -54,7 +54,7 @@ DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, u32 width, Mem
     width(width),
     problem(problem),
     cutsetStates(width, mallocType),
-    scratchpadMemory(Memory::safeMalloc(sizeOfScratchpadMemory(), Memory::MallocType::Std)),
+    scratchpadMemory(Memory::safeMalloc(sizeOfScratchpadMemory(problem, width), Memory::MallocType::Std)),
     currentStates(nullptr),
     nextStates(nullptr),
     nextStatesMetadata(nullptr)
@@ -99,8 +99,7 @@ void DD::MDD<ProblemType, StateType>::buildTopDown(Neighbourhood const* neighbou
 }
 
 template<typename ProblemType, typename StateType>
-__host__ __device__
-u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory() const
+u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory(ProblemType const * problem, u32 width)
 {
     u32 const sizeCurrentStates = sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
     u32 const sizeNextStates =    sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
@@ -337,7 +336,7 @@ void DD::MDD<ProblemType, StateType>::saveInvalidBottom(StateType * bottom)
 {
     CUDA_ONLY_FIRST_THREAD
     {
-       bottom->makeInvalid();
+        bottom->invalidate();
     }
     CUDA_BLOCK_BARRIER
 }
