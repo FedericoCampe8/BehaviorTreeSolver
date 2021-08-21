@@ -4,6 +4,7 @@
 #include <thrust/binary_search.h>
 #include <thrust/partition.h>
 #include <thrust/functional.h>
+#include <thrust/equal.h>
 #include <Containers/Vector.cuh>
 #include <Utils/Algorithms.cuh>
 #include <Utils/CUDA.cuh>
@@ -103,8 +104,8 @@ u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory(ProblemType const * 
 {
     u32 const sizeCurrentStates = sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
     u32 const sizeNextStates =    sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
-    u32 const sizeNextStatesMetadata = sizeof(LightVector<StateMetadata>) + LightVector<StateMetadata>::sizeOfStorage(Algorithms::nextPower2(width * problem->maxBranchingFactor)) + Memory::DefaultAlignmentPadding * 2;
-    u32 const size = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
+    u32 const sizeNextStatesMetadata = sizeof(LightVector<StateMetadata>) + LightVector<StateMetadata>::sizeOfStorage(width * problem->maxBranchingFactor) + Memory::DefaultAlignmentPadding * 2;
+     u32 const size = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
     return size + Memory::DefaultAlignmentPadding;
 }
 
@@ -113,11 +114,11 @@ __host__ __device__
 void DD::MDD<ProblemType, StateType>::calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, bool lns)
 {
     initializeNextStatesMetadata();
-    
+
     u32 const elements = currentStates->getSize() * problem->maxBranchingFactor;
 #ifdef __CUDA_ARCH__
     u32 const threads = blockDim.x;
-    for (u32 index = threadIdx.x; index < elements; index += threads)
+    for(u32 index = threadIdx.x; index < elements; index += threads)
 #else
     for (u32 index = 0; index < elements; index += 1)
 #endif
@@ -134,8 +135,8 @@ void DD::MDD<ProblemType, StateType>::calcNextStatesMetadata(u32 variableIdx, Ne
             }
         }
     }
+    CUDA_BLOCK_BARRIER
 
-    
     finalizeNextStatesMetadata();
 }
 
@@ -156,7 +157,7 @@ void DD::MDD<ProblemType, StateType>::calcNextStates(u32 variableIdx)
     u32 const elements = nextStates->getSize();
 #ifdef __CUDA_ARCH__
     u32 const threads = blockDim.x;
-    for (u32 nextStateIdx = threadIdx.x; nextStateIdx < elements; nextStateIdx += threads)
+    for(u32 nextStateIdx = threadIdx.x; nextStateIdx < elements; nextStateIdx += threads)
 #else
     for (u32 nextStateIdx = 0; nextStateIdx < elements; nextStateIdx += 1)
 #endif
@@ -219,10 +220,9 @@ void DD::MDD<ProblemType, StateType>::initializeScratchpadMemory()
         nextStatesMetadata = reinterpret_cast<LightVector<StateMetadata>*>(freeScratchpadMemory);
         freeScratchpadMemory += sizeof(LightVector<StateMetadata>);
         freeScratchpadMemory = Memory::align(freeScratchpadMemory, Memory::DefaultAlignment);
-        new (nextStatesMetadata) LightVector<StateMetadata>(Algorithms::nextPower2(width * problem->maxBranchingFactor), reinterpret_cast<StateMetadata*>(freeScratchpadMemory));
+        new (nextStatesMetadata) LightVector<StateMetadata>(width * problem->maxBranchingFactor, reinterpret_cast<StateMetadata*>(freeScratchpadMemory));
         freeScratchpadMemory = nextStatesMetadata->endOfStorage();
         u32 const sizeNextStatesMetadata = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeNextStatesMetadata);
-
 
         // Memory
         [[maybe_unused]] u32 const usedScratchpadMemory = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
@@ -258,7 +258,7 @@ void DD::MDD<ProblemType, StateType>::saveCutsetStates()
     u32 const elements = cutsetStates.getSize();
 #ifdef __CUDA_ARCH__
     u32 const threads = blockDim.x;
-    for (u32 cutsetStateIdx = threadIdx.x; cutsetStateIdx < elements; cutsetStateIdx += threads)
+    for(u32 cutsetStateIdx = threadIdx.x; cutsetStateIdx < elements; cutsetStateIdx += threads)
 #else
     for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutsetStates.getSize(); cutsetStateIdx += 1)
 #endif
@@ -285,13 +285,7 @@ __host__ __device__
 void DD::MDD<ProblemType, StateType>::initializeNextStatesMetadata()
 {
     //Resize
-    u32 elements;
-#ifdef __CUDA_ARCH__
-    elements = Algorithms::nextPower2(currentStates->getSize() * problem->maxBranchingFactor);
-#else
-    elements = currentStates->getSize() * problem->maxBranchingFactor;
-#endif
-
+    u32 elements = currentStates->getSize() * problem->maxBranchingFactor;
     CUDA_ONLY_FIRST_THREAD
     {
        nextStatesMetadata->resize(elements);
@@ -300,8 +294,8 @@ void DD::MDD<ProblemType, StateType>::initializeNextStatesMetadata()
 
     //Reset
 #ifdef __CUDA_ARCH__
-    u32 const threads = blockDim.x;
-    for (u32 stateMetadataIdx = threadIdx.x; stateMetadataIdx < elements; stateMetadataIdx += threads)
+u32 const threads = blockDim.x;
+    for(u32 stateMetadataIdx = threadIdx.x; stateMetadataIdx < elements; stateMetadataIdx += threads)
 #else
     for (u32 stateMetadataIdx = 0; stateMetadataIdx < elements; stateMetadataIdx += 1)
 #endif
@@ -317,10 +311,8 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 void DD::MDD<ProblemType, StateType>::finalizeNextStatesMetadata()
 {
-    //Sort
     Algorithms::sort(nextStatesMetadata->begin(), nextStatesMetadata->getSize());
 
-    //Discard invalid
     CUDA_ONLY_FIRST_THREAD
     {
         StateMetadata const invalidStateMetadata(DP::MaxCost, 0);

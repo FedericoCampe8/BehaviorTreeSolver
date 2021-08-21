@@ -26,7 +26,7 @@ class Neighbourhood
     public:
     Neighbourhood(OP::Problem const * problem, float probEq, float probNeq, Memory::MallocType mallocType);
     void generate(std::mt19937* rng, Vector<OP::ValueType>* values);
-    __device__ void generate(curandStatePhilox4_32_10_t* rng, Vector<OP::ValueType>* values);
+    __device__ void generate(curandState* rng, Vector<OP::ValueType>* values);
     __host__ __device__ bool constraintsCheck(u32 variableIdx, OP::ValueType value) const;
     __host__ __device__ void reset();
     __host__ __device__ void constraintVariable(u32 variableIdx, OP::ValueType value, float random);
@@ -63,7 +63,7 @@ void Neighbourhood::generate(std::mt19937* rng, Vector<OP::ValueType>* values)
 }
 
 __device__
-void Neighbourhood::generate(curandStatePhilox4_32_10_t* rng, Vector<OP::ValueType>* values)
+void Neighbourhood::generate(curandState* rng, Vector<OP::ValueType>* values)
 {
     reset();
     for(u32 valueIdx = 0; valueIdx < values->getCapacity(); valueIdx += 1)

@@ -16,8 +16,9 @@ class SearchManagerCPU
     public:
     u64 speed;
     bool done;
-    SyncState<StateType> bestSolution;
-    SyncState<StateType> neighborhoodSolution;
+    u64 iteration;
+    SyncState<ProblemType, StateType> bestSolution;
+    SyncState<ProblemType, StateType> neighborhoodSolution;
     private:
     ProblemType const * problem;
     Options const * options;
@@ -30,7 +31,7 @@ class SearchManagerCPU
     SearchManagerCPU(ProblemType const * problem, Options const * options);
     void searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool * timeout);
     void initializeRngs(bool * timeout);
-    void searchLnsLoop(bool * timeout);
+    void searchLnsLoop(StateType const * root, bool * timeout);
     private:
     void waitThreads();
     void doOffloadsAsync(LNS::SearchPhase searchPhase);
@@ -44,6 +45,7 @@ template<typename ProblemType, typename StateType>
 SearchManagerCPU<ProblemType, StateType>::SearchManagerCPU(ProblemType const * problem, Options const * options) :
     speed(0),
     done(false),
+    iteration(0),
     problem(problem),
     options(options),
     bestSolution(problem, Memory::MallocType::Std),
@@ -51,12 +53,15 @@ SearchManagerCPU<ProblemType, StateType>::SearchManagerCPU(ProblemType const * p
     offloadBuffer(problem, options->widthCpu, options->mddsCpu, options->probEq, options->probNeq, Memory::MallocType::Std),
     rngs(options->mddsCpu, Memory::MallocType::Std),
     threads(std::thread::hardware_concurrency(), Memory::MallocType::Std)
-{}
+{
+    bestSolution.state.invalidate();
+}
 
 template<typename ProblemType, typename StateType>
 void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool * timeout)
 {
     done = false;
+    iteration = 0;
 
     if(options->mddsCpu > 0)
     {
@@ -67,16 +72,26 @@ void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
             // Initialize offload
             offloadBuffer.initializeOffload(statesPriorityQueue);
 
-            // Offload
-            doOffloadsAsync(LNS::SearchPhase::Init);
-            waitThreads();
+            if(not offloadBuffer.isEmpty())
+            {
+                // Offload
+                doOffloadsAsync(LNS::SearchPhase::Init);
+                waitThreads();
 
-            //Finalize offload
-            offloadBuffer.finalizeOffload(statesPriorityQueue);
-            offloadBuffer.getBestSolution(LNS::SearchPhase::Init, &bestSolution);
+                //Finalize offload
+                offloadBuffer.finalizeOffload(statesPriorityQueue);
+                offloadBuffer.getBestSolution(LNS::SearchPhase::Init, &bestSolution);
 
-            u64 const elapsedTime = Chrono::now() - startTime;
-            speed = offloadBuffer.getSize() * 1000 / elapsedTime;
+                thrust::maximum max;
+                u64 const elapsedTime = max(Chrono::now() - startTime, 1u);
+                speed = offloadBuffer.getSize() * 1000 / elapsedTime;
+
+                iteration += 1;
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
         }
     }
 
@@ -100,12 +115,14 @@ void SearchManagerCPU<ProblemType, StateType>::initializeRngs(bool * timeout)
 }
 
 template<typename ProblemType, typename StateType>
-void SearchManagerCPU<ProblemType, StateType>::searchLnsLoop(bool * timeout)
+void SearchManagerCPU<ProblemType, StateType>::searchLnsLoop(StateType const * root, bool * timeout)
 {
     done = false;
+    iteration = 0;
 
     if(options->mddsCpu > 0)
     {
+        offloadBuffer.initializeOffload(root);
         while(not *timeout)
         {
             u64 const startTime = Chrono::now();
@@ -121,12 +138,13 @@ void SearchManagerCPU<ProblemType, StateType>::searchLnsLoop(bool * timeout)
             waitThreads();
 
             //Finalize offload
-            bestSolution.mutex.lock();
             offloadBuffer.getBestSolution(LNS::SearchPhase::LNS, &bestSolution);
-            bestSolution.mutex.unlock();
 
-            u64 const elapsedTime = Chrono::now() - startTime;
-            speed = offloadBuffer.getSize() * 1000 / elapsedTime;
+            thrust::maximum max;
+            u64 const elapsedTime = max(Chrono::now() - startTime, 1u);
+            speed = offloadBuffer.getCapacity() * 1000 / elapsedTime;
+
+            iteration += 1;
         }
     }
 
@@ -161,7 +179,7 @@ void SearchManagerCPU<ProblemType, StateType>::generateNeighbourhoodsAsync()
     u32 const threadsCount = threads.getCapacity();
     for (u32 threadIdx = 0; threadIdx < threadsCount; threadIdx += 1)
     {
-        new (threads[threadIdx]) std::thread(& SearchManagerCPU<ProblemType, StateType>::generateNeighbourhoods, this, threadIdx, threadsCount, elements);
+        new (threads[threadIdx]) std::thread(&SearchManagerCPU<ProblemType, StateType>::generateNeighbourhoods, this, threadIdx, elements, threadsCount);
     }
 }
 

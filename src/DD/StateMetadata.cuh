@@ -19,7 +19,6 @@ namespace DD
         __host__ __device__ StateMetadata& operator=(StateMetadata const & other);
         __host__ __device__ bool operator<(StateMetadata const & other) const;
         __host__ __device__ bool operator==(StateMetadata const & other) const;
-        __host__ __device__ void makeInvalid();
         __host__ __device__ static void swap(StateMetadata& sm0, StateMetadata& sm1);
         __host__ __device__ static bool isValid (StateMetadata const & sm);
     };
@@ -54,8 +53,8 @@ bool DD::StateMetadata::operator<(DD::StateMetadata const & other) const
 __host__ __device__
 void DD::StateMetadata::swap(DD::StateMetadata& sm0, DD::StateMetadata& sm1)
 {
-    thrust::swap(sm0.cost, sm1.cost);
     thrust::swap(sm0.index, sm1.index);
+    thrust::swap(sm0.cost, sm1.cost);
 }
 
 __host__ __device__
@@ -68,10 +67,4 @@ __host__ __device__
 bool DD::StateMetadata::operator==(DD::StateMetadata const& other) const
 {
     return cost == other.cost and index == other.index;
-}
-
-__host__ __device__
-void DD::StateMetadata::makeInvalid()
-{
-    cost = DP::MaxCost;
 }

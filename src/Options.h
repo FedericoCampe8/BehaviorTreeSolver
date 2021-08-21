@@ -121,12 +121,12 @@ bool Options::parseOptions(int argc, char* argv[])
         return false;
 
     if (anyOption->getValue("mc") != nullptr)
-        mddsCpu = static_cast<u32>(std::stoi(anyOption->getValue("pc")));
+        mddsCpu = static_cast<u32>(std::stoi(anyOption->getValue("mc")));
     else
         return false;
 
     if (anyOption->getValue("mg") != nullptr)
-        mddsGpu = static_cast<u32>(std::stoi(anyOption->getValue("pg")));
+        mddsGpu = static_cast<u32>(std::stoi(anyOption->getValue("mg")));
     else
         return false;
 
@@ -160,7 +160,7 @@ void Options::printOptions()
     printf("[INFO] Width CPU: %u\n", widthCpu);
     printf("[INFO] Width GPU: %u\n", widthGpu);
     printf("[INFO] MDDs on CPU: %u\n", mddsCpu);
-    printf("[INFO] MDDs on GPU: %u\n", mddsCpu);
+    printf("[INFO] MDDs on GPU: %u\n", mddsGpu);
     printf("[INFO] Probability of using a value: %.3f\n", probEq);
     printf("[INFO] Probability of discarding a value: %.3f\n", probNeq);
     printf("[INFO] Random seed: %u\n", randomSeed);
