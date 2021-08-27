@@ -8,12 +8,13 @@
 #include <Containers/Vector.cuh>
 #include <Utils/Algorithms.cuh>
 #include <Utils/CUDA.cuh>
-#include "../DP/TSPPDState.cuh"
-#include "../DP/TSPPDModel.cuh"
-#include "../OP/Problem.cuh"
+#include <Utils/Random.cuh>
+#include <DP/TSPPDState.cuh>
+#include <DP/TSPPDModel.cuh>
+#include <OP/Problem.cuh>
 #include <LNS/Neighbourhood.cuh>
-#include "Context.h"
-#include "StateMetadata.cuh"
+#include <DD/Context.h>
+#include <DD/StateMetadata.cuh>
 
 namespace DD
 {
@@ -21,11 +22,9 @@ namespace DD
     class MDD
     {
         // Members
-        public:
+        private:
         u32 const width;
         ProblemType const * const problem;
-        Vector<StateType> cutsetStates;
-        private:
         std::byte* scratchpadMemory;
         LightVector<StateType>* currentStates;
         LightVector<StateType>* nextStates;
@@ -33,17 +32,17 @@ namespace DD
 
         // Functions
         public:
-        MDD(ProblemType const * problem, u32 width, Memory::MallocType mallocType);
-        __host__ __device__ inline void buildTopDown(Neighbourhood const * neighbourhood, StateType const * top, StateType * bottom, bool lns);
+        MDD(ProblemType const * problem, u32 width);
+        __host__ __device__ inline void buildTopDown(StateType const * top, StateType * bottom, Vector<StateType> * cutset, Neighbourhood const * neighbourhood, RandomEngine* randomEngine, bool lns);
         static u32 sizeOfScratchpadMemory(ProblemType const * problem, u32 width);
         private:
-        __host__ __device__ inline void calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, bool lns);
-        __host__ __device__ inline void initializeNextStatesMetadata();
+        __host__ __device__ inline void calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, RandomEngine * randomEngine, bool lns);
+        __host__ __device__ inline void initializeNextStatesMetadata(RandomEngine * randomEngine);
         __host__ __device__ inline void finalizeNextStatesMetadata();
         __host__ __device__ inline void calcNextStates(u32 variableIdx);
         __host__ __device__ inline void initializeScratchpadMemory();
         __host__ __device__ inline void initializeTop(StateType const * top);
-        __host__ __device__ inline void saveCutsetStates();
+        __host__ __device__ inline void saveCutset(Vector<StateType> * cutset);
         __host__ __device__ void saveInvalidBottom(StateType * bottom);
         __host__ __device__ void saveBottom(StateType * bottom);
         __host__ __device__ void swapCurrentAndNextStates();
@@ -51,28 +50,18 @@ namespace DD
 }
 
 template<typename ProblemType, typename StateType>
-DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, u32 width, Memory::MallocType mallocType) :
+DD::MDD<ProblemType, StateType>::MDD(ProblemType const * problem, u32 width) :
     width(width),
     problem(problem),
-    cutsetStates(width, mallocType),
     scratchpadMemory(Memory::safeMalloc(sizeOfScratchpadMemory(problem, width), Memory::MallocType::Std)),
     currentStates(nullptr),
     nextStates(nullptr),
     nextStatesMetadata(nullptr)
-{
-    // Cutset states
-    std::byte* storage = StateType::mallocStorages(problem, cutsetStates.getCapacity(), mallocType);
-    for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutsetStates.getCapacity(); cutsetStateIdx += 1)
-    {
-        StateType* cutsetState = cutsetStates.LightArray<StateType>::at(cutsetStateIdx);
-        new (cutsetState) StateType(problem, storage);
-        storage = Memory::align(cutsetState->endOfStorage(), Memory::DefaultAlignment);
-    }
-}
+{}
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::buildTopDown(Neighbourhood const* neighbourhood, StateType const * top, StateType * bottom, bool lns)
+void DD::MDD<ProblemType, StateType>::buildTopDown(StateType const * top, StateType * bottom, Vector<StateType> * cutset, Neighbourhood const * neighbourhood, RandomEngine * randomEngine, bool lns)
 {
     initializeScratchpadMemory();
     initializeTop(top);
@@ -81,7 +70,7 @@ void DD::MDD<ProblemType, StateType>::buildTopDown(Neighbourhood const* neighbou
     u32 const variableIdxEnd = problem->variables.getCapacity();
     for (u32 variableIdx = variableIdxBegin; variableIdx < variableIdxEnd; variableIdx += 1)
     {
-        calcNextStatesMetadata(variableIdx, neighbourhood, lns);
+        calcNextStatesMetadata(variableIdx, neighbourhood, randomEngine, lns);
         if (nextStatesMetadata->isEmpty())
         {
             saveInvalidBottom(bottom);
@@ -90,7 +79,7 @@ void DD::MDD<ProblemType, StateType>::buildTopDown(Neighbourhood const* neighbou
         calcNextStates(variableIdx);
         if (not (lns or cutsetStatesSaved))
         {
-            saveCutsetStates();
+            saveCutset(cutset);
             cutsetStatesSaved = true;
         }
         swapCurrentAndNextStates();
@@ -103,25 +92,25 @@ template<typename ProblemType, typename StateType>
 u32 DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory(ProblemType const * problem, u32 width)
 {
     u32 const sizeCurrentStates = sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
-    u32 const sizeNextStates =    sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
+    u32 const sizeNextStates = sizeof(LightVector<StateType>) + LightVector<StateType>::sizeOfStorage(width) + (StateType::sizeOfStorage(problem) * width) + Memory::DefaultAlignmentPadding * 3;
     u32 const sizeNextStatesMetadata = sizeof(LightVector<StateMetadata>) + LightVector<StateMetadata>::sizeOfStorage(width * problem->maxBranchingFactor) + Memory::DefaultAlignmentPadding * 2;
-     u32 const size = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
+    u32 const size = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
     return size + Memory::DefaultAlignmentPadding;
 }
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, bool lns)
+void DD::MDD<ProblemType, StateType>::calcNextStatesMetadata(u32 variableIdx, Neighbourhood const * neighbourhood, RandomEngine * randomEngine, bool lns)
 {
-    initializeNextStatesMetadata();
+    initializeNextStatesMetadata(randomEngine);
 
     u32 const elements = currentStates->getSize() * problem->maxBranchingFactor;
 #ifdef __CUDA_ARCH__
-    u32 const threads = blockDim.x;
-    for(u32 index = threadIdx.x; index < elements; index += threads)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(threadIdx.x, blockDim.x, elements);
 #else
-    for (u32 index = 0; index < elements; index += 1)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(0, 1, elements);
 #endif
+    for (u32 index = indicesBeginEnd.first; index < indicesBeginEnd.second; index += 1)
     {
         u32 const currentStateIdx = index / problem->maxBranchingFactor;
         StateType const * const currentState = currentStates->at(currentStateIdx);
@@ -148,19 +137,18 @@ void DD::MDD<ProblemType, StateType>::calcNextStates(u32 variableIdx)
     CUDA_ONLY_FIRST_THREAD
     {
         u32 const nextStatesMetadataSize = nextStatesMetadata->getSize();
-        thrust::minimum min;
         nextStates->resize(min(width, nextStatesMetadataSize));
     }
     CUDA_BLOCK_BARRIER
 
-    
     u32 const elements = nextStates->getSize();
 #ifdef __CUDA_ARCH__
-    u32 const threads = blockDim.x;
-    for(u32 nextStateIdx = threadIdx.x; nextStateIdx < elements; nextStateIdx += threads)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(threadIdx.x, blockDim.x, elements);
 #else
-    for (u32 nextStateIdx = 0; nextStateIdx < elements; nextStateIdx += 1)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(0, 1, elements);
 #endif
+    for (u32 nextStateIdx = indicesBeginEnd.first; nextStateIdx < indicesBeginEnd.second; nextStateIdx += 1)
+
     {
         StateMetadata const sm = *nextStatesMetadata->at(nextStateIdx);
         u32 const currentStateIdx = sm.index / problem->maxBranchingFactor;
@@ -225,7 +213,8 @@ void DD::MDD<ProblemType, StateType>::initializeScratchpadMemory()
         u32 const sizeNextStatesMetadata = reinterpret_cast<uintptr_t>(freeScratchpadMemory) - reinterpret_cast<uintptr_t>(freeScratchpadMemoryBeforeNextStatesMetadata);
 
         // Memory
-        [[maybe_unused]] u32 const usedScratchpadMemory = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
+        [[maybe_unused]]
+        u32 const usedScratchpadMemory = sizeCurrentStates + sizeNextStates + sizeNextStatesMetadata;
     }
     CUDA_BLOCK_BARRIER
 }
@@ -245,25 +234,25 @@ void DD::MDD<ProblemType, StateType>::initializeTop(StateType const * top)
 
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::saveCutsetStates()
+void DD::MDD<ProblemType, StateType>::saveCutset(Vector<StateType> * cutset)
 {
     //Resize
     CUDA_ONLY_FIRST_THREAD
     {
-        thrust::minimum min;
-        cutsetStates.resize(min(width,nextStatesMetadata->getSize()));
+        cutset->resize(min(width,nextStatesMetadata->getSize()));
     }
     CUDA_BLOCK_BARRIER
 
-    u32 const elements = cutsetStates.getSize();
+    u32 const elements = cutset->getSize();
+
 #ifdef __CUDA_ARCH__
-    u32 const threads = blockDim.x;
-    for(u32 cutsetStateIdx = threadIdx.x; cutsetStateIdx < elements; cutsetStateIdx += threads)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(threadIdx.x, blockDim.x, elements);
 #else
-    for (u32 cutsetStateIdx = 0; cutsetStateIdx < cutsetStates.getSize(); cutsetStateIdx += 1)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(0, 1, elements);
 #endif
+    for (u32 stateIdx = indicesBeginEnd.first; stateIdx < indicesBeginEnd.second; stateIdx += 1)
     {
-        *cutsetStates[cutsetStateIdx] = *nextStates->at(cutsetStateIdx);
+        *cutset->at(stateIdx) = *nextStates->at(stateIdx);
     }
     CUDA_BLOCK_BARRIER
 }
@@ -280,9 +269,10 @@ void DD::MDD<ProblemType, StateType>::swapCurrentAndNextStates()
     CUDA_BLOCK_BARRIER
 }
 
+
 template<typename ProblemType, typename StateType>
 __host__ __device__
-void DD::MDD<ProblemType, StateType>::initializeNextStatesMetadata()
+void DD::MDD<ProblemType, StateType>::initializeNextStatesMetadata(RandomEngine* randomEngine)
 {
     //Resize
     u32 elements = currentStates->getSize() * problem->maxBranchingFactor;
@@ -294,14 +284,15 @@ void DD::MDD<ProblemType, StateType>::initializeNextStatesMetadata()
 
     //Reset
 #ifdef __CUDA_ARCH__
-u32 const threads = blockDim.x;
-    for(u32 stateMetadataIdx = threadIdx.x; stateMetadataIdx < elements; stateMetadataIdx += threads)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(threadIdx.x, blockDim.x, elements);
 #else
-    for (u32 stateMetadataIdx = 0; stateMetadataIdx < elements; stateMetadataIdx += 1)
+    Pair<u32> indicesBeginEnd = Algorithms::getBeginEndIndices(0, 1, elements);
 #endif
+    for (u32 stateMetadataIdx = indicesBeginEnd.first; stateMetadataIdx < indicesBeginEnd.second; stateMetadataIdx += 1)
     {
         nextStatesMetadata->at(stateMetadataIdx)->cost = DP::MaxCost;
         nextStatesMetadata->at(stateMetadataIdx)->index = stateMetadataIdx;
+        nextStatesMetadata->at(stateMetadataIdx)->random = randomEngine->getFloat01();
     }
     CUDA_BLOCK_BARRIER
 }
@@ -311,12 +302,15 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 void DD::MDD<ProblemType, StateType>::finalizeNextStatesMetadata()
 {
-    Algorithms::sort(nextStatesMetadata->begin(), nextStatesMetadata->getSize());
+#ifdef __CUDA_ARCH__
+    Algorithms::sort(nextStatesMetadata->begin(), nextStatesMetadata->end());
+#else
+    std::sort(nextStatesMetadata->begin(), nextStatesMetadata->end());
+#endif
 
     CUDA_ONLY_FIRST_THREAD
     {
-        StateMetadata const invalidStateMetadata(DP::MaxCost, 0);
-        StateMetadata const * const nextStatesMetadataEnd = thrust::lower_bound(thrust::seq, nextStatesMetadata->begin(), nextStatesMetadata->end(), invalidStateMetadata);
+        StateMetadata const * const nextStatesMetadataEnd = thrust::partition_point(thrust::seq, nextStatesMetadata->begin(), nextStatesMetadata->end(), &StateMetadata::isValid);
         nextStatesMetadata->resize(nextStatesMetadataEnd);
     }
     CUDA_BLOCK_BARRIER
@@ -341,7 +335,6 @@ void DD::MDD<ProblemType, StateType>::saveBottom(StateType* bottom)
     CUDA_ONLY_FIRST_THREAD
     {
         *bottom = *currentStates->at(0);
-        //printf("[DEBUG] Bottom cost: %d\n", currentStates->at(0)->cost);
     }
     CUDA_BLOCK_BARRIER
 }

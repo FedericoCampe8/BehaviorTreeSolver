@@ -11,7 +11,7 @@ namespace DP
     __host__ __device__ inline void updatePrecedencesCount(OP::SOPProblem const * problem, SOPState const * state, OP::ValueType value);
     void makeRoot(OP::SOPProblem const * problem, SOPState* root);
     __host__ __device__ inline void makeState(OP::SOPProblem const * problem, SOPState const * currentState, OP::ValueType value, DP::CostType cost, SOPState* nextState);
-    __host__ __device__ inline void mergeState(OP::SOPProblem const * problem, SOPState const * currentState, OP::ValueType value, SOPState* nextState);
+    __host__ __device__ inline void makeState(OP::SOPProblem const * problem, SOPState const * currentState, OP::ValueType value, SOPState* nextState);
 }
 
 __host__ __device__
@@ -91,8 +91,8 @@ void DP::makeState(OP::SOPProblem const * problem, SOPState const * currentState
 }
 
 __host__ __device__
-void DP::mergeState(OP::SOPProblem const * problem, SOPState const * currentState, OP::ValueType value, SOPState* nextState)
+void DP::makeState(OP::SOPProblem const* problem, DP::SOPState const* currentState, OP::ValueType value, DP::SOPState* nextState)
 {
-    nextState->admissibleValuesMap.merge(currentState->admissibleValuesMap);
-    //updateAdmissibles(problem, value, nextState);
+    DP::CostType const cost = calcCost(problem, currentState, value);
+    makeState(problem, currentState, value, cost, nextState);
 }

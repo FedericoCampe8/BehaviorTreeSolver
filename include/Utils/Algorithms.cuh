@@ -1,20 +1,25 @@
 #pragma once
 
-#include <thrust/sort.h>
+#include <cassert>
+#include <algorithm>
+#include <random>
 #include <Utils/TypeAlias.h>
+#include <Containers/Pair.cuh>
 
 namespace Algorithms
 {
     template<typename T>
-    __host__ __device__ void sort(T* array, u32 size);
+    __device__ inline void sort(T* begin, T* end);
+    __host__ __device__ Pair<u32> getBeginEndIndices(u32 index, u32 threads, u32 elements);
 }
 
 
 template<typename T>
-__host__ __device__
-void Algorithms::sort(T* array, u32 size)
+__device__
+void Algorithms::sort(T* begin, T* end)
 {
-#ifdef __CUDA_ARCH__
+    T* array = begin;
+    u32 size = end - begin;
     __shared__ bool sorted;
     u32 const threads = blockDim.x;
     u32 const pairs = size / 2;
@@ -55,8 +60,13 @@ void Algorithms::sort(T* array, u32 size)
     }
     while (not sorted);
     __syncthreads();
-#else
-    thrust::sort(thrust::host, array, array + size);
-#endif
+}
 
+__host__ __device__
+Pair<u32> Algorithms::getBeginEndIndices(u32 index, u32 threads, u32 elements)
+{
+    u32 const elementsPerThread = (elements + threads - 1) / threads;
+    u32 const beginIdx = elementsPerThread * index;
+    u32 const endIdx = min(beginIdx + elementsPerThread, elements);
+    return Pair<u32>(beginIdx, endIdx);
 }

@@ -5,6 +5,7 @@
 #include <LNS/Neighbourhood.cuh>
 #include <LNS/StatesPriorityQueue.cuh>
 #include <LNS/SyncState.cuh>
+#include <Utils/Random.cuh>
 
 template<typename ProblemType, typename StateType>
 class OffloadBuffer
@@ -12,11 +13,14 @@ class OffloadBuffer
     // Members
     private:
     u32 size;
-    u32 capacity;
+    u32 const capacity;
     Array<StateType> topStates;
     Array<StateType> bottomStates;
+    Array<Vector<StateType>> cutsets;
     Array<DD::MDD<ProblemType, StateType>> mdds;
+    Array<RandomEngine> randomEngines;
     Array<Neighbourhood> neighbourhoods;
+
 
     // Functions
     public:
@@ -26,8 +30,8 @@ class OffloadBuffer
     __host__ __device__ void doOffload(LNS::SearchPhase searchPhase, u32 index);
     void finalizeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue);
     void getBestSolution(LNS::SearchPhase searchPhase, SyncState<ProblemType, StateType> * solution);
-    void generateNeighborhood(Array<std::mt19937>* rngs, Vector<OP::ValueType> * values, u32 index);
-    __device__ void generateNeighborhood(Array<curandState>* rngs, Vector<OP::ValueType> * values, u32 index);
+    __host__ __device__ void initializeRandomEngines(u32 randomSeed, u32 index);
+    __host__ __device__ void generateNeighborhood(Vector<OP::ValueType> * values, u32 index);
     void printNeighborhoods() const;
     bool isEmpty() const;
     u32 getSize() const;
@@ -38,10 +42,13 @@ class OffloadBuffer
 
 template<typename ProblemType, typename StateType>
 OffloadBuffer<ProblemType, StateType>::OffloadBuffer(ProblemType const * problem, u32 mddsWidth, u32 capacity, float eqProbability, float neqProbability, Memory::MallocType mallocType) :
+    size(0),
     capacity(capacity),
     topStates(capacity, mallocType),
     bottomStates(capacity, mallocType),
+    cutsets(capacity, mallocType),
     mdds(capacity, mallocType),
+    randomEngines(capacity, mallocType),
     neighbourhoods(capacity, mallocType)
 {
     // Top states
@@ -60,10 +67,24 @@ OffloadBuffer<ProblemType, StateType>::OffloadBuffer(ProblemType const * problem
         storages = Memory::align(bottomStates[stateIdx]->endOfStorage(), Memory::DefaultAlignment);
     }
 
+    // Cutsets
+    storages = StateType::mallocStorages(problem, capacity * mddsWidth, mallocType);
+    for(u32 cutsetIdx = 0; cutsetIdx < capacity; cutsetIdx += 1)
+    {
+        LightArray<StateType>* cutset = cutsets[cutsetIdx];
+        new (cutset) Vector<StateType>(mddsWidth, mallocType);
+        for (u32 stateIdx = 0; stateIdx < mddsWidth; stateIdx += 1)
+        {
+            StateType* state = cutset->at(stateIdx);
+            new (state) StateType(problem, storages);
+            storages = Memory::align(state->endOfStorage(), Memory::DefaultAlignment);
+        }
+    }
+
     // MDDs
     for (u32 mddIdx = 0; mddIdx < capacity; mddIdx += 1)
     {
-        new (mdds[mddIdx]) DD::MDD<ProblemType, StateType>(problem, mddsWidth, mallocType);
+        new (mdds[mddIdx]) DD::MDD<ProblemType, StateType>(problem, mddsWidth);
     }
 
     // Neighbourhood
@@ -81,8 +102,8 @@ void OffloadBuffer<ProblemType, StateType>::initializeOffload(StatesPriorityQueu
     size = 0;
     while (not (statesPriorityQueue->isEmpty() or isFull()))
     {
-        *topStates[size] = *statesPriorityQueue->front();
-        statesPriorityQueue->popFront();
+        *topStates[size] = *statesPriorityQueue->getMin();
+        statesPriorityQueue->popMin();
         size += 1;
     }
 
@@ -111,7 +132,7 @@ void OffloadBuffer<ProblemType, StateType>::finalizeOffload(StatesPriorityQueue<
     {
         if(topStates[index]->selectedValues.getSize() < topStates[index]->selectedValues.getCapacity() - 1)
         {
-            Vector<StateType> const * cutset = &mdds[index]->cutsetStates;
+            Vector<StateType> const * const cutset = cutsets[index];
             for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
             {
                 if (cutsetState->isValid() and (not statesPriorityQueue->isFull()))
@@ -124,6 +145,7 @@ void OffloadBuffer<ProblemType, StateType>::finalizeOffload(StatesPriorityQueue<
 
     statesPriorityQueue->mutex.unlock();
 }
+
 template<typename ProblemType, typename StateType>
 u32 OffloadBuffer<ProblemType, StateType>::getSize() const
 {
@@ -164,25 +186,19 @@ void OffloadBuffer<ProblemType, StateType>::doOffload(LNS::SearchPhase searchPha
 {
     if(searchPhase == LNS::SearchPhase::Init)
     {
-        mdds[index]->buildTopDown(neighbourhoods[index], topStates[index], bottomStates[index], false);
+        mdds[index]->buildTopDown(topStates[index], bottomStates[index], cutsets[index], neighbourhoods[index], randomEngines[index], false);
     }
     else
     {
-        mdds[index]->buildTopDown(neighbourhoods[index], topStates[0], bottomStates[index], true);
+        mdds[index]->buildTopDown(topStates[index], bottomStates[index], cutsets[index], neighbourhoods[index], randomEngines[index], true);
     }
 }
 
 template<typename ProblemType, typename StateType>
-void OffloadBuffer<ProblemType, StateType>::generateNeighborhood(Array<std::mt19937>* rngs, Vector<OP::ValueType> * values, u32 index)
+__host__ __device__
+void OffloadBuffer<ProblemType, StateType>::generateNeighborhood(Vector<OP::ValueType> * values, u32 index)
 {
-    neighbourhoods[index]->generate(rngs->at(index), values);
-}
-
-template<typename ProblemType, typename StateType>
-__device__
-void OffloadBuffer<ProblemType, StateType>::generateNeighborhood(Array<curandState>* rngs, Vector<OP::ValueType>* values, u32 index)
-{
-    neighbourhoods[index]->generate(rngs->at(index), values);
+    neighbourhoods[index]->generate(randomEngines[index], values);
 }
 
 template<typename ProblemType, typename StateType>
@@ -192,4 +208,11 @@ void OffloadBuffer<ProblemType, StateType>::printNeighborhoods() const
     {
         neighbourhood->print(true);
     }
+}
+
+template<typename ProblemType, typename StateType>
+__host__ __device__
+void OffloadBuffer<ProblemType, StateType>::initializeRandomEngines(u32 randomSeed, u32 index)
+{
+    randomEngines[index]->initialize(randomSeed + index);
 }

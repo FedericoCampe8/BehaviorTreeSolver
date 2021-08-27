@@ -11,9 +11,9 @@ def parse_args(argv):
     parser.add_argument("-t",    type=int, action="store", dest="t",   default=60)
     parser.add_argument("-q",    type=int, action="store", dest="q",   default=50000)
     parser.add_argument("--wc",  type=int, action="store", dest="wc",  required=True)
-    parser.add_argument("--pc",  type=int, action="store", dest="pc",  required=True)
+    parser.add_argument("--mc",  type=int, action="store", dest="mc",  required=True)
     parser.add_argument("--wg",  type=int, action="store", dest="wg",  required=True)
-    parser.add_argument("--pg",  type=int, action="store", dest="pg",  required=True)
+    parser.add_argument("--mg",  type=int, action="store", dest="mg",  required=True)
     parser.add_argument("--eq",  type=float, action="store", dest="eq",  default=0)
     parser.add_argument("--neq", type=float, action="store", dest="neq", default=25)
     args, _ = parser.parse_known_args(argv)
@@ -21,8 +21,8 @@ def parse_args(argv):
 
 
 def get_args_str(args):
-    flat_args = args.t, args.q, args.wc, args.pc, args.wg, args.pg, args.eq, args.neq
-    return "t{}-q{}-wc{}-pc{}-wg{}-pg{}-eq{}-neq{}-{}".format(*flat_args, int(time.time()))
+    flat_args = args.t, args.q, args.wc, args.mc, args.wg, args.mg, args.eq, args.neq
+    return "t{}-q{}-wc{}-mc{}-wg{}-mg{}-eq{}-neq{}-{}".format(*flat_args, int(time.time()))
 
 
 def solve(args, json_file):
@@ -32,9 +32,9 @@ def solve(args, json_file):
         ["-q"] + [str(args.q)] + \
         ["-t"] + [str(args.t)] + \
         ["--wc"] + [str(args.wc)] + \
-        ["--pc"] + [str(args.pc)] + \
+        ["--mc"] + [str(args.mc)] + \
         ["--wg"] + [str(args.wg)] + \
-        ["--pg"] + [str(args.pg)] + \
+        ["--mg"] + [str(args.mg)] + \
         ["--eq"] + [str(args.eq)] + \
         ["--neq"] + [str(args.neq)] + \
         ["--rs"] + ["0"] + \
@@ -56,9 +56,9 @@ def solve(args, json_file):
 output_grammar = Grammar("""
     output = output_line+
     output_line = solution / info
-    solution = "[SOLUTION] Source: " source " | Time: " time " | Iteration: " int " | Cost: " int " | Solution: " list_int nl
+    solution = "[SOLUTION] Source: " source " | Time: " time " | Cost: " int " | Solution: " list_int nl?
     source = "CPU" / "GPU"
-    info = "[INFO]" ~"."+ nl
+    info = "[INFO]" ~"."+ nl?
     list_int = "[" ~"[0-9,\\s]*" "]"
     time = int ":" int ":" int "." int
     int = ~"[0-9]+"
@@ -74,8 +74,8 @@ class OutputVisitor(NodeVisitor):
         return visited_children[0]
 
     def visit_solution(self, node, visited_children):
-        cost = visited_children[7]
-        solution = visited_children[9]
+        cost = visited_children[5]
+        solution = visited_children[7]
         return Result(cost, solution)
 
     def visit_list_int(self, node, visited_children):

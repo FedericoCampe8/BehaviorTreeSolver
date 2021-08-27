@@ -1,6 +1,5 @@
 #pragma once
 #include <thread>
-#include <random>
 #include <curand_kernel.h>
 #include <LNS/OffloadBuffer.cuh>
 #include <Options.h>
@@ -19,16 +18,15 @@ class SearchManagerGPU
     SyncState<ProblemType, StateType> bestSolution;
     SyncState<ProblemType, StateType> neighborhoodSolution;
     private:
-    ProblemType const * problem;
-    Options const * options;
+    ProblemType const * const problem;
+    Options const * const options;
     OffloadBuffer<ProblemType,StateType> offloadBuffer;
-    Array<curandState> rngs;
 
     // Functions
     public:
     SearchManagerGPU(ProblemType const * problem, Options const * options, Memory::MallocType mallocType);
     void searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool * timeout);
-    void initializeRngs(bool * timeout);
+    void initializeRandomEngines(bool * timeout);
     void searchLnsLoop(StateType const * root, bool * timeout);
     private:
     void waitDevice() const;
@@ -46,8 +44,7 @@ SearchManagerGPU<ProblemType, StateType>::SearchManagerGPU(ProblemType const * p
     options(options),
     bestSolution(problem, mallocType),
     neighborhoodSolution(problem, mallocType),
-    offloadBuffer(problem, options->widthGpu, options->mddsGpu, options->probEq, options->probNeq, mallocType),
-    rngs(options->mddsGpu, mallocType)
+    offloadBuffer(problem, options->widthGpu, options->mddsGpu, options->probEq, options->probNeq, mallocType)
 {
     bestSolution.state.invalidate();
 }
@@ -77,8 +74,7 @@ void SearchManagerGPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
                 offloadBuffer.finalizeOffload(statesPriorityQueue);
                 offloadBuffer.getBestSolution(LNS::SearchPhase::Init, &bestSolution);
 
-                thrust::maximum max;
-                u64 const elapsedTime = max(Chrono::now() - startTime, 1u);
+                u64 const elapsedTime = max(Chrono::now() - startTime, 1ul);
                 speed = offloadBuffer.getSize() * 1000 / elapsedTime;
 
                 iteration += 1;
@@ -103,33 +99,33 @@ void doOffloadKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, LNS::S
 template<typename ProblemType, typename StateType>
 void SearchManagerGPU<ProblemType, StateType>::doOffloadsAsync(LNS::SearchPhase searchPhase)
 {
-    thrust::minimum min;
     u32 const blockSize = min(options->widthGpu * problem->maxBranchingFactor, 1024u);
     u32 const blockCount = searchPhase == LNS::SearchPhase::Init ? offloadBuffer.getSize() : offloadBuffer.getCapacity();
     u32 const sharedMemSize = DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory(problem, options->widthGpu);
     doOffloadKernel<<<blockCount, blockSize, sharedMemSize>>>(&offloadBuffer, searchPhase);
 }
 
+template<typename ProblemType, typename StateType>
 __global__
-void initializeRngKernel(Array<curandState>* rngs, u32 randomSeed)
+void initializeRandomEnginesKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, u32 randomSeed)
 {
     if(threadIdx.x == 0)
     {
         u32 const index = blockIdx.x;
-        curand_init(randomSeed + index, 0, 0, rngs->at(index));
+        offloadBuffer->initializeRandomEngines(randomSeed, index);
     }
 }
 
 
 template<typename ProblemType, typename StateType>
-void SearchManagerGPU<ProblemType, StateType>::initializeRngs(bool * timeout)
+void SearchManagerGPU<ProblemType, StateType>::initializeRandomEngines(bool * timeout)
 {
     // Random Numbers Generators
     if((not *timeout) and options->mddsGpu > 0)
     {
         u32 const blockSize = 1;
-        u32 const blockCount = rngs.getCapacity();
-        initializeRngKernel<<<blockCount, blockSize>>>(&rngs, options->randomSeed);
+        u32 const blockCount = offloadBuffer.getCapacity();
+        initializeRandomEnginesKernel<<<blockCount, blockSize>>>(&offloadBuffer, options->randomSeed);
         waitDevice();
     }
 }
@@ -160,8 +156,7 @@ void SearchManagerGPU<ProblemType, StateType>::searchLnsLoop(StateType const * r
             //Finalize offload
             offloadBuffer.getBestSolution(LNS::SearchPhase::LNS, &bestSolution);
 
-            thrust::maximum max;
-            u64 const elapsedTime = max(Chrono::now() - startTime, 1u);
+            u64 const elapsedTime = max(Chrono::now() - startTime, 1ul);
             speed = offloadBuffer.getCapacity() * 1000 / elapsedTime;
 
             iteration += 1;
@@ -172,12 +167,12 @@ void SearchManagerGPU<ProblemType, StateType>::searchLnsLoop(StateType const * r
 
 template<typename ProblemType,typename StateType>
 __global__
-void generateNeighbourhoodKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, Array<curandState>* rngs, StateType * solution)
+void generateNeighbourhoodKernel(OffloadBuffer<ProblemType,StateType>* offloadBuffer, StateType * solution)
 {
     if(threadIdx.x == 0)
     {
         u32 const index = blockIdx.x;
-        offloadBuffer->generateNeighborhood(rngs, &solution->selectedValues, index);
+        offloadBuffer->generateNeighborhood(&solution->selectedValues, index);
     }
 }
 
@@ -186,7 +181,7 @@ void SearchManagerGPU<ProblemType, StateType>::generateNeighbourhoodsAsync()
 {
     u32 const blockSize = 1;
     u32 const blockCount = options->mddsGpu;
-    generateNeighbourhoodKernel<<<blockCount, blockSize>>>(&offloadBuffer, &rngs, &neighborhoodSolution.state);
+    generateNeighbourhoodKernel<<<blockCount, blockSize>>>(&offloadBuffer, &neighborhoodSolution.state);
 }
 
 

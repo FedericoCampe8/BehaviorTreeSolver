@@ -1,12 +1,11 @@
 #pragma once
 
 #include <algorithm>
-#include <random>
-#include <curand_kernel.h>
 #include <thrust/fill.h>
 #include <Containers/Array.cuh>
 #include <Containers/BitSet.cuh>
 #include <OP/Problem.cuh>
+#include <Utils/Random.cuh>
 
 class Neighbourhood
 {
@@ -25,10 +24,9 @@ class Neighbourhood
     // Functions
     public:
     Neighbourhood(OP::Problem const * problem, float probEq, float probNeq, Memory::MallocType mallocType);
-    void generate(std::mt19937* rng, Vector<OP::ValueType>* values);
-    __device__ void generate(curandState* rng, Vector<OP::ValueType>* values);
+    __host__ __device__ void generate(RandomEngine* randomEngine, Vector<OP::ValueType>* values);
     __host__ __device__ bool constraintsCheck(u32 variableIdx, OP::ValueType value) const;
-    __host__ __device__ void reset();
+    __host__ __device__ void clear();
     __host__ __device__ void constraintVariable(u32 variableIdx, OP::ValueType value, float random);
     void print(bool endLine = true);
 };
@@ -40,36 +38,24 @@ Neighbourhood::Neighbourhood(OP::Problem const * problem,float probEq, float pro
     constraints(problem->variables.getCapacity(), mallocType),
     fixedValue(problem->maxValue + 1, mallocType)
 {
-    reset();
+    clear();
 }
 
 __host__ __device__
-void Neighbourhood::reset()
+void Neighbourhood::clear()
 {
     thrust::fill(thrust::seq, constraints.begin(), constraints.end(), ConstraintType::None);
     fixedValue.clear();
 }
 
-void Neighbourhood::generate(std::mt19937* rng, Vector<OP::ValueType>* values)
+__host__ __device__
+void Neighbourhood::generate(RandomEngine* randomEngine, Vector<OP::ValueType>* values)
 {
-    std::uniform_real_distribution<float> distribution(0.0,1.0);
-    reset();
+    clear();
     for(u32 valueIdx = 0; valueIdx < values->getCapacity(); valueIdx += 1)
     {
         OP::ValueType const value = *values->at(valueIdx);
-        float const random = distribution(*rng);
-        constraintVariable(valueIdx, value, random);
-    }
-}
-
-__device__
-void Neighbourhood::generate(curandState* rng, Vector<OP::ValueType>* values)
-{
-    reset();
-    for(u32 valueIdx = 0; valueIdx < values->getCapacity(); valueIdx += 1)
-    {
-        OP::ValueType const value = *values->at(valueIdx);
-        float const random = curand_uniform(rng);
+        float const random = randomEngine->getFloat01();
         constraintVariable(valueIdx, value, random);
     }
 }

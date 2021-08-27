@@ -22,7 +22,6 @@ namespace DP
         __host__ __device__ void print(bool endLine = true) const;
         __host__ __device__ static unsigned int sizeOfStorage(OP::SOPProblem const * problem);
         __host__ __device__ static void swap(SOPState& sops0, SOPState& sops1);
-        __host__ __device__ void sanityCheck() const;
     };
 }
 
@@ -78,16 +77,4 @@ void DP::SOPState::swap(DP::SOPState& sops0, DP::SOPState& sops1)
 {
     State::swap(sops0, sops1);
     Array<u16>::swap(sops0.precedencesCount, sops1.precedencesCount);
-}
-
-__host__ __device__
-void DP::SOPState::sanityCheck() const
-{
-    for(u32 i = 0; i < selectedValues.getSize(); i +=1 )
-    {
-        if(admissibleValuesMap.contains(*selectedValues[i]))
-        {
-            printf("Error sanityCheck\n");
-        }
-    }
 }

@@ -6210,7 +6210,7 @@ class lexer : public lexer_base<BasicJsonType>
     */
     token_type scan_string()
     {
-        // reset token_buffer (ignore opening quote)
+        // clear token_buffer (ignore opening quote)
         reset();
 
         // we entered the function by reading an open quote
@@ -6925,7 +6925,7 @@ class lexer : public lexer_base<BasicJsonType>
     */
     token_type scan_number()  // lgtm [cpp/use-of-goto]
     {
-        // reset token_buffer to store the number's bytes
+        // clear token_buffer to store the number's bytes
         reset();
 
         // the type of the parsed number; initially set to unsigned; will be
@@ -7273,7 +7273,7 @@ scan_number_done:
     // input management
     /////////////////////
 
-    /// reset token_buffer; current character is beginning of token
+    /// clear token_buffer; current character is beginning of token
     void reset() noexcept
     {
         token_buffer.clear();
@@ -7298,7 +7298,7 @@ scan_number_done:
 
         if (next_unget)
         {
-            // just reset the next_unget variable and work with current
+            // just clear the next_unget variable and work with current
             next_unget = false;
         }
         else
@@ -15997,7 +15997,7 @@ class serializer
                         }
                     }
 
-                    // write buffer and reset index; there must be 13 bytes
+                    // write buffer and clear index; there must be 13 bytes
                     // left, as this is the maximal number of bytes to be
                     // written ("\uxxxx\uxxxx\0") for one code point
                     if (string_buffer.size() - bytes < 13)
@@ -16035,7 +16035,7 @@ class serializer
                                 --i;
                             }
 
-                            // reset length buffer to the last accepted index;
+                            // clear length buffer to the last accepted index;
                             // thus removing/ignoring the invalid characters
                             bytes = bytes_after_last_accept;
 
@@ -16058,7 +16058,7 @@ class serializer
                                     string_buffer[bytes++] = detail::binary_writer<BasicJsonType, char>::to_char_type('\xBD');
                                 }
 
-                                // write buffer and reset index; there must be 13 bytes
+                                // write buffer and clear index; there must be 13 bytes
                                 // left, as this is the maximal number of bytes to be
                                 // written ("\uxxxx\uxxxx\0") for one code point
                                 if (string_buffer.size() - bytes < 13)
@@ -23154,7 +23154,7 @@ class basic_json
         const bool pretty_print = o.width() > 0;
         const auto indentation = pretty_print ? o.width() : 0;
 
-        // reset width to 0 for subsequent calls to this stream
+        // clear width to 0 for subsequent calls to this stream
         o.width(0);
 
         // do the actual serialization

@@ -29,6 +29,7 @@ class Options
     Options();
     ~Options();
     bool parseOptions(int argc, char* argv[]);
+    void printUsage() const;
     void printOptions();
 };
 
@@ -81,13 +82,14 @@ Options::~Options()
      free(anyOption);
 }
 
+
 bool Options::parseOptions(int argc, char* argv[])
 {
     anyOption->processCommandArgs(argc, argv);
 
     if (not anyOption->hasOptions())
     {
-        anyOption->printUsage();
+        printUsage();
         return false;
     }
 
@@ -164,4 +166,9 @@ void Options::printOptions()
     printf("[INFO] Probability of using a value: %.3f\n", probEq);
     printf("[INFO] Probability of discarding a value: %.3f\n", probNeq);
     printf("[INFO] Random seed: %u\n", randomSeed);
+}
+
+void Options::printUsage() const
+{
+    anyOption->printUsage();
 }
