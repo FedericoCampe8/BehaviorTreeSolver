@@ -57,7 +57,7 @@ void SearchManagerGPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
 
     if(options->mddsGpu > 0)
     {
-        while(not (statesPriorityQueue->isFull() or *timeout))
+        while(not (statesPriorityQueue->isFull() or statesPriorityQueue->isEmpty() or *timeout))
         {
             u64 const startTime = Chrono::now();
 
@@ -81,7 +81,7 @@ void SearchManagerGPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
             }
             else
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(std::chrono::seconds(1));
             }
         }
     }
@@ -100,7 +100,7 @@ template<typename ProblemType, typename StateType>
 void SearchManagerGPU<ProblemType, StateType>::doOffloadsAsync(LNS::SearchPhase searchPhase)
 {
     u32 const blockSize = min(options->widthGpu * problem->maxBranchingFactor, 1024u);
-    u32 const blockCount = searchPhase == LNS::SearchPhase::Init ? offloadBuffer.getSize() : offloadBuffer.getCapacity();
+    u32 const blockCount = offloadBuffer.getSize();
     u32 const sharedMemSize = DD::MDD<ProblemType, StateType>::sizeOfScratchpadMemory(problem, options->widthGpu);
     doOffloadKernel<<<blockCount, blockSize, sharedMemSize>>>(&offloadBuffer, searchPhase);
 }

@@ -26,7 +26,7 @@ class OffloadBuffer
     public:
     OffloadBuffer(ProblemType const * problem, u32 mddsWidth, u32 capacity, float eqProbability, float neqProbability, Memory::MallocType mallocType);
     void initializeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue);
-    void initializeOffload(StateType const * statesPriorityQueue);
+    void initializeOffload(StateType const * state);
     __host__ __device__ void doOffload(LNS::SearchPhase searchPhase, u32 index);
     void finalizeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue);
     void getBestSolution(LNS::SearchPhase searchPhase, SyncState<ProblemType, StateType> * solution);
@@ -119,8 +119,12 @@ bool OffloadBuffer<ProblemType, StateType>::isFull() const
 template<typename ProblemType, typename StateType>
 void OffloadBuffer<ProblemType, StateType>::initializeOffload(StateType const * state)
 {
-    size = 1;
-    *topStates[0] = *state;
+    size = 0;
+    while (not isFull())
+    {
+        *topStates[size] = *state;
+        size += 1;
+    }
 }
 
 template<typename ProblemType, typename StateType>
@@ -184,14 +188,7 @@ template<typename ProblemType, typename StateType>
 __host__ __device__
 void OffloadBuffer<ProblemType, StateType>::doOffload(LNS::SearchPhase searchPhase, u32 index)
 {
-    if(searchPhase == LNS::SearchPhase::Init)
-    {
-        mdds[index]->buildTopDown(topStates[index], bottomStates[index], cutsets[index], neighbourhoods[index], randomEngines[index], false);
-    }
-    else
-    {
-        mdds[index]->buildTopDown(topStates[index], bottomStates[index], cutsets[index], neighbourhoods[index], randomEngines[index], true);
-    }
+    mdds[index]->buildTopDown(topStates[index], bottomStates[index], cutsets[index], neighbourhoods[index], randomEngines[index], searchPhase == LNS::SearchPhase::LNS);
 }
 
 template<typename ProblemType, typename StateType>

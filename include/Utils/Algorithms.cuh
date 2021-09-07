@@ -10,7 +10,7 @@ namespace Algorithms
 {
     template<typename T>
     __device__ inline void sort(T* begin, T* end);
-    __host__ __device__ Pair<u32> getBeginEndIndices(u32 index, u32 threads, u32 elements);
+    __host__ __device__ inline Pair<u32> getBeginEndIndices(u32 index, u32 threads, u32 elements);
 }
 
 

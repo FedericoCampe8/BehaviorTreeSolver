@@ -9,8 +9,6 @@
 #include <Utils/Algorithms.cuh>
 #include <Utils/CUDA.cuh>
 #include <Utils/Random.cuh>
-#include <DP/TSPPDState.cuh>
-#include <DP/TSPPDModel.cuh>
 #include <OP/Problem.cuh>
 #include <LNS/Neighbourhood.cuh>
 #include <DD/Context.h>

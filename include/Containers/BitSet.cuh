@@ -78,12 +78,11 @@ bool BitSet::contains(u32 value) const
 __host__ __device__
 void BitSet::clear()
 {
-    for(u32 chunkIdx = 0; chunkIdx <= chunkIndex(maxValue); chunkIdx +=1 )
+    u32 const chunkEndIdx = chunkIndex(maxValue) + 1;
+    for(u32 chunkIdx = 0; chunkIdx < chunkEndIdx; chunkIdx +=1)
     {
         storage[chunkIdx] = 0;
     }
-
-    //thrust::fill(thrust::seq, begin(), end(), static_cast<u32>(0));
 }
 
 __host__ __device__

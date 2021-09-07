@@ -11,7 +11,6 @@ namespace DP
     __host__ __device__ inline void updatePrecedencesCount(OP::SOPProblem const * problem, SOPState const * state, OP::ValueType value);
     void makeRoot(OP::SOPProblem const * problem, SOPState* root);
     __host__ __device__ inline void makeState(OP::SOPProblem const * problem, SOPState const * currentState, OP::ValueType value, DP::CostType cost, SOPState* nextState);
-    __host__ __device__ inline void makeState(OP::SOPProblem const * problem, SOPState const * currentState, OP::ValueType value, SOPState* nextState);
 }
 
 __host__ __device__
@@ -88,11 +87,4 @@ void DP::makeState(OP::SOPProblem const * problem, SOPState const * currentState
     nextState->selectValue(value);
     updatePrecedencesCount(problem, nextState, value);
     calcAdmissibleValues(problem, nextState);
-}
-
-__host__ __device__
-void DP::makeState(OP::SOPProblem const* problem, DP::SOPState const* currentState, OP::ValueType value, DP::SOPState* nextState)
-{
-    DP::CostType const cost = calcCost(problem, currentState, value);
-    makeState(problem, currentState, value, cost, nextState);
 }

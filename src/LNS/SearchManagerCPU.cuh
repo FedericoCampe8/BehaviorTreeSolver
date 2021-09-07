@@ -63,7 +63,7 @@ void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
 
     if(options->mddsCpu > 0)
     {
-        while(not (statesPriorityQueue->isFull() or *timeout))
+        while(not (statesPriorityQueue->isFull() or statesPriorityQueue->isEmpty() or *timeout))
         {
             u64 const startTime = Chrono::now();
 
@@ -87,7 +87,7 @@ void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
             }
             else
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(std::chrono::seconds(1));
             }
         }
     }
@@ -121,6 +121,7 @@ void SearchManagerCPU<ProblemType, StateType>::searchLnsLoop(StateType const * r
     if(options->mddsCpu > 0)
     {
         offloadBuffer.initializeOffload(root);
+
         while(not *timeout)
         {
             u64 const startTime = Chrono::now();
@@ -202,7 +203,7 @@ void SearchManagerCPU<ProblemType, StateType>::doOffload(LNS::SearchPhase search
 template<typename ProblemType, typename StateType>
 void SearchManagerCPU<ProblemType, StateType>::doOffloadsAsync(LNS::SearchPhase searchPhase)
 {
-    u32 const elements = searchPhase == LNS::SearchPhase::Init ? offloadBuffer.getSize() : offloadBuffer.getCapacity();
+    u32 const elements = offloadBuffer.getSize();
     u32 const threadsCount = threads.getCapacity();
     for (u32 threadIdx = 0; threadIdx < threadsCount; threadIdx += 1)
     {

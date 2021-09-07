@@ -24,7 +24,7 @@ class Neighbourhood
     // Functions
     public:
     Neighbourhood(OP::Problem const * problem, float probEq, float probNeq, Memory::MallocType mallocType);
-    __host__ __device__ void generate(RandomEngine* randomEngine, Vector<OP::ValueType>* values);
+    __host__ __device__ void generate(RandomEngine* randomEngine, Vector<OP::ValueType>* solutionValues);
     __host__ __device__ bool constraintsCheck(u32 variableIdx, OP::ValueType value) const;
     __host__ __device__ void clear();
     __host__ __device__ void constraintVariable(u32 variableIdx, OP::ValueType value, float random);
@@ -44,19 +44,34 @@ Neighbourhood::Neighbourhood(OP::Problem const * problem,float probEq, float pro
 __host__ __device__
 void Neighbourhood::clear()
 {
-    thrust::fill(thrust::seq, constraints.begin(), constraints.end(), ConstraintType::None);
+    u32 const constraintEndIdx = constraints.getCapacity();
+    for(u32 constraintIdx = 0; constraintIdx < constraintEndIdx; constraintIdx +=1 )
+    {
+       *constraints[constraintIdx] = ConstraintType::None;
+    }
     fixedValue.clear();
 }
 
 __host__ __device__
-void Neighbourhood::generate(RandomEngine* randomEngine, Vector<OP::ValueType>* values)
+void Neighbourhood::generate(RandomEngine* randomEngine, Vector<OP::ValueType>* solutionValues)
 {
     clear();
-    for(u32 valueIdx = 0; valueIdx < values->getCapacity(); valueIdx += 1)
+    for(u32 valueIdx = 0; valueIdx < solutionValues->getCapacity(); valueIdx += 1)
     {
-        OP::ValueType const value = *values->at(valueIdx);
+        OP::ValueType const value = *solutionValues->at(valueIdx);
         float const random = randomEngine->getFloat01();
-        constraintVariable(valueIdx, value, random);
+
+        if (random < probEq)
+        {
+            *constraints[valueIdx] = ConstraintType::Eq;
+            *values[valueIdx] = value;
+            fixedValue.insert(value);
+        }
+        else if (random < probEq + probNeq)
+        {
+            *constraints[valueIdx] = ConstraintType::Neq;
+            *values[valueIdx] = value;
+        }
     }
 }
 
@@ -76,22 +91,6 @@ bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType val
         return false;
     }
     return true;
-}
-
-__host__ __device__
-void Neighbourhood::constraintVariable(u32 variableIdx, OP::ValueType value, float random)
-{
-    if (random < probEq)
-    {
-        *constraints[variableIdx] = ConstraintType::Eq;
-        *values[variableIdx] = value;
-        fixedValue.insert(value);
-    }
-    else if (random < probEq + probNeq)
-    {
-        *constraints[variableIdx] = ConstraintType::Neq;
-        *values[variableIdx] = value;
-    }
 }
 
 void Neighbourhood::print(bool endLine)

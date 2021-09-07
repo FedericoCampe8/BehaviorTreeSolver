@@ -7,14 +7,8 @@
 class RandomEngine
 {
     private:
-    union Engine
-    {
-        std::mt19937 host;
-        curandState device;
-    };
-
-    private:
-    Engine engine;
+    std::mt19937 hostEngine;
+    curandState deviceEngine;
 
     public:
     __host__ __device__ void initialize(u32 randomSeed);
@@ -25,9 +19,9 @@ __host__ __device__
 void RandomEngine::initialize(u32 randomSeed)
 {
 #ifdef __CUDA_ARCH__
-    curand_init(randomSeed, 0, 0, &engine.device);
+    curand_init(randomSeed, 0, 0, &deviceEngine);
 #else
-    new (&engine.host) std::mt19937(randomSeed);
+    new (&hostEngine) std::mt19937(randomSeed);
 #endif
 }
 
@@ -35,9 +29,9 @@ __host__ __device__
 float RandomEngine::getFloat01()
 {
 #ifdef __CUDA_ARCH__
-    return curand_uniform(&engine.device);
+    return curand_uniform(&deviceEngine);
 #else
     std::uniform_real_distribution<float> urd(0.0,1.0);
-    return urd(engine.host);
+    return urd(hostEngine);
 #endif
 }

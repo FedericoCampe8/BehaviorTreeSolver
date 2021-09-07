@@ -18,7 +18,7 @@ namespace DD
         __host__ __device__ StateMetadata();
         __host__ __device__ StateMetadata(DP::CostType cost, u32 index, float random);
         __host__ __device__ StateMetadata& operator=(StateMetadata const & other);
-        __host__ __device__ inline bool operator<(StateMetadata const & other);
+        __host__ __device__ inline bool operator<(StateMetadata const & other) const;
         __host__ __device__ static void swap(StateMetadata& sm0, StateMetadata& sm1);
         __host__ __device__ static bool isValid (StateMetadata const & sm);
     };
@@ -63,7 +63,7 @@ bool DD::StateMetadata::isValid(StateMetadata const & sm)
 }
 
 __host__ __device__
-bool DD::StateMetadata::operator<(DD::StateMetadata const & other)
+bool DD::StateMetadata::operator<(DD::StateMetadata const & other) const
 {
     return (cost < other.cost) or (cost == other.cost and random < other.random);
 }
