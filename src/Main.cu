@@ -4,10 +4,8 @@
 #include <Utils/Algorithms.cuh>
 #include <Utils/Chrono.cuh>
 #include <LNS/Context.h>
-#include "DP/TSPPDModel.cuh"
 #include "DP/CTWPModel.cuh"
-#include "DP/MOSPModel.cuh"
-#include "DP/JSPModel.cuh"
+#include "DP/OSSPModel.cuh"
 #include "DP/SOPModel.cuh"
 #include "LNS/SearchManagerCPU.cuh"
 #include "LNS/SearchManagerGPU.cuh"
@@ -23,8 +21,8 @@ using namespace DD;
 using namespace DP;
 using namespace OP;
 using namespace LNS;
-using ProblemType = TSPPDProblem;
-using StateType = TSPPDState;
+using ProblemType = OSSProblem;
+using StateType = OSSPState;
 
 // Auxiliary functions
 AnyOption* parseOptions(int argc, char* argv[]);
@@ -35,9 +33,11 @@ template<typename ProblemType, typename StateType>
 void printStatistics(Options const * options, u64 startTime, SearchManagerCPU<ProblemType,StateType>* searchManagerCpu, SearchManagerGPU<ProblemType,StateType>* searchManagerGpu);
 
 template<typename ProblemType, typename StateType>
-void checkBetterSolutions(StateType* bestSolution, u64 startTime, SearchManagerCPU<ProblemType, StateType>* searchManagerCpu, SearchManagerGPU<ProblemType, StateType>* searchManagerGpu);
+void checkBetterSolutions(Options const * options, StateType* bestSolution, u64 startTime, SearchManagerCPU<ProblemType, StateType>* searchManagerCpu, SearchManagerGPU<ProblemType, StateType>* searchManagerGpu);
 
-bool checkTimeout(u64 startTime, Options const * options);
+bool checkInitTimeout(u64 startTime);
+
+bool checkTotalTimeout(u64 startTime, Options const * options);
 
 // Debug
 void printElapsedTime(u64 elapsedTimeMs);
@@ -46,7 +46,7 @@ void clearLine();
 
 int main(int argc, char* argv[])
 {
-    u64 startTime = now();
+    u64 const startTime = now();
     
     // Options parsing
     byte* memory = nullptr;
@@ -61,6 +61,11 @@ int main(int argc, char* argv[])
     {
         optionsCpu->printOptions();
     }
+
+    printf("[INFO] Initializing data structures");
+    printf(" | Time: ");
+    printElapsedTime(now() - startTime);
+    printf("\n");
 
     // Context initialization
     MallocType mallocTypeGpu = MallocType::Std;
@@ -88,14 +93,10 @@ int main(int argc, char* argv[])
     memory = safeMalloc(sizeof(SearchManagerGPU<ProblemType,StateType>), mallocTypeGpu);
     SearchManagerGPU<ProblemType,StateType>* searchManagerGpu = new (memory) SearchManagerGPU<ProblemType, StateType>(problemGpu, optionsGpu, mallocTypeGpu);
 
-    // Solution
-    memory = safeMalloc(sizeof(StateType), mallocTypeGpu);
-    StateType* bestSolution = new (memory) StateType(problemCpu, mallocTypeGpu);
+    // Solutions
+    memory = safeMalloc(sizeof(StateType), MallocType::Std);
+    StateType* bestSolution = new (memory) StateType(problemCpu, MallocType::Std);
     bestSolution->invalidate();
-
-    // Temporary solution
-    memory = safeMalloc(sizeof(StateType), mallocTypeGpu);
-    StateType* partialSolution = new (memory) StateType(problemCpu, mallocTypeGpu);
 
     // Root
     memory = safeMalloc(sizeof(StateType), mallocTypeGpu);
@@ -103,53 +104,62 @@ int main(int argc, char* argv[])
     makeRoot(problemCpu, root);
     statesPriorityQueue.insert(root);
 
-    // Search
-    bool timeout = false;
+    //Random
+    printf("[INFO] Initializing random engines");
+    printf(" | Time: ");
+    printElapsedTime(now() - startTime);
+    printf("\n");
+    std::thread initRandomCpu(&SearchManagerCPU<ProblemType,StateType>::initializeRandomEngines, searchManagerCpu);
+    std::thread initRandomGpu(&SearchManagerGPU<ProblemType,StateType>::initializeRandomEngines, searchManagerGpu);
+    initRandomCpu.join();
+    initRandomGpu.join();
 
-    clearLine();
-    u64 searchStartTime = now();
-    printf("[INFO] Start search");
+    //Initial search
+    bool timeout = false;
+    printf("[INFO] Start initial search");
     printf(" | Time: ");
     printElapsedTime(now() - startTime);
     printf("\n");
 
     std::thread searchInitCpu(&SearchManagerCPU<ProblemType,StateType>::searchInitLoop, searchManagerCpu, &statesPriorityQueue, &timeout);
     searchInitCpu.detach();
-    std::thread searchInitGpu(&SearchManagerGPU<ProblemType,StateType>::searchInitLoop, searchManagerGpu, &statesPriorityQueue, &timeout);
-    searchInitGpu.detach();
 
-    while(not (timeout or (searchManagerCpu->done and searchManagerGpu->done)))
+    while(not searchManagerCpu->done)
     {
         printStatistics(optionsCpu, startTime, searchManagerCpu, searchManagerGpu);
-        checkBetterSolutions(bestSolution, startTime, searchManagerCpu, searchManagerGpu);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        timeout = checkTimeout(startTime, optionsCpu);
+        checkBetterSolutions(optionsCpu, bestSolution, startTime, searchManagerCpu, searchManagerGpu);
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        timeout = checkInitTimeout(startTime);
     }
-    checkBetterSolutions(bestSolution, startTime,  searchManagerCpu, searchManagerGpu);
+    checkBetterSolutions(optionsCpu, bestSolution, startTime,  searchManagerCpu, searchManagerGpu);
 
-    clearLine();
-    printf("[INFO] Switch to LNS");
-    printf(" | Time: ");
-    printElapsedTime(now() - startTime);
-    printf("\n");
-
-    searchManagerCpu->initializeRandomEngines(&timeout);
-    searchManagerGpu->initializeRandomEngines(&timeout);
-
-    std::thread searchLnsCpu(&SearchManagerCPU<ProblemType,StateType>::searchLnsLoop, searchManagerCpu, root, &timeout);
-    searchLnsCpu.detach();
-    std::thread searchLnsGpu(&SearchManagerGPU<ProblemType,StateType>::searchLnsLoop, searchManagerGpu, root, &timeout);
-    searchLnsGpu.detach();
-
-    while (not timeout)
+    if(bestSolution->isValid())
     {
-        printStatistics(optionsCpu, startTime,searchManagerCpu, searchManagerGpu);
-        checkBetterSolutions(bestSolution, startTime, searchManagerCpu, searchManagerGpu);
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        timeout = checkTimeout(startTime, optionsCpu);
-    }
-    checkBetterSolutions(bestSolution, startTime, searchManagerCpu, searchManagerGpu);
+        //LNS search
+        timeout = false;
+        if(optionsCpu->statistics)
+        {
+            clearLine();
+        }
+        printf("[INFO] Switch to LNS");
+        printf(" | Time: ");
+        printElapsedTime(now() - startTime);
+        printf("\n");
 
+        std::thread searchLnsCpu(& SearchManagerCPU<ProblemType, StateType>::searchLnsLoop, searchManagerCpu, root, &timeout);
+        searchLnsCpu.detach();
+        std::thread searchLnsGpu(& SearchManagerGPU<ProblemType, StateType>::searchLnsLoop, searchManagerGpu, root, &timeout);
+        searchLnsGpu.detach();
+
+        while (not (searchManagerCpu->done and searchManagerGpu->done))
+        {
+            printStatistics(optionsCpu, startTime, searchManagerCpu, searchManagerGpu);
+            checkBetterSolutions(optionsCpu, bestSolution, startTime, searchManagerCpu, searchManagerGpu);
+            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            timeout = checkTotalTimeout(startTime, optionsCpu);
+        }
+        checkBetterSolutions(optionsCpu, bestSolution, startTime, searchManagerCpu, searchManagerGpu);
+    }
 
     if(optionsCpu->mddsGpu > 0)
     {
@@ -169,7 +179,7 @@ void configGPU()
     size_t const sizeStackThread = 4 * 1024;
     cudaDeviceSetLimit(cudaLimitStackSize, sizeStackThread);
 
-    //Cache
+    //L1 Cache
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 }
 
@@ -205,28 +215,22 @@ void printStatistics(Options const * options, u64 startTime, SearchManagerCPU<Pr
         printf("[INFO] Time: ");
         printElapsedTime(now() - startTime);
 
-        if(options->mddsCpu > 0)
+        if(options->mddsCpu > 0 and searchManagerCpu->bestSolution.state.isValid())
         {
-            searchManagerCpu->bestSolution.mutex.lock();
-            DP::CostType currentCostCpu = searchManagerCpu->bestSolution.state.cost;
-            searchManagerCpu->bestSolution.mutex.unlock();
-            printf(" | CPU: %d - %lu - %lu MDD/s",  currentCostCpu , searchManagerCpu->iteration, searchManagerCpu->speed);
+            printf(" | CPU: %d - %lu - %lu MDD/s", searchManagerCpu->bestSolution.state.cost, searchManagerCpu->iteration, searchManagerCpu->speed);
         }
         else
         {
-            printf(" | CPU: * - 0 - 0 MDD/s");
+            printf(" | CPU: * - %lu - %lu MDD/s", searchManagerCpu->iteration, searchManagerCpu->speed);
         }
 
-        if (options->mddsGpu > 0)
+        if (options->mddsGpu > 0 and searchManagerGpu->bestSolution.state.isValid())
         {
-            searchManagerGpu->bestSolution.mutex.lock();
-            DP::CostType currentCostGpu = searchManagerGpu->bestSolution.state.cost;
-            searchManagerGpu->bestSolution.mutex.unlock();
-            printf(" | GPU: %d - %lu - %lu MDD/s", currentCostGpu, searchManagerGpu->iteration, searchManagerGpu->speed);
+            printf(" | GPU: %d - %lu - %lu MDD/s", searchManagerGpu->bestSolution.state.cost, searchManagerGpu->iteration, searchManagerGpu->speed);
         }
         else
         {
-            printf(" | GPU: * - 0 - 0 MDD/s");
+            printf(" | GPU: * - %lu - %lu MDD/s", searchManagerGpu->iteration, searchManagerGpu->speed);
         }
 
         printf("\r");
@@ -235,49 +239,78 @@ void printStatistics(Options const * options, u64 startTime, SearchManagerCPU<Pr
 }
 
 template<typename ProblemType, typename StateType>
-void checkBetterSolutions(StateType* bestSolution, u64 startTime, SearchManagerCPU<ProblemType, StateType>* searchManagerCpu, SearchManagerGPU<ProblemType, StateType>* searchManagerGpu)
+void checkBetterSolutions(Options const * options, StateType* bestSolution, u64 startTime, SearchManagerCPU<ProblemType, StateType>* searchManagerCpu, SearchManagerGPU<ProblemType, StateType>* searchManagerGpu)
 {
-    bool betterSolutionFromCpu = false;
-    bool betterSolutionFromGpu = false;
+    bool const betterSolutionFromCpu =
+        searchManagerCpu->bestSolution.state.isValid() and
+        searchManagerCpu->bestSolution.state.cost < bestSolution->cost and
+        searchManagerCpu->bestSolution.state.cost < searchManagerGpu->bestSolution.state.cost;
 
-    searchManagerCpu->bestSolution.mutex.lock();
-    if(searchManagerCpu->bestSolution.state.cost < bestSolution->cost)
-    {
-        *bestSolution = searchManagerCpu->bestSolution.state;
-        betterSolutionFromCpu = true;
-    }
-    searchManagerCpu->bestSolution.mutex.unlock();
-
-    searchManagerGpu->bestSolution.mutex.lock();
-    if(searchManagerGpu->bestSolution.state.cost < bestSolution->cost)
-    {
-        *bestSolution = searchManagerGpu->bestSolution.state;
-        betterSolutionFromGpu = true;
-    }
-    searchManagerGpu->bestSolution.mutex.unlock();
+    bool const betterSolutionFromGpu =
+        searchManagerGpu->bestSolution.state.isValid() and
+        searchManagerGpu->bestSolution.state.cost < bestSolution->cost and
+        searchManagerGpu->bestSolution.state.cost < searchManagerCpu->bestSolution.state.cost;
 
     if (betterSolutionFromCpu or betterSolutionFromGpu)
     {
-        searchManagerGpu->neighborhoodSolution.mutex.lock();
-        searchManagerGpu->neighborhoodSolution.state = *bestSolution;
-        searchManagerGpu->neighborhoodSolution.mutex.unlock();
+        if(betterSolutionFromCpu)
+        {
+            searchManagerCpu->bestSolution.mutex.lock();
+            *bestSolution = searchManagerCpu->bestSolution.state;
+            searchManagerCpu->bestSolution.mutex.unlock();
+        }
+        else
+        {
+            searchManagerGpu->bestSolution.mutex.lock();
+            *bestSolution = searchManagerGpu->bestSolution.state;
+            searchManagerGpu->bestSolution.mutex.unlock();
+        }
 
         searchManagerCpu->neighborhoodSolution.mutex.lock();
         searchManagerCpu->neighborhoodSolution.state = *bestSolution;
         searchManagerCpu->neighborhoodSolution.mutex.unlock();
 
-        clearLine();
-        printf("[SOLUTION] Source: %s", betterSolutionFromCpu ? "CPU" : "GPU");
+        searchManagerGpu->neighborhoodSolution.mutex.lock();
+        searchManagerGpu->neighborhoodSolution.state = *bestSolution;
+        searchManagerGpu->neighborhoodSolution.mutex.unlock();
+
+
+        if (options->statistics)
+        {
+            clearLine();
+        }
+        printf("[SOLUTION] Source: ");
+        if (options->statistics)
+        {
+            printf("%s", betterSolutionFromCpu ? "\033[30;44mCPU\033[0m" : "\033[30;42mGPU\033[0m");
+        }
+        else
+        {
+            printf("%s", betterSolutionFromCpu ? "CPU" : "GPU");
+        }
         printf(" | Time: ");
         printElapsedTime(now() - startTime);
-        printf(" | Cost: %u", bestSolution->cost);
+        if (options->statistics)
+        {
+            printf(" | Cost: \033[30;43m%u\033[0m", bestSolution->cost);
+        }
+        else
+        {
+            printf(" | Cost: %u", bestSolution->cost);
+        }
         printf(" | Solution: ");
         bestSolution->print(true);
+        fflush(stdout);
     }
-    fflush(stdout);
 }
 
-bool checkTimeout(u64 startTime, Options const* options)
+bool checkInitTimeout(u64 startTime)
+{
+    // 10s timeout
+    return  (now() - startTime) > ( 10 * 1000);
+}
+
+bool checkTotalTimeout(u64 startTime, Options const* options)
 {
     return  (now() - startTime) > (options->timeout * 1000);
 }

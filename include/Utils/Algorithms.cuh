@@ -5,68 +5,122 @@
 #include <random>
 #include <Utils/TypeAlias.h>
 #include <Containers/Pair.cuh>
+#include <Containers/LightVector.cuh>
 
 namespace Algorithms
 {
     template<typename T>
-    __device__ inline void sort(T* begin, T* end);
+    __host__ __device__ inline T min(T a, T b);
+    template<typename T>
+    __host__ __device__ inline T max(T a, T b);
+    template<typename T>
+    __host__ __device__ inline void selectionSort(T* begin, T* end, u32 k);
+    template<typename T>
+    __host__ __device__ inline T ceilIntDivision(T a, T b);
+    template<typename T>
+    __host__ __device__ inline void sortedInsert(T* element, LightVector<T>* vector);
     __host__ __device__ inline Pair<u32> getBeginEndIndices(u32 index, u32 threads, u32 elements);
 }
 
+template<typename T>
+__host__ __device__
+T Algorithms::min(T a, T b)
+{
+    assert(std::is_arithmetic_v<T>);
+    return a <= b ? a : b;
+}
 
 template<typename T>
-__device__
-void Algorithms::sort(T* begin, T* end)
+__host__ __device__
+T Algorithms::max(T a, T b)
+{
+    assert(std::is_arithmetic_v<T>);
+    return a >= b ? a : b;
+}
+
+template<typename T>
+__host__ __device__
+void Algorithms::selectionSort(T* begin, T* end, u32 k)
 {
     T* array = begin;
     u32 size = end - begin;
-    __shared__ bool sorted;
-    u32 const threads = blockDim.x;
-    u32 const pairs = size / 2;
-    do
+
+    assert(k < size);
+
+    u32 last_sorted_idx = 0;
+    for (u32 i = 1; i < size; i += 1)
     {
-        __syncthreads();
-        if(threadIdx.x == 0)
+        if(array[i] < array[last_sorted_idx])
         {
-            sorted = true;
-        }
-        __syncthreads();
-        for(u32 pairIdx = threadIdx.x; pairIdx < pairs; pairIdx += threads)
-        {
-            u32 const idx0 = pairIdx * 2;
-            u32 const idx1 = pairIdx * 2 + 1;
-            if(array[idx1] < array[idx0])
+            T::swap(array[i],array[last_sorted_idx]);
+            for(i32 j = last_sorted_idx - 1; j >= 0; j -= 1)
             {
-                T::swap(array[idx1],array[idx0]);
-                sorted = false;
+                if(array[j+1] < array[j])
+                {
+                    T::swap(array[j],array[j+1]);
+                }
+                else
+                {
+                    break;
+                }
+            }
+            if(last_sorted_idx < k - 1)
+            {
+                last_sorted_idx += 1;
             }
         }
-        __syncthreads();
+    }
+}
 
-        for(u32 pairIdx = threadIdx.x; pairIdx < pairs; pairIdx += threads)
+template<typename T>
+__host__ __device__
+void Algorithms::sortedInsert(T* element, LightVector<T>* vector)
+{
+    if(not vector->isEmpty())
+    {
+        if(*element < *vector->back())
         {
-            u32 const idx0 = 1 + pairIdx * 2;
-            u32 const idx1 = 1 + pairIdx * 2 + 1;
-            if(idx1 < size)
+            if (vector->isFull())
             {
-                if(array[idx1] < array[idx0])
+                *vector->back() = *element;
+            }
+            else
+            {
+                vector->pushBack(element);
+            }
+
+            for(u32 i = vector->getSize() - 1; i > 0; i -= 1)
+            {
+                if(*vector->at(i) < *vector->at(i-1))
                 {
-                    T::swap(array[idx1],array[idx0]);
-                    sorted = false;
+                    T::swap(*vector->at(i), *vector->at(i-1));
+                }
+                else
+                {
+                    break;
                 }
             }
         }
-        __syncthreads();
     }
-    while (not sorted);
-    __syncthreads();
+    else
+    {
+        vector->pushBack(element);
+    }
 }
 
 __host__ __device__
 Pair<u32> Algorithms::getBeginEndIndices(u32 index, u32 threads, u32 elements)
 {
-    u32 const elementsPerThread = (elements + threads - 1) / threads;
+    u32 const elementsPerThread = ceilIntDivision(elements, threads);
     u32 const beginIdx = elementsPerThread * index;
-    u32 const endIdx = min(beginIdx + elementsPerThread, elements);
+    u32 endIdx = Algorithms::min(elements, beginIdx + elementsPerThread);
     return Pair<u32>(beginIdx, endIdx);
+}
+
+template<typename T>
+__host__ __device__
+T Algorithms::ceilIntDivision(T a, T b)
+{
+    assert(std::is_unsigned_v<T>);
+    return (a + b - 1) / b;
 }

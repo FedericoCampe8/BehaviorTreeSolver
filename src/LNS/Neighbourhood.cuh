@@ -27,7 +27,6 @@ class Neighbourhood
     __host__ __device__ void generate(RandomEngine* randomEngine, Vector<OP::ValueType>* solutionValues);
     __host__ __device__ bool constraintsCheck(u32 variableIdx, OP::ValueType value) const;
     __host__ __device__ void clear();
-    __host__ __device__ void constraintVariable(u32 variableIdx, OP::ValueType value, float random);
     void print(bool endLine = true);
 };
 
@@ -78,19 +77,16 @@ void Neighbourhood::generate(RandomEngine* randomEngine, Vector<OP::ValueType>* 
 __host__ __device__
 bool Neighbourhood::constraintsCheck(unsigned int variableIdx, OP::ValueType value) const
 {
-    if (*constraints[variableIdx] == ConstraintType::Eq and *values[variableIdx] != value)
+    switch(*constraints[variableIdx])
     {
-        return false;
+        case ConstraintType::Eq:
+            return *values[variableIdx] == value;
+        case ConstraintType::Neq:
+            return *values[variableIdx] != value;
+        case ConstraintType::None:
+            return not fixedValue.contains(value);
     }
-    else if(*constraints[variableIdx] == ConstraintType::Neq and *values[variableIdx] == value)
-    {
-        return false;
-    }
-    else if(*constraints[variableIdx] == ConstraintType::None and fixedValue.contains(value))
-    {
-        return false;
-    }
-    return true;
+    return false;
 }
 
 void Neighbourhood::print(bool endLine)

@@ -29,11 +29,11 @@ class LightArray
     __host__ __device__ inline u32 indexOf(T const * t) const;
     __host__ __device__ LightArray<T>& operator=(LightArray<T> const & other);
     __host__ __device__ inline T* operator[](u32 index) const;
-    __host__ __device__ void print(bool endLine = true) const;
+    __host__ __device__ void print(bool endLine = true, bool reverse = false) const;
     __host__ __device__ inline static u32 sizeOfStorage(u32 capacity);
     __host__ __device__ inline static void swap(LightArray<T>& a0, LightArray<T>& a1);
     protected:
-    __host__ __device__ void print(u32 beginIdx, u32 endIdx, bool endLine) const;
+    __host__ __device__ void print(u32 beginIdx, u32 endIdx, bool endLine, bool reverse) const;
 
 };
 
@@ -114,9 +114,9 @@ T* LightArray<T>::operator[](u32 index) const
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::print(bool endLine) const
+void LightArray<T>::print(bool endLine, bool reverse) const
 {
-    print(0, capacity, endLine);
+    print(0, capacity, endLine, reverse);
 }
 
 template<typename T>
@@ -136,20 +136,28 @@ void LightArray<T>::swap(LightArray<T>& a0, LightArray<T>& a1)
 
 template<typename T>
 __host__ __device__
-void LightArray<T>::print(u32 beginIdx, u32 endIdx, bool endLine) const
+void LightArray<T>::print(u32 beginIdx, u32 endIdx, bool endLine, bool reverse) const
 {
     if constexpr (std::is_integral_v<T>)
     {
+        assert(beginIdx < endIdx);
+
+        i32 begin = not reverse ? static_cast<i32>(beginIdx) : static_cast<i32>(endIdx) - 1;
+        i32 end = not reverse ? static_cast<i32>(endIdx) : static_cast<i32>(beginIdx) - 1;
+        i32 step = not reverse ? 1 : -1;
+
         printf("[");
-        if (beginIdx < endIdx)
         {
-            printf("%d",static_cast<int>(*at(beginIdx)));
-            for (u32 index = beginIdx + 1; index < endIdx; index += 1)
+            if (beginIdx != endIdx)
             {
-                printf(",");
-                printf("%d", static_cast<int>(*at(index)));
+                printf("%d", static_cast<int>(*at(begin)));
+                for (i32 index = begin + step; index != end; index += step)
+                {
+                    printf(",");
+                    printf("%d", static_cast<int>(*at(index)));
+                }
             }
+            printf(endLine ? "]\n" : "]");
         }
-        printf(endLine ? "]\n" : "]");
     }
 }

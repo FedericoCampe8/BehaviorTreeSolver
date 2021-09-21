@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fstream>
+#include <Containers/Array.cuh>
 #include <Containers/Vector.cuh>
 #include <Containers/Pair.cuh>
 #include <Containers/Triple.cuh>

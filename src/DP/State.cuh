@@ -27,7 +27,7 @@ namespace DP
         __host__ __device__ bool operator<(State const & other) const;
         __host__ __device__ inline void invalidate();
         __host__ __device__ inline bool isValid();
-        __host__ __device__ void print(bool endLine = true) const;
+        __host__ __device__ void print(bool endLine = true, bool reverse = false) const;
         __host__ __device__ inline void selectValue(OP::ValueType value);
         __host__ __device__ static u32 sizeOfStorage(OP::Problem const* problem);
         __host__ __device__ static void swap(State& s0, State& s1);
@@ -82,15 +82,9 @@ bool DP::State::isValid()
 }
 
 __host__ __device__
-void DP::State::print(bool endLine) const
+void DP::State::print(bool endLine, bool reverse) const
 {
-    //printf("Values: ");
-    selectedValues.print(endLine);
-    //printf(" | Cost: %d", cost);
-    //printf(" | Values map: ", cost);
-    //selectedValuesMap.print(false);
-    //printf(" | Admissibles map: ");
-    //admissibleValuesMap.print(endLine);
+    selectedValues.print(endLine, reverse);
 }
 
 __host__ __device__
@@ -118,6 +112,7 @@ void DP::State::swap(DP::State& s0, DP::State& s1)
     BitSet::swap(s0.admissibleValuesMap, s1.admissibleValuesMap);
     Vector<OP::ValueType>::swap(s0.selectedValues, s1.selectedValues);
 }
+
 __host__ __device__
 bool DP::State::operator<(DP::State const & other) const
 {

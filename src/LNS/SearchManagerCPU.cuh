@@ -29,7 +29,7 @@ class SearchManagerCPU
     public:
     SearchManagerCPU(ProblemType const * problem, Options const * options);
     void searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool * timeout);
-    void initializeRandomEngines(bool * timeout);
+    void initializeRandomEngines();
     void searchLnsLoop(StateType const * root, bool * timeout);
     private:
     void waitThreads();
@@ -53,17 +53,18 @@ SearchManagerCPU<ProblemType, StateType>::SearchManagerCPU(ProblemType const * p
     threads(std::thread::hardware_concurrency(), Memory::MallocType::Std)
 {
     bestSolution.state.invalidate();
+    neighborhoodSolution.state.invalidate();
 }
 
 template<typename ProblemType, typename StateType>
-void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool * timeout)
+void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueue<StateType>* statesPriorityQueue, bool* timeout)
 {
     done = false;
     iteration = 0;
 
     if(options->mddsCpu > 0)
     {
-        while(not (statesPriorityQueue->isFull() or statesPriorityQueue->isEmpty() or *timeout))
+        while(not (*timeout or statesPriorityQueue->isEmpty()))
         {
             u64 const startTime = Chrono::now();
 
@@ -78,7 +79,7 @@ void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
 
                 //Finalize offload
                 offloadBuffer.finalizeOffload(statesPriorityQueue);
-                offloadBuffer.getBestSolution(LNS::SearchPhase::Init, &bestSolution);
+                offloadBuffer.getSolutions(LNS::SearchPhase::Init, &bestSolution);
 
                 u64 const elapsedTime = max(Chrono::now() - startTime, 1ul);
                 speed = offloadBuffer.getSize() * 1000 / elapsedTime;
@@ -87,7 +88,7 @@ void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
             }
             else
             {
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
     }
@@ -96,10 +97,10 @@ void SearchManagerCPU<ProblemType, StateType>::searchInitLoop(StatesPriorityQueu
 }
 
 template<typename ProblemType, typename StateType>
-void SearchManagerCPU<ProblemType, StateType>::initializeRandomEngines(bool * timeout)
+void SearchManagerCPU<ProblemType, StateType>::initializeRandomEngines()
 {
     // Random Numbers Generators
-    if((not *timeout) and options->mddsCpu > 0)
+    if(options->mddsCpu > 0)
     {
         u32 elements = offloadBuffer.getCapacity();
         u32 threadsCount = threads.getCapacity();
@@ -127,17 +128,15 @@ void SearchManagerCPU<ProblemType, StateType>::searchLnsLoop(StateType const * r
             u64 const startTime = Chrono::now();
 
             // Generate neighborhoods
-            neighborhoodSolution.mutex.lock();
             generateNeighbourhoodsAsync();
             waitThreads();
-            neighborhoodSolution.mutex.unlock();
 
             // Offload
             doOffloadsAsync(LNS::SearchPhase::LNS);
             waitThreads();
 
             //Finalize offload
-            offloadBuffer.getBestSolution(LNS::SearchPhase::LNS, &bestSolution);
+            offloadBuffer.getSolutions(LNS::SearchPhase::LNS, &bestSolution);
 
             u64 const elapsedTime = max(Chrono::now() - startTime, 1ul);
             speed = offloadBuffer.getCapacity() * 1000 / elapsedTime;

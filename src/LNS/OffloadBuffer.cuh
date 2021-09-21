@@ -29,7 +29,7 @@ class OffloadBuffer
     void initializeOffload(StateType const * state);
     __host__ __device__ void doOffload(LNS::SearchPhase searchPhase, u32 index);
     void finalizeOffload(StatesPriorityQueue<StateType>* statesPriorityQueue);
-    void getBestSolution(LNS::SearchPhase searchPhase, SyncState<ProblemType, StateType> * solution);
+    void getSolutions(LNS::SearchPhase searchPhase, SyncState<ProblemType, StateType>* bestSolution);
     __host__ __device__ void initializeRandomEngines(u32 randomSeed, u32 index);
     __host__ __device__ void generateNeighborhood(Vector<OP::ValueType> * values, u32 index);
     void printNeighborhoods() const;
@@ -139,9 +139,17 @@ void OffloadBuffer<ProblemType, StateType>::finalizeOffload(StatesPriorityQueue<
             Vector<StateType> const * const cutset = cutsets[index];
             for (StateType* cutsetState = cutset->begin(); cutsetState != cutset->end(); cutsetState += 1)
             {
-                if (cutsetState->isValid() and (not statesPriorityQueue->isFull()))
+                if (cutsetState->isValid())
                 {
-                    statesPriorityQueue->insert(cutsetState);
+                    if(not statesPriorityQueue->isFull())
+                    {
+                        statesPriorityQueue->insert(cutsetState);
+                    }
+                    else if (cutsetState->cost < statesPriorityQueue->getMax()->cost)
+                    {
+                        statesPriorityQueue->popMax();
+                        statesPriorityQueue->insert(cutsetState);
+                    }
                 }
             }
         }
@@ -157,19 +165,20 @@ u32 OffloadBuffer<ProblemType, StateType>::getSize() const
 }
 
 template<typename ProblemType, typename StateType>
-void OffloadBuffer<ProblemType, StateType>::getBestSolution(LNS::SearchPhase searchPhase, SyncState<ProblemType, StateType> * solution)
+void OffloadBuffer<ProblemType, StateType>::getSolutions(LNS::SearchPhase searchPhase, SyncState<ProblemType, StateType>* bestSolution)
 {
-    solution->mutex.lock();
-    solution->state.invalidate();
     u32 stateIdxEnd = searchPhase == LNS::SearchPhase::Init ? size : capacity;
+
+    bestSolution->mutex.lock();
+    bestSolution->state.invalidate();
     for(u32 stateIdx = 0; stateIdx < stateIdxEnd; stateIdx += 1)
     {
-        if(bottomStates[stateIdx]->cost < solution->state.cost)
+        if(bottomStates[stateIdx]->cost < bestSolution->state.cost)
         {
-            solution->state = *bottomStates[stateIdx];
+            bestSolution->state = *bottomStates[stateIdx];
         }
     }
-    solution->mutex.unlock();
+    bestSolution->mutex.unlock();
 }
 
 template<typename ProblemType, typename StateType>

@@ -12,7 +12,7 @@ namespace Memory
     u32 const DefaultAlignmentPadding = 8;
     template<typename T>
     __host__ __device__ inline T* align(std::byte const * ptr);
-    __host__ __device__ inline std::byte* align(std::byte const * ptr, u32 alignment);
+    __host__ __device__ inline std::byte* align(std::byte const * ptr, u32 alignment = DefaultAlignment);
     __host__ __device__ inline uintptr_t align(uintptr_t address, u32 alignment);
     __host__ __device__ std::byte* safeMalloc(u64 size, MallocType type);
     __host__ __device__ std::byte* safeStdMalloc(u64 size);

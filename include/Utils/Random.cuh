@@ -31,7 +31,7 @@ float RandomEngine::getFloat01()
 #ifdef __CUDA_ARCH__
     return curand_uniform(&deviceEngine);
 #else
-    std::uniform_real_distribution<float> urd(0.0,1.0);
-    return urd(hostEngine);
+    std::uniform_real_distribution<float> uniform01(0.0,1.0);
+    return uniform01(hostEngine);
 #endif
 }

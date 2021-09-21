@@ -25,7 +25,7 @@ class LightVector: public LightArray<T>
     __host__ __device__ LightVector<T>& operator=(LightVector<T> const& other);
     __host__ __device__ inline T* operator[](u32 index) const;
     __host__ __device__ inline void popBack();
-    __host__ __device__ void print(bool endLine = true) const;
+    __host__ __device__ void print(bool endLine = true, bool reverse = false) const;
     __host__ __device__ void pushBack(T const* t);
     __host__ __device__ inline void resize(u32 size);
     __host__ __device__ inline void resize(T const * end);
@@ -138,9 +138,9 @@ void LightVector<T>::popBack()
 
 template<typename T>
 __host__ __device__
-void LightVector<T>::print(bool endLine) const
+void LightVector<T>::print(bool endLine, bool reverse) const
 {
-    LightArray<T>::print(0, size, endLine);
+    LightArray<T>::print(0, size, endLine, reverse);
 }
 
 template<typename T>

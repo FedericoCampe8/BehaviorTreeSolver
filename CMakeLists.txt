@@ -9,8 +9,8 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES 86)
 string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda")
 set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
-string(APPEND CMAKE_CUDA_FLAGS " --compiler-options=-Wall")
-string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -g -G")
+string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler -Wall")
+string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -G")
 string(APPEND CMAKE_CUDA_FLAGS_RELEASE " -lineinfo")
 
 # Check CUDA and GCC version
@@ -29,13 +29,11 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 set(SOURCES
     src/Main.cu
     src/OP/Variable.cuh
-    src/DP/TSPPDModel.cuh
     src/DP/CTWPModel.cuh
     src/DP/SOPModel.cuh
     src/DD/MDD.cuh
     src/OP/CTWProblem.cuh
-    src/OP/TSPPDProblem.cuh
-    src/OP/SOPProblem.cuh
+    src/OP/SOProblem.cuh
     src/OP/Problem.cuh
     src/DP/State.cuh
     src/LNS/OffloadBuffer.cuh
@@ -53,12 +51,9 @@ set(SOURCES
     src/Options.h
     src/DP/CTWPState.cuh
     src/DP/SOPState.cuh
-    src/OP/MOSProblem.cuh
-    src/DP/MOSPState.cuh
-    src/DP/MOSPModel.cuh
-    src/OP/JSProblem.cuh
-    src/DP/JSPState.cuh
-    src/DP/JSPModel.cuh)
+    src/OP/OSSProblem.cuh
+    src/DP/OSSPState.cuh
+    src/DP/OSSPModel.cuh)
 
 
 # Add include path

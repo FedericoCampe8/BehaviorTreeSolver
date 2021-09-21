@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Utils/Algorithms.cuh>
 #include <Containers/Vector.cuh>
 #include "Variable.cuh"
 
@@ -9,7 +10,7 @@ namespace OP
     {
         // Members
         public:
-        u32 maxValue;
+        ValueType maxValue;
         u32 maxBranchingFactor;
         Vector<Variable> variables;
 
@@ -32,8 +33,8 @@ OP::Problem::Problem(u32 variablesCount, Memory::MallocType mallocType) :
 void OP::Problem::add(Variable const * variable)
 {
     variables.pushBack(variable);
-    maxValue = max(maxValue, variable->maxValue);
-    maxBranchingFactor = maxValue + 1;
+    maxValue = Algorithms::max(maxValue, variable->maxValue);
+    maxBranchingFactor = Algorithms::max(maxBranchingFactor, static_cast<u32>(maxValue + 1));
 }
 
 

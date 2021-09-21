@@ -1,7 +1,7 @@
 #pragma once
 
 #include "State.cuh"
-#include "../OP/SOPProblem.cuh"
+#include "../OP/SOProblem.cuh"
 
 
 namespace DP
@@ -14,25 +14,25 @@ namespace DP
 
         // Functions
         public:
-        __host__ __device__ SOPState(OP::SOPProblem const * problem, std::byte* storage);
-        __host__ __device__ SOPState(OP::SOPProblem const * problem, Memory::MallocType mallocType);
+        __host__ __device__ SOPState(OP::SOProblem const * problem, std::byte* storage);
+        __host__ __device__ SOPState(OP::SOProblem const * problem, Memory::MallocType mallocType);
         __host__ __device__ inline std::byte* endOfStorage() const;
-        __host__ __device__ static std::byte* mallocStorages(OP::SOPProblem const *  problem, unsigned int statesCount, Memory::MallocType mallocType);
+        __host__ __device__ static std::byte* mallocStorages(OP::SOProblem const *  problem, unsigned int statesCount, Memory::MallocType mallocType);
         __host__ __device__ SOPState& operator=(SOPState const & other);
         __host__ __device__ void print(bool endLine = true) const;
-        __host__ __device__ static unsigned int sizeOfStorage(OP::SOPProblem const * problem);
+        __host__ __device__ static unsigned int sizeOfStorage(OP::SOProblem const * problem);
         __host__ __device__ static void swap(SOPState& sops0, SOPState& sops1);
     };
 }
 
 __host__ __device__
-DP::SOPState::SOPState(OP::SOPProblem const * problem, std::byte* storage) :
+DP::SOPState::SOPState(OP::SOProblem const * problem, std::byte* storage) :
     State(problem, storage),
     precedencesCount(problem->variables.getCapacity(), Memory::align<u16>(this->State::endOfStorage()))
 {}
 
 __host__ __device__
-DP::SOPState::SOPState(OP::SOPProblem const* problem, Memory::MallocType mallocType) :
+DP::SOPState::SOPState(OP::SOProblem const* problem, Memory::MallocType mallocType) :
     SOPState(problem, mallocStorages(problem,1,mallocType))
 {}
 
@@ -43,7 +43,7 @@ std::byte* DP::SOPState::endOfStorage() const
 }
 
 __host__ __device__
-std::byte* DP::SOPState::mallocStorages(OP::SOPProblem const* problem, unsigned int statesCount, Memory::MallocType mallocType)
+std::byte* DP::SOPState::mallocStorages(OP::SOProblem const* problem, unsigned int statesCount, Memory::MallocType mallocType)
 {
     return Memory::safeMalloc(sizeOfStorage(problem) * statesCount, mallocType);
 }
@@ -64,7 +64,7 @@ void DP::SOPState::print(bool endLine) const
 
 
 __host__ __device__
-unsigned int DP::SOPState::sizeOfStorage(OP::SOPProblem const * problem)
+unsigned int DP::SOPState::sizeOfStorage(OP::SOProblem const * problem)
 {
     return
         State::sizeOfStorage(problem) +

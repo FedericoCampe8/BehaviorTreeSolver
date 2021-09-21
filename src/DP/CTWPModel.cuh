@@ -17,7 +17,6 @@ namespace DP
     void makeRoot(OP::CTWProblem const * problem, CTWPState* root);
     __host__ __device__ inline bool interruptPair(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType const value);
     __host__ __device__ inline void makeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, DP::CostType cost, CTWPState* nextState);
-    __host__ __device__ inline void mergeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, CTWPState* nextState);
     __host__ __device__ inline void updateInterruptedPairs(OP::CTWProblem const * problem, CTWPState* state, OP::ValueType value);
     __host__ __device__ inline void updatePrecedencesCount(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
     __host__ __device__ inline bool checkDisjunctive1(OP::CTWProblem const * problem, CTWPState const * state, OP::ValueType value);
@@ -100,21 +99,6 @@ void DP::makeState(OP::CTWProblem const * problem, CTWPState const * currentStat
     nextState->selectValue(value);
     calcAdmissibleValues(problem, nextState);
 }
-
-__host__ __device__
-void DP::mergeState(OP::CTWProblem const * problem, CTWPState const * currentState, OP::ValueType value, CTWPState* nextState)
-{
-    for (u32 value = 0; value < nextState->precedencesCount.getCapacity(); value += 1)
-    {
-        u32 const blockingConstraintsCount0 = *currentState->precedencesCount[value];
-        u32 const blockingConstraintsCount1 = *nextState->precedencesCount[value];
-        *nextState->precedencesCount[value] = static_cast<u8>(min(blockingConstraintsCount0,blockingConstraintsCount1));
-    }
-
-    updatePrecedencesCount(problem, nextState, value);
-    calcAdmissibleValues(problem, nextState);
-}
-
 
 __host__ __device__
 OP::ValueType DP::calcOtherEnd(OP::CTWProblem const * problem, OP::ValueType const value)

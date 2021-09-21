@@ -68,11 +68,17 @@ BitSet::~BitSet()
 __host__ __device__
 bool BitSet::contains(u32 value) const
 {
-    assert(value <= maxValue);
-    u32 const chunkIndex = BitSet::chunkIndex(value);
-    u32 const chunkOffset = BitSet::chunkOffset(value);
-    u32 const mask = 1u;
-    return static_cast<bool>((storage[chunkIndex] >> chunkOffset) & mask);
+    if (value <= maxValue)
+    {
+        u32 const chunkIndex = BitSet::chunkIndex(value);
+        u32 const chunkOffset = BitSet::chunkOffset(value);
+        u32 const mask = 1u;
+        return static_cast<bool>((storage[chunkIndex] >> chunkOffset) & mask);
+    }
+    else
+    {
+      return false;
+    }
 }
 
 __host__ __device__
